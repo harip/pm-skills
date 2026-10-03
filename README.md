@@ -4,7 +4,7 @@
 
 ![Multi-Agent SDLC Swarm Architecture](docs/assets/sdlc_swarm_architecture.png)
 
----
+----
 
 ## 💡 Core Philosophy
 
@@ -13,7 +13,7 @@ Traditional software development relies on departmental handoffs—Product Manag
 For a **1-Person Company**, this model creates crippling coordination overhead. This repository provides a **Multi-Agent SDLC Swarm** designed specifically for solo execution:
 
 - **Full-Stack Feature Slices:** Every user story is a complete, vertical capability—UI through database—owned and shipped end-to-end in a single pull request.
-- **Autonomy Modes (`BALANCED` / `AUTOPILOT` / `SUPERVISED`):** Eliminates micro-management by letting you choose how often execution halts for approval (3 strategic gates in `BALANCED`, 1 gate in `AUTOPILOT`).
+- **Autonomy Modes (`BALANCED` / `AUTOPILOT` / `SUPERVISED`):** Eliminates micro-management by letting you choose how often execution halts for approval (3 strategic gates in `BALANCED`, mandatory mockup, database, and deployment checkpoints in every mode).
 - **Proactive Scaffolding:** Agents arrive with opinionated, production-ready defaults (TypeScript, React Native/Next.js, hybrid local-first DB, JWT auth) rather than asking endless technical questions.
 - **Zero-Trust Quality Gates:** Every phase deliverable is audited by a dedicated Architecture Reviewer before reaching the founder, with automatic self-correction loops when blocked.
 - **Context & Token Efficiency:** Strict protocols prevent LLM context window bloat during long 30+ turn building sessions.
@@ -119,7 +119,7 @@ flowchart TB
 | ⚙️ **Service Engineer** | [`service_engineer`](.agents/skills/service_engineer/SKILL.md) | Engineers offline-first database adapters, sync engines, role/ownership guards, and JWT auth managers. |
 | 🧪 **QA Agent** | [`qa_agent`](.agents/skills/qa_agent/SKILL.md) | Enforces ≥80% service coverage, passes automated P1 tests, and performs visual UI comparison against approved mockups (`tests/07_TEST_MANIFEST.md`). |
 | 🔄 **Orchestrator** | [`orchestrator`](.agents/skills/orchestrator/SKILL.md) | State machine engine. Overwrites `docs/PROJECT_STATUS.md` every turn to enable cold-start session resumption. |
-| 🚀 **Deployment Lead** | [`deployment`](.agents/skills/deployment/SKILL.md) | Release playbook for Expo EAS (OTA & native builds) and Vercel web deployments. |
+| 🚀 **Deployment Lead** | [`deployment`](.agents/skills/deployment/SKILL.md) | Interactive destination selection and prerequisites for Expo EAS, Vercel, or another provider; prepares an approved, verified release. |
 
 ---
 
@@ -135,19 +135,25 @@ To prevent LLM context window bloat and keep execution crisp after 30+ turns, th
 
 ## 📂 Standard Directory Layout
 
-All project documentation is stored in a clean, visible `docs/` folder:
+All project documentation is stored in a clean, visible `docs/` folder (and `tests/` for QA):
 
 ```
 docs/
 ├── PROJECT_STATUS.md       # Living state machine & NEXT_STEP_POINTER
+├── 00_PROJECT_CONTRACT.md  # Phase 0: Explicit capability contract & scope boundaries
 ├── 01_ARCH_BRIEF.md        # Phase 1: Architecture Brief & Permission Matrix
 ├── 02_PRD.md               # Phase 2: Product Requirements & "The Bet"
 ├── 03_USER_STORIES.md      # Phase 2: Full-stack feature stories
 ├── 04_TECHNICAL_SPEC.md    # Phase 3: Technical Spec & Data reconciliation
-├── 05_TASK_MANIFEST.md     # Phase 3: Infrastructure tasks & execution plan
+├── 05_TASK_MANIFEST.md     # Phase 3: Executable infrastructure & feature tasks
 ├── 06_DESIGN_REGISTER.md   # Phase 5: UI mockup versioning & feedback log
-├── design/mockups/         # Phase 5: Generated screen mockup images
+├── 08_SETUP_REGISTER.md   # Phase 6/Release: Non-secret setup & connection evidence
+├── 09_RELEASE_PLAN.md      # Release: Concrete deployment & recovery plan
+├── design/mockups/         # Phase 5: Concept screen mockup images
 └── reviews/                # Architecture Reviewer audit reports
+
+tests/
+└── 07_TEST_MANIFEST.md     # Phase 7: Canonical test manifest & coverage evidence
 ```
 
 ---
@@ -165,3 +171,21 @@ If you pause or resume work after hours or days, simply tell the AI:
 > *"Read `docs/PROJECT_STATUS.md` and continue."*
 
 The **Orchestrator** will parse `NEXT_STEP_POINTER`, announce the active agent and step, and resume execution instantly with zero context re-negotiation.
+
+
+## Interactive Database and Deployment Setup
+
+Every mode stops for generated mockup approval, then offers guided database and deployment choices:
+
+| When | Choices | Guided actions |
+|---|---|---|
+| Backend work starts (Phase 6) | Supabase Free (subject to current availability), existing database, another provider, skip and use mocks | Create/select project, enter connection values securely, verify access |
+| QA passes (final Release step) | Vercel for web, Expo EAS for Expo mobile, another provider, skip deployment | Select destination, authenticate, configure required settings, prepare and approve release |
+
+Use clickable choices when the host supports them. Each prerequisite offers **Done — check it**, **Help**, or **Later**, with a direct dashboard link or copyable command. Typed input is needed only for missing identifiers/details. Users enter passwords and secrets through provider workflows or ignored local environment files, never chat or committed documents. Saved progress resumes at the first incomplete step.
+
+`docs/08_SETUP_REGISTER.md` stores non-secret choices, prerequisite progress, and validation evidence. `docs/09_RELEASE_PLAN.md` stores the concrete release plan, approval scope, and verified outcome. Both are generated in an active project at the relevant stage. Passing QA starts deployment setup; Gate 3 approves the prepared release before publication. Missing setup information pauses every autonomy mode. Logging and monitoring setup are excluded.
+
+Provider instructions live in `.agents/skills/deployment/references/`; database onboarding lives in `.agents/skills/service_engineer/references/database-setup.md`. Add a provider guide and link it from the deployment skill to extend supported destinations. Current provider prerequisites and free-plan eligibility are checked against official documentation when used.
+
+**Explicit skip paths:** Skipping the database continues with typed models, mock fixtures, and a mock adapter. The agent tells the user to return and finish persistence/auth/sync integration; QA marks that work unverified and production stays blocked. Skipping deployment runs no deployment commands and ends with a user-managed handoff stating nothing was deployed. **Later** instead leaves a pending checkpoint. These choices are never inferred from silence or autonomy mode.

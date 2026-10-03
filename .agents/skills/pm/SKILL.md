@@ -1,82 +1,36 @@
 ---
 name: pm
-description: Entry point for the PM SDLC swarm. Handles /pm start, resume, status, next, mode, and help.
+description: Entry point for the PM SDLC swarm. Handles /pm commands.
 ---
 
-# PM Command
+# PM Command (Swarm Entry Point)
 
-Use `/pm` as the only user-facing entry point. Route work to the existing swarm skills and keep `docs/PROJECT_STATUS.md` updated through the Orchestrator.
-
-Keep the conversation very terse, concise, and clear. Number all generated documents sequentially (e.g., `01_ARCH_BRIEF.md`, `02_PRD.md`, `03_USER_STORIES.md`, `04_TECHNICAL_SPEC.md`, `05_TASK_MANIFEST.md`, `06_DESIGN_REGISTER.md`, `07_TEST_MANIFEST.md`) so that the user knows the order.
+See `.agents/rules/GLOBAL_RULES.md` for shared protocols and document numbering.
 
 ## Commands
+- `/pm` — Show active project or start intake.
+- `/pm start <name>` — Ask pitch description, init `docs/PROJECT_STATUS.md` in `BALANCED`, start Phase 1.
+- `/pm resume` — Read `NEXT_STEP_POINTER` in `PROJECT_STATUS.md` and execute assigned agent.
+- `/pm status` — Display project, mode, phase, agent, and next step without executing.
+- `/pm next` — Force execute `NEXT_STEP_POINTER` (respecting gate approvals).
+- `/pm mode <balanced|autopilot|supervised>` — Update active mode in `PROJECT_STATUS.md`.
+- `/pm help` — Display command list.
 
-- `/pm` - Show active project, or start intake if none exists.
-- `/pm start <name>` - Ask for a short project description, create `docs/PROJECT_STATUS.md`, default to `BALANCED`, and start Phase 1 with the IT Consultant.
-- `/pm resume` - Read `NEXT_STEP_POINTER` and continue with the assigned agent.
-- `/pm status` - Show project, mode, phase, agent, status, and next action. Do not execute work.
-- `/pm next` - Execute `NEXT_STEP_POINTER`. Never bypass an approval gate.
-- `/pm mode <balanced|autopilot|supervised>` - Update the mode in `PROJECT_STATUS.md`.
-- `/pm help` - Show this command list.
-- `/pm understand` - Read the skill file and understand
+## Routing Matrix
+| Target | Agent | Skill Path |
+|---|---|---|
+| Phase 1 | IT Consultant | `it_consultant/SKILL.md` |
+| Phase 2 | Product Owner | `product_owner/SKILL.md` |
+| Phase 3 | Technical Architect | `techincal_architect/SKILL.md` |
+| Phase 4 | Content Parser | `content_parser/SKILL.md` |
+| Phase 5 | Frontend Developer | `frontend_developer/SKILL.md` |
+| Phase 6 (database setup first) | Service Engineer | `service_engineer/SKILL.md` |
+| Phase 7 | QA Agent | `qa_agent/SKILL.md` |
+| Release (provider setup, approval, deployment) | Deployment Lead | `deployment/SKILL.md` |
+| Audit | Architecture Reviewer | `architecture_reviewer/SKILL.md` |
+| State | Orchestrator | `orchestrator/SKILL.md` |
 
-## Agent Routing
-
-```text
-Phase 1 -> IT Consultant
-Phase 2 -> Product Owner
-Phase 3 -> Technical Architect
-Phase 4 -> Content Parser
-Phase 5 -> Frontend Developer + Apple Design
-Phase 6 -> Service Engineer
-Phase 7 -> QA Agent
-Release -> Deployment Agent
-Review -> Architecture Reviewer
-State -> Orchestrator
-```
-
-Before running an agent, read its `SKILL.md`.
-
-## Start Flow
-
-For `/pm start <name>`:
-
-1. If `docs/PROJECT_STATUS.md` exists, stop and suggest `/pm resume`.
-2. Ask only: `Briefly describe what you want to build.`
-3. Initialize the project in `BALANCED` mode.
-4. Set Phase 1 to `[IN PROGRESS]` and later phases to `[NOT STARTED]`.
-5. Set `NEXT_STEP_POINTER` to the IT Consultant.
-6. Start Phase 1 immediately.
-7. If Mobile App or Website is already stated, do not ask again.
-
-## Resume and Next
-
-- Read `docs/PROJECT_STATUS.md` first.
-- Load the agent named in `NEXT_STEP_POINTER` and execute it.
-- If awaiting user approval, show the relevant artifacts and wait for `Approved` or revisions.
-- After each phase, run the Architecture Reviewer.
-- On approval, follow the active autonomy mode.
-- On a block, return fixes to the responsible agent.
-- Run the Orchestrator after every state change.
-
-## Modes
-
-- `BALANCED`: Stop after Phases 2, 5, and 7.
-- `AUTOPILOT`: Stop after generating UI Mock ups and only before production release.
-- `SUPERVISED`: Stop after every phase.
-
-Production release always requires explicit approval.
-
-## Missing State
-
-If no project exists, say:
-
-```text
-No PM project exists. Run `/pm start <project name>`.
-```
-
-For an unknown command, say:
-
-```text
-Unknown PM command. Run `/pm help`.
-```
+## Execution Protocol
+1. **Start:** If `PROJECT_STATUS.md` exists → suggest `/pm resume`. Else prompt pitch, set `NEXT_STEP_POINTER: Phase 1`, run IT Consultant.
+2. **Resume/Next:** Load `NEXT_STEP_POINTER` agent skill → execute step → run Architecture Reviewer → run Orchestrator to update `PROJECT_STATUS.md`.
+3. **Gate Rules:** Pause for user sign-off per active autonomy mode (`BALANCED`, `AUTOPILOT`, `SUPERVISED`). Mockup review, database setup/skip, and deployment selection/skip stop every mode using selectable controls. Database skip continues with explicit mock data/models and integration debt; deployment skip ends with a handoff and no deployment. Resume the saved prerequisite when deferred. After QA passes, route to Deployment Lead to prepare the release plan before final production sign-off. `/pm next` cannot bypass setup or release approval.
