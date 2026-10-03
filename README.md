@@ -37,9 +37,9 @@ flowchart TB
     subgraph Phase1_3 ["💡 Discovery, Scope & Tech Spec (Phases 1–3)"]
         ITC["it_consultant<br/>(Solutions Architect)"]
         PO["product_owner<br/>(PRD & Story Writer)"]
-        ARCH_BRIEF[("docs/ARCH_BRIEF.md")]
-        PRD_US[("docs/PRD.md & USER_STORIES.md")]
-        SPEC[("docs/TECHNICAL_SPEC.md")]
+        ARCH_BRIEF[("docs/01_ARCH_BRIEF.md")]
+        PRD_US[("docs/02_PRD.md & 03_USER_STORIES.md")]
+        SPEC[("docs/04_TECHNICAL_SPEC.md & 05_TASK_MANIFEST.md")]
         
         ITC -->|Outputs| ARCH_BRIEF
         ARCH_BRIEF --> PO
@@ -58,7 +58,7 @@ flowchart TB
         FED["frontend_developer<br/>(UI/UX Engineer)"]
         SVE["service_engineer<br/>(Backend/Data Engineer)"]
         APPLE["apple_design<br/>(Design System Rules)"]
-        MOCKUPS[("docs/design/mockups/<br/>& DESIGN_REGISTER.md")]
+        MOCKUPS[("docs/design/mockups/<br/>& 06_DESIGN_REGISTER.md")]
         UI_CODE[("src/components/ & src/screens/")]
         SERVICE_CODE[("src/services/ & src/db/")]
 
@@ -73,7 +73,7 @@ flowchart TB
 
     subgraph Phase7_Deploy ["🧪 Verification & Shipping (Phase 7 & Release)"]
         QA["qa_agent<br/>(Test Automation & Visual QA)"]
-        TEST_MAN[("tests/TEST_MANIFEST.md")]
+        TEST_MAN[("tests/07_TEST_MANIFEST.md")]
         DEP["deployment<br/>(EAS OTA / Native & Vercel)"]
 
         UI_CODE & SERVICE_CODE --> QA
@@ -111,13 +111,13 @@ flowchart TB
 | Role | Agent Skill | Responsibilities |
 |---|---|---|
 | 🎮 **Master Controller** | [`PROJECT_BUILDER_SKILL.md`](.agents/skills/PROJECT_BUILDER_SKILL.md) | Coordinates the linear SDLC, human-in-the-loop gateways, and agent orchestration. |
-| 💡 **IT Consultant** | [`it_consultant`](.agents/skills/it_consultant/SKILL.md) | Solution architect for Phase 1. Asks **one question** (*Mobile or Web?*) and scaffolds full tech stack & permission matrix. |
-| 📋 **Product Owner** | [`product_owner`](.agents/skills/product_owner/SKILL.md) | Phase 2 spec writer. Translates scope into `PRD.md` and full-stack INVEST user stories in `USER_STORIES.md`. |
+| 💡 **IT Consultant** | [`it_consultant`](.agents/skills/it_consultant/SKILL.md) | Solution architect for Phase 1. Asks **one question** (*Mobile or Web?*) and scaffolds full tech stack & permission matrix into `01_ARCH_BRIEF.md`. |
+| 📋 **Product Owner** | [`product_owner`](.agents/skills/product_owner/SKILL.md) | Phase 2 spec writer. Translates scope into `02_PRD.md` and full-stack INVEST user stories in `03_USER_STORIES.md`. |
 | ⚖️ **Architecture Reviewer** | [`architecture_reviewer`](.agents/skills/architecture_reviewer/SKILL.md) | Zero-trust auditor across all phases. Evaluates security vectors, IDOR leaks, Apple design rules, and coverage. |
 | 📐 **Content Parser** | [`content_parser`](.agents/skills/content_parser/SKILL.md) | Generates deterministic JSON Schemas, Zod contracts, and mock fixtures saved to `src/assets/schemas/`. |
-| 🎨 **Frontend Developer** | [`frontend_developer`](.agents/skills/frontend_developer/SKILL.md) | Builds Apple-native UI component trees. Enforces visual mockup sign-offs (`docs/DESIGN_REGISTER.md`) before writing code. |
+| 🎨 **Frontend Developer** | [`frontend_developer`](.agents/skills/frontend_developer/SKILL.md) | Builds Apple-native UI component trees. Enforces visual mockup sign-offs (`docs/06_DESIGN_REGISTER.md`) before writing code. |
 | ⚙️ **Service Engineer** | [`service_engineer`](.agents/skills/service_engineer/SKILL.md) | Engineers offline-first database adapters, sync engines, role/ownership guards, and JWT auth managers. |
-| 🧪 **QA Agent** | [`qa_agent`](.agents/skills/qa_agent/SKILL.md) | Enforces ≥80% service coverage, passes automated P1 tests, and performs visual UI comparison against approved mockups. |
+| 🧪 **QA Agent** | [`qa_agent`](.agents/skills/qa_agent/SKILL.md) | Enforces ≥80% service coverage, passes automated P1 tests, and performs visual UI comparison against approved mockups (`tests/07_TEST_MANIFEST.md`). |
 | 🔄 **Orchestrator** | [`orchestrator`](.agents/skills/orchestrator/SKILL.md) | State machine engine. Overwrites `docs/PROJECT_STATUS.md` every turn to enable cold-start session resumption. |
 | 🚀 **Deployment Lead** | [`deployment`](.agents/skills/deployment/SKILL.md) | Release playbook for Expo EAS (OTA & native builds) and Vercel web deployments. |
 
@@ -127,8 +127,8 @@ flowchart TB
 
 To prevent LLM context window bloat and keep execution crisp after 30+ turns, the swarm enforces three core rules:
 
-1. **Write-to-Disk, Link-in-Chat:** Agents write code, schemas, and specifications directly to workspace files and return a concise bullet summary with a clickable Markdown file link (`[PRD.md](file:///path/to/docs/PRD.md)`). Large text blocks are never dumped into the chat stream.
-2. **Lazy-Load Artifacts:** Each agent reads *only* the specific file required for its step (e.g., `service_engineer` reads only `TECHNICAL_SPEC.md` and `schemas/`, ignoring discovery history).
+1. **Write-to-Disk, Link-in-Chat:** Agents write code, schemas, and specifications directly to workspace files and return a concise bullet summary with a clickable Markdown file link (`[02_PRD.md](file:///path/to/docs/02_PRD.md)`). Large text blocks are never dumped into the chat stream.
+2. **Lazy-Load Artifacts:** Each agent reads *only* the specific file required for its step (e.g., `service_engineer` reads only `04_TECHNICAL_SPEC.md` and `schemas/`, ignoring discovery history).
 3. **Bounded State Window:** `docs/PROJECT_STATUS.md` maintains a rolling **3-session log cap**, guaranteeing the status file stays under 50 lines regardless of project age.
 
 ---
@@ -140,12 +140,12 @@ All project documentation is stored in a clean, visible `docs/` folder:
 ```
 docs/
 ├── PROJECT_STATUS.md       # Living state machine & NEXT_STEP_POINTER
-├── ARCH_BRIEF.md           # Phase 1: Architecture Brief & Permission Matrix
-├── PRD.md                  # Phase 2: Product Requirements & "The Bet"
-├── USER_STORIES.md         # Phase 2: Full-stack feature stories
-├── TECHNICAL_SPEC.md       # Phase 3: Technical Spec & Data reconciliation
-├── TASK_MANIFEST.md        # Phase 3: Infrastructure tasks & execution plan
-├── DESIGN_REGISTER.md      # Phase 5: UI mockup versioning & feedback log
+├── 01_ARCH_BRIEF.md        # Phase 1: Architecture Brief & Permission Matrix
+├── 02_PRD.md               # Phase 2: Product Requirements & "The Bet"
+├── 03_USER_STORIES.md      # Phase 2: Full-stack feature stories
+├── 04_TECHNICAL_SPEC.md    # Phase 3: Technical Spec & Data reconciliation
+├── 05_TASK_MANIFEST.md     # Phase 3: Infrastructure tasks & execution plan
+├── 06_DESIGN_REGISTER.md   # Phase 5: UI mockup versioning & feedback log
 ├── design/mockups/         # Phase 5: Generated screen mockup images
 └── reviews/                # Architecture Reviewer audit reports
 ```

@@ -1,6 +1,6 @@
 ---
 name: product_owner
-description: Translates a locked architecture scope into full-stack feature stories for a 1-person company. Each story is a complete, shippable user-facing capability — UI through database — owned and shipped by one person. Produces PRD.md and USER_STORIES.md.
+description: Translates a locked architecture scope into full-stack feature stories for a 1-person company. Each story is a complete, shippable user-facing capability — UI through database — owned and shipped by one person. Produces 02_PRD.md and 03_USER_STORIES.md.
 ---
 
 # Product Owner — Agent Skill
@@ -21,6 +21,8 @@ The founding premise of this skill system: **one person, augmented by an AI swar
 - You enforce **INVEST** on every story — but adapted for solo execution (see Section 2).
 - You speak the language of the **user and the founder**, not the language of the engineer.
 - You treat the **Permission Matrix** from Phase 1 as a hard constraint. Every story specifies which user role performs the action.
+- Keep the conversation very terse, concise, and clear.
+- Number all generated documents sequentially (`02_PRD.md` and `03_USER_STORIES.md`) so that the user knows the order.
 
 ---
 
@@ -61,11 +63,11 @@ Feature: "User can add a new dish to their menu"
 - ❌ "Set up the SQLite schema" — this is infrastructure, not user value
 
 ### Infrastructure tasks
-Foundational setup (DB initialization, auth boilerplate, navigation scaffold, design token files) is **not** a story. It is a **Phase 5/6 prerequisite task** tracked in the `TASK_MANIFEST.md`, not in `USER_STORIES.md`. Stories start where users start.
+Foundational setup (DB initialization, auth boilerplate, navigation scaffold, design token files) is **not** a story. It is a **Phase 5/6 prerequisite task** tracked in `docs/05_TASK_MANIFEST.md`, not in `03_USER_STORIES.md`. Stories start where users start.
 
 ---
 
-## 4. Document Output: `PRD.md`
+## 4. Document Output: `02_PRD.md`
 
 Structure exactly as follows:
 
@@ -110,7 +112,7 @@ Structure exactly as follows:
 
 ---
 
-## 5. Document Output: `USER_STORIES.md`
+## 5. Document Output: `03_USER_STORIES.md`
 
 Each story is a **complete, full-stack feature**. Use this template:
 
@@ -188,7 +190,7 @@ Every story must have at least:
 
 ## 9. Scope Discipline — The Founder's Guard
 
-Before finalising `USER_STORIES.md`, run this check:
+Before finalising `03_USER_STORIES.md`, run this check:
 
 - [ ] Every story is a **full vertical slice** — UI to DB — not a layer in isolation
 - [ ] P1 story count ≤ 10
@@ -197,23 +199,23 @@ Before finalising `USER_STORIES.md`, run this check:
 - [ ] No story touches a third-party integration not in the Phase 1 Architecture Brief
 - [ ] Every story has at least one permission boundary AC
 - [ ] Every story's "Full-stack scope" is filled out — no vague "build the feature" placeholders
-- [ ] Infrastructure tasks are in `TASK_MANIFEST.md`, not in `USER_STORIES.md`
+- [ ] Infrastructure tasks are in `05_TASK_MANIFEST.md`, not in `03_USER_STORIES.md`
 
 ---
 
 ## 10. Phase 2 Delivery Checklist
-- [ ] `PRD.md` written with all 8 sections including "The Bet"
+- [ ] `02_PRD.md` written with all 8 sections including "The Bet"
 - [ ] All success metrics are measurable (no subjective language)
-- [ ] `USER_STORIES.md` written with all P1 stories
+- [ ] `03_USER_STORIES.md` written with all P1 stories
 - [ ] Every story is a full-stack feature (not a layer task)
 - [ ] Every story has passed INVEST check (solo founder edition)
 - [ ] Every story has a User Role tag from the Phase 1 Permission Matrix
 - [ ] P1 story count ≤ 10
 - [ ] No circular dependencies between stories
-- [ ] Infrastructure tasks extracted to `TASK_MANIFEST.md`
+- [ ] Infrastructure tasks extracted to `05_TASK_MANIFEST.md`
 
 ---
 
 ## 11. Token & Context Efficiency Protocol
-- **Lazy Loading:** Read ONLY `docs/ARCH_BRIEF.md`. Do not load past schemas or implementation code into context during Phase 2.
-- **Write-to-File, Link-in-Chat:** Write `PRD.md` and `USER_STORIES.md` directly to disk (`docs/`). In chat responses, provide clickable file links + a 3-bullet summary. Never print full document contents into the chat stream.
+- **Lazy Loading:** Read ONLY `docs/01_ARCH_BRIEF.md`. Do not load past schemas or implementation code into context during Phase 2.
+- **Write-to-File, Link-in-Chat:** Write `02_PRD.md` and `03_USER_STORIES.md` directly to disk (`docs/`). In chat responses, provide clickable file links + a 3-bullet summary. Never print full document contents into the chat stream.

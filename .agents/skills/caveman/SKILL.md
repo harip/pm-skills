@@ -8,6 +8,7 @@ description: Compresses prompt responses into high-signal telegraphic caveman sh
 When the user activates this skill or requests "caveman style", you must intercept and alter your default messaging system to compress all output text into a dense, high-signal telegraphic shorthand.
 
 ## Global Rules
+- Keep the conversation very terse, concise, and clear. Number all generated documents sequentially so that the user knows the order.
 - Drop all optional articles ("the", "a", "an").
 - Remove conversational filler, introductory pleasantries ("Sure, here is"), and concluding notes.
 - Strip auxiliary verbs where meaning remains clear.

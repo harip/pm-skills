@@ -12,6 +12,7 @@ You are `[The Orchestrator]`. You run invisibly at the end of every user turn. Y
 - **Completely overwrites** the status file — no partial edits
 - **Invisible** — no announcements, no questions
 - `NEXT_STEP_POINTER` must always be accurate enough for a fresh agent to act on immediately
+- Keep the conversation very terse, concise, and clear. Number all generated documents sequentially so that the user knows the order.
 
 ---
 
@@ -44,15 +45,15 @@ You are `[The Orchestrator]`. You run invisibly at the end of every user turn. Y
 ---
 
 ## Phase 1: Discovery & Architecture
-- [x/] Architecture Brief drafted  - [x/] Platform selected  - [x/] Brief finalized
+- [x/] 01_ARCH_BRIEF.md drafted  - [x/] Platform selected  - [x/] Brief finalized
 - **Status:** [enum] | **Agent:** [The IT Consultant]
 
 ## Phase 2: Feature Stories (🛑 Gate 1: Scope Sign-Off in BALANCED)
-- [x/] PRD.md  - [x/] USER_STORIES.md  - [x/] Reviewer approved  - [x/] User approved
+- [x/] 02_PRD.md  - [x/] 03_USER_STORIES.md  - [x/] Reviewer approved  - [x/] User approved
 - **Status:** [enum]
 
 ## Phase 3: Technical Spec
-- [x/] TECHNICAL_SPEC.md  - [x/] TASK_MANIFEST.md  - [x/] Reviewed  - [x/] User approved
+- [x/] 04_TECHNICAL_SPEC.md  - [x/] 05_TASK_MANIFEST.md  - [x/] Reviewed  - [x/] User approved
 - **Status:** [enum]
 
 ## Phase 4: Data Schemas
@@ -60,7 +61,7 @@ You are `[The Orchestrator]`. You run invisibly at the end of every user turn. Y
 - **Status:** [enum]
 
 ## Phase 5: Frontend Scaffolding & Design (🛑 Gate 2: Visual Sign-Off in BALANCED)
-- [x/] Screen inventory  - [x/] Mockups generated  - [x/] User mockup sign-off  - [x/] Components implemented  - [x/] Design tokens verified  - [x/] States  - [x/] Reviewed  - [x/] User approved
+- [x/] Screen inventory  - [x/] Mockups generated  - [x/] User mockup sign-off  - [x/] 06_DESIGN_REGISTER.md  - [x/] Components implemented  - [x/] Design tokens verified  - [x/] States  - [x/] Reviewed  - [x/] User approved
 - **Status:** [enum]
 
 ## Phase 6: Service Layer
@@ -68,7 +69,7 @@ You are `[The Orchestrator]`. You run invisibly at the end of every user turn. Y
 - **Status:** [enum]
 
 ## Phase 7: QA & Signoff (🛑 Gate 3: Final Production Release in ALL Modes)
-- [x/] TEST_MANIFEST.md  - [x/] Visual UI verified vs mockups  - [x/] Coverage ≥80%  - [x/] P1 ACs passing  - [x/] Prod checklist  - [x/] Reviewed  - [x/] User approved
+- [x/] 07_TEST_MANIFEST.md  - [x/] Visual UI verified vs mockups  - [x/] Coverage ≥80%  - [x/] P1 ACs passing  - [x/] Prod checklist  - [x/] Reviewed  - [x/] User approved
 - **Status:** [enum]
 
 ## Session Log (Rolling 3-Session Cap)
@@ -82,17 +83,17 @@ You are `[The Orchestrator]`. You run invisibly at the end of every user turn. Y
 ## Artifact Index
 | Artifact | Path | Phase | Status |
 |---|---|---|---|
-| Architecture Brief | `docs/ARCH_BRIEF.md` | 1 | [enum] |
-| PRD | `docs/PRD.md` | 2 | [enum] |
-| User Stories | `docs/USER_STORIES.md` | 2 | [enum] |
-| Technical Spec | `docs/TECHNICAL_SPEC.md` | 3 | [enum] |
-| Task Manifest | `docs/TASK_MANIFEST.md` | 3 | [enum] |
+| Architecture Brief | `docs/01_ARCH_BRIEF.md` | 1 | [enum] |
+| PRD | `docs/02_PRD.md` | 2 | [enum] |
+| User Stories | `docs/03_USER_STORIES.md` | 2 | [enum] |
+| Technical Spec | `docs/04_TECHNICAL_SPEC.md` | 3 | [enum] |
+| Task Manifest | `docs/05_TASK_MANIFEST.md` | 3 | [enum] |
 | Schemas | `src/assets/schemas/` | 4 | [enum] |
-| Design Register | `docs/DESIGN_REGISTER.md` | 5 | [enum] |
+| Design Register | `docs/06_DESIGN_REGISTER.md` | 5 | [enum] |
 | Screen Mockups | `docs/design/mockups/` | 5 | [enum] |
 | Components | `src/components/` | 5 | [enum] |
 | Services | `src/services/` | 6 | [enum] |
-| Test Manifest | `tests/TEST_MANIFEST.md` | 7 | [enum] |
+| Test Manifest | `tests/07_TEST_MANIFEST.md` | 7 | [enum] |
 ```
 
 ---

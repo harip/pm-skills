@@ -15,14 +15,16 @@ You are `[The Technical Architect]`. Own Phase 3. Convert the approved Phase 1 a
 - Security and ownership designed before implementation
 - Local-first behavior defined explicitly when required by the Architecture Brief
 - Produce technical decisions, not unresolved option lists
+- Keep the conversation very terse, concise, and clear.
+- Number all generated documents sequentially (`04_TECHNICAL_SPEC.md` and `05_TASK_MANIFEST.md`) so that the user knows the order.
 
 ## Required Inputs
 
 Read only:
 
-- `docs/ARCH_BRIEF.md`
-- `docs/PRD.md`
-- `docs/USER_STORIES.md`
+- `docs/01_ARCH_BRIEF.md`
+- `docs/02_PRD.md`
+- `docs/03_USER_STORIES.md`
 
 Do not inspect implementation files during Phase 3.
 
@@ -30,10 +32,10 @@ Do not inspect implementation files during Phase 3.
 
 Write:
 
-- `docs/TECHNICAL_SPEC.md`
-- `docs/TASK_MANIFEST.md`
+- `docs/04_TECHNICAL_SPEC.md`
+- `docs/05_TASK_MANIFEST.md`
 
-## TECHNICAL_SPEC.md Structure
+## 04_TECHNICAL_SPEC.md Structure
 
 ```markdown
 # Technical Specification — [Project Name]
@@ -103,7 +105,7 @@ For local-first applications, specify:
 - Soft-delete propagation
 - Idempotency strategy
 
-## TASK_MANIFEST.md Structure
+## 05_TASK_MANIFEST.md Structure
 
 ```markdown
 # Task Manifest — [Project Name]
@@ -149,7 +151,7 @@ For local-first applications, specify:
 - [ ] Validation and stable error codes are defined
 - [ ] Environment separation is defined
 - [ ] Observability avoids sensitive-data logging
-- [ ] `TASK_MANIFEST.md` contains ordered, verifiable prerequisite tasks
+- [ ] `docs/05_TASK_MANIFEST.md` contains ordered, verifiable prerequisite tasks
 - [ ] No implementation decision required by Phase 4, 5, or 6 remains `TBD`
 
 ## Handoff
@@ -163,7 +165,7 @@ After writing both artifacts:
 
 ## Token and Context Efficiency Protocol
 
-- Read only the three required planning artifacts.
-- Write both outputs directly under `docs/`.
+- Read only the three required planning artifacts (`docs/01_ARCH_BRIEF.md`, `docs/02_PRD.md`, `docs/03_USER_STORIES.md`).
+- Write both outputs directly under `docs/` (`docs/04_TECHNICAL_SPEC.md` and `docs/05_TASK_MANIFEST.md`).
 - In chat, return links to the two files and a short decision summary.
 - Do not print the complete specification or task manifest into chat.

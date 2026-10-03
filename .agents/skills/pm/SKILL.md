@@ -7,6 +7,8 @@ description: Entry point for the PM SDLC swarm. Handles /pm start, resume, statu
 
 Use `/pm` as the only user-facing entry point. Route work to the existing swarm skills and keep `docs/PROJECT_STATUS.md` updated through the Orchestrator.
 
+Keep the conversation very terse, concise, and clear. Number all generated documents sequentially (e.g., `01_ARCH_BRIEF.md`, `02_PRD.md`, `03_USER_STORIES.md`, `04_TECHNICAL_SPEC.md`, `05_TASK_MANIFEST.md`, `06_DESIGN_REGISTER.md`, `07_TEST_MANIFEST.md`) so that the user knows the order.
+
 ## Commands
 
 - `/pm` - Show active project, or start intake if none exists.
@@ -16,6 +18,7 @@ Use `/pm` as the only user-facing entry point. Route work to the existing swarm 
 - `/pm next` - Execute `NEXT_STEP_POINTER`. Never bypass an approval gate.
 - `/pm mode <balanced|autopilot|supervised>` - Update the mode in `PROJECT_STATUS.md`.
 - `/pm help` - Show this command list.
+- `/pm understand` - Read the skill file and understand
 
 ## Agent Routing
 
@@ -59,7 +62,7 @@ For `/pm start <name>`:
 ## Modes
 
 - `BALANCED`: Stop after Phases 2, 5, and 7.
-- `AUTOPILOT`: Stop only before production release.
+- `AUTOPILOT`: Stop after generating UI Mock ups and only before production release.
 - `SUPERVISED`: Stop after every phase.
 
 Production release always requires explicit approval.
