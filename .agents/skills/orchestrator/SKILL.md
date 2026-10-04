@@ -12,7 +12,7 @@ See `.agents/rules/GLOBAL_RULES.md` for shared protocols and document numbering.
 - **Invisible Execution:** Overwrite `docs/PROJECT_STATUS.md` silently on disk at the end of *every user turn*. Never dump raw table in chat unless requested.
 - **Line Limit & Session Cap:** Keep `PROJECT_STATUS.md` under 65 lines. Maintain rolling **3-session log cap** (delete oldest rows).
 - **Exact Status Enums:** `[NOT STARTED] | [IN PROGRESS] | [AWAITING USER SETUP] | [AWAITING PEER REVIEW] | [AWAITING MANAGER APPROVAL] | [COMPLETED & LOCKED] | [SKIPPED — USER MANAGED] | [N/A — CAPABILITY NOT REQUIRED] | [UNVERIFIED — DEPENDENCY DEFERRED] | [STALE — REVISION REQUIRED]`.
-- **Terminal Handoff Pointer:** `NEXT_STEP_POINTER: COMPLETE — USER MANAGED HANDOFF` when deployment is skipped.
+- **Visual Progress Synchronization:** Keep project root `progress.html` updated at every turn with current phase, deliverables index, and StackBlitz sandbox link.
 
 ## Template: `docs/PROJECT_STATUS.md`
 ```markdown
@@ -29,6 +29,7 @@ See `.agents/rules/GLOBAL_RULES.md` for shared protocols and document numbering.
 - [ ] Phase 5 (UI/UX): `docs/06_DESIGN_REGISTER.md`, `src/components/` — [Status] | Agent: Frontend Dev
 - [ ] Phase 6 (Database Setup & Service): `src/services/`, `src/hooks/`, `src/db/` — [Status] | Agent: Service Eng
 - [ ] Phase 7 (QA): `tests/07_TEST_MANIFEST.md` — [Status] | Agent: QA Agent
+- [ ] Phase 8 (UAT): `docs/10_UAT_CHECKLIST.md` — [Status] | Agent: UAT Coordinator (StackBlitz Sandbox)
 
 - [ ] Release (Provider Setup & Deployment): `docs/08_SETUP_REGISTER.md`, `docs/09_RELEASE_PLAN.md` — [Status] | Agent: Deployment Lead
 
