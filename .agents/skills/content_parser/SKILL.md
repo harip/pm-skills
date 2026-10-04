@@ -32,3 +32,6 @@ For every persistent entity (when persistence is active), generate 3 files:
 1. Read `docs/00_PROJECT_CONTRACT.md`, `docs/04_TECHNICAL_SPEC.md`, and `docs/03_USER_STORIES.md`.
 2. Generate `.schema.json`, `.contract.ts`, and `.mock.ts` directly under `src/assets/schemas/` (or mark N/A).
 3. Chat Output: Table of generated schemas + file links. Never print raw JSON schema in chat.
+
+## Contract Verification
+Map generated contracts to their story/AC and planned unit/contract cases in the existing technical spec/task manifest. Cover valid inputs, rejected inputs, boundary values, and applicable serialization round trips; fixtures alone are not test evidence.

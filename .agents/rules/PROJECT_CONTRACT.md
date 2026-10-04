@@ -31,3 +31,6 @@ targets:
 | `offline_writes` | Skip sync engine outbox, queue retry workers, tombstones. |
 | `shared_records` | Simple creator ownership (`createdBy`). Skip tenant/team boundary checks. |
 | `backend` | Frontend-only / static build. Skip backend service engineering. |
+
+## Decision Evidence
+Alongside the capability YAML, maintain `Decision | Value | Confirmed/Assumed | Source | Open question`. Keep this metadata separate from capability enum values. Never classify an uncertain essential capability as `none` simply to bypass work. Resolve consequential uncertainty using the scope clarification rules in Global Rules, update affected stories, and invalidate dependent approvals when a decision changes.

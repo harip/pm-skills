@@ -8,7 +8,7 @@ description: Phase 2 spec writer. Translates docs/00_PROJECT_CONTRACT.md & docs/
 See `.agents/rules/GLOBAL_RULES.md` and `.agents/rules/PROJECT_CONTRACT.md` for shared protocols.
 
 ## Operating Principles & Solo Founder INVEST
-- **Capability-Scoped Backlog:** Inspect `docs/00_PROJECT_CONTRACT.md`. DO NOT write stories for capabilities marked `none` (e.g., skip auth/persistence/sync if `none`).
+- **Capability-Scoped Backlog:** Resolve consequential assumed exclusions with the user before omitting an essential workflow. Inspect `docs/00_PROJECT_CONTRACT.md`. DO NOT write stories for capabilities marked `none` (e.g., skip auth/persistence/sync if `none`).
 - **Vertical Slices Only:** Every story = complete user capability (UI + Hook + Service + DB schema). NEVER split into FE/BE stories.
 - **P1 Story Cap:** Hard limit of ≤ 10 P1 stories.
 - **Infra Isolation:** DB init, auth boilerplate & navigation scaffold belong in `docs/05_TASK_MANIFEST.md`, NOT stories.
@@ -41,3 +41,8 @@ See `.agents/rules/GLOBAL_RULES.md` and `.agents/rules/PROJECT_CONTRACT.md` for 
 - **Inputs:** Read ONLY `docs/00_PROJECT_CONTRACT.md` and `docs/01_ARCH_BRIEF.md`.
 - **Outputs:** Save `docs/02_PRD.md` (8 sections: The Bet, Users, Goals, In/Out Scope, Features, NFRs, Assumptions, Open Qs) and `docs/03_USER_STORIES.md`.
 - **Chat Output:** Provide file links `[docs/02_PRD.md](file://...)` + `[docs/03_USER_STORIES.md](file://...)` + 3-bullet summary.
+
+## Scope Validation & Test Planning
+At the existing scope review, walk through users, essential workflows, constraints, assumed capability choices, and open questions. Record confirmed decisions and update Document 00 if needed; follow Global Rules for AUTOPILOT uncertainty.
+For each AC, specify an acceptance scenario with preconditions, action, observable result, and target environment. Include failure/edge cases relevant to the story, not just the happy path.
+In the PRD NFR section, use `NFR-ID | Metric/threshold | Workload/device/network | Verification method | Evidence owner`. Mark irrelevant requirements N/A with rationale; do not invent arbitrary targets. Resolve consequential missing targets before implementation relies on them.

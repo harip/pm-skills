@@ -3,104 +3,52 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Multi-Agent SDLC Swarm — Skills & Architecture Visualizer</title>
-  <script src="https://cdn.tailwindcss.com"></script>
+  <title>PM Workflow — V-Model</title>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=SF+Pro+Display:wght@400;500;600;700&display=swap');
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", sans-serif;
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 32px 24px; background: #f7f9fb; color: #1e293b; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased; }
+    main { width: 100%; max-width: 1024px; padding: 32px; background: #fff; border: 1px solid #dce5f1; border-radius: 24px; box-shadow: 0 20px 25px -5px rgb(0 0 0 / .10), 0 8px 10px -6px rgb(0 0 0 / .10); }
+    .audit-strip { display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 12px; padding: 10px 16px; border: 1px solid #cbd5e1; border-radius: 14px; background: #fff; color: #334155; font: inherit; font-size: 11px; font-weight: 650; cursor: pointer; }
+    .audit-strip span:last-child { color: #64748b; font-weight: 500; }
+    .audit-strip:hover, .audit-strip.selected { border-color: #64748b; background: #f8fafc; }
+    .audit-strip:focus-visible { outline: 3px solid #64748b; outline-offset: 3px; }
+    .v-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: end; gap: 24px; padding: 16px; background: #f7f9fb; border: 1px solid #dce5f1; border-radius: 18px; }
+    .phase-column { --accent: #2563ff; --line: #dbe5f3; --badge-bg: #dbeafe; --badge-text: #1d4ed8; }
+    .implementation { --accent: #9333ff; --line: #e9d5ff; --badge-bg: #f3e8ff; --badge-text: #7e22ce; }
+    .validation { --accent: #00a36c; --badge-bg: #d1fae5; --badge-text: #047857; }
+    .phase-column h2 { margin: 0 0 16px; padding: 0 0 8px; border-bottom: 1px solid var(--line); color: var(--accent); text-align: center; text-transform: uppercase; font-size: 12px; line-height: 16px; font-weight: 650; letter-spacing: 1px; }
+    .validation h2 { border-color: #d1fae5; }
+    .phase-cards { display: grid; gap: 16px; }
+    .role-card { display: block; width: 100%; height: 74px; padding: 14px; border: 1px solid var(--line); border-radius: 17px; background: #fff; color: #1e293b; text-align: left; font: inherit; cursor: pointer; }
+    .card-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; height: 24px; }
+    .card-role { font-size: 12px; font-weight: 650; white-space: nowrap; }
+    .badge { display: inline-grid; place-items: center; width: 24px; height: 24px; flex: 0 0 24px; border-radius: 50%; color: var(--badge-text); background: var(--badge-bg); font-size: 13px; font-weight: 700; }
+    .card-label { display: block; margin-top: 4px; color: #586174; font-size: 10px; line-height: 14px; letter-spacing: .25px; }
+    .role-card.selected { background: #2563eb; color: #fff; border-color: #60a5fa; box-shadow: 0 0 0 1px #93c5fd, 0 3px 5px rgb(15 23 42 / .12); }
+    .selected .badge { background: #fff; color: #2563ff; }
+    .selected .card-label { color: #dbeafe; font-weight: 600; }
+    .role-card:hover:not(.selected) { border-color: var(--accent); }
+    .role-card:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+    .detail { display: flex; align-items: center; gap: 12px; min-height: 68px; margin-top: 24px; padding: 14px 16px; border: 1px solid #b9d6ff; border-radius: 17px; background: #eff6ff; }
+    .detail .test-mapping { margin-top: 5px; color: #1d4ed8; font-size: 11px; }
+    .detail-icon { font-size: 22px; line-height: 28px; }
+    .detail h2 { margin: 0; color: #0f172a; font-size: 12px; line-height: 18px; font-weight: 650; }
+    .detail p { margin: 0; color: #475569; font-size: 12px; line-height: 18px; letter-spacing: .1px; }
+    @media (max-width: 760px) {
+      body { display: block; padding: 24px 12px; overflow-x: auto; }
+      main { min-width: 700px; padding: 24px; }
+      .v-grid { gap: 16px; padding: 12px; }
+      .audit-strip { gap: 20px; }
+      .role-card { padding: 12px; }
+      .card-role { font-size: 11px; }
     }
-    ::-webkit-scrollbar { width: 5px; height: 5px; }
-    ::-webkit-scrollbar-thumb { background: #262626; border-radius: 4px; }
   </style>
 </head>
-<body class="bg-black text-neutral-100 min-h-screen flex flex-col antialiased">
-
-  <!-- Header -->
-  <header class="h-16 border-b border-neutral-800/80 px-4 md:px-8 flex items-center justify-between shrink-0 bg-neutral-950/80 backdrop-blur-xl">
-    <div class="flex items-center gap-3">
-      <div class="w-9 h-9 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-400 font-bold text-lg">
-        🐝
-      </div>
-      <div>
-        <h1 class="text-sm font-bold tracking-tight text-white flex items-center gap-2">
-          <span>SDLC Swarm Architecture</span>
-          <span class="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/30 font-mono">v2.7.0</span>
-        </h1>
-        <p class="text-[11px] text-neutral-400 font-mono">/Volumes/Samsung 990 1TB/hp/projects/pm-skills</p>
-      </div>
-    </div>
-
-    <!-- View Switcher -->
-    <nav class="flex items-center bg-neutral-900 border border-neutral-800 rounded-2xl p-1">
-      <button onclick="switchView('flow')" id="btnTabFlow" class="px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all bg-neutral-800 text-white shadow">
-        Swarm Workflow
-      </button>
-      <button onclick="switchView('docs')" id="btnTabDocs" class="px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all text-neutral-400 hover:text-white">
-        Documents Matrix
-      </button>
-      <button onclick="switchView('dashboard')" id="btnTabDash" class="px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all text-neutral-400 hover:text-white">
-        Project Progress View
-      </button>
-    </nav>
-  </header>
-
-  <!-- Main Viewport -->
-  <main class="flex-1 flex overflow-hidden p-4 md:p-6 gap-6">
-
-    <!-- VIEW 1: Swarm Flowchart & Skill Inspector -->
-    <div id="viewFlow" class="flex-1 flex flex-col lg:flex-row gap-6 overflow-hidden">
-      <!-- Left: Phase Flow Grid -->
-      <section class="flex-1 flex flex-col overflow-hidden">
-        <div class="flex items-center justify-between pb-3">
-          <div>
-            <h2 class="text-base font-bold text-white tracking-tight">Phase Execution Lifecycle</h2>
-            <p class="text-xs text-neutral-400">Click any skill to inspect handoffs, inputs, and created documents</p>
-          </div>
-          <span class="text-xs font-mono text-neutral-500">7 Phases + 4 Support Roles</span>
-        </div>
-
-        <div id="flowContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 overflow-y-auto pr-1 flex-1">
-          <!-- Populated by app.js -->
-        </div>
-      </section>
-
-      <!-- Right: Detailed Skill Inspector Panel -->
-      <aside class="w-full lg:w-[420px] bg-neutral-900/60 border border-neutral-800 rounded-3xl p-5 flex flex-col shrink-0 overflow-y-auto">
-        <div id="inspectorPanel">
-          <!-- Populated by app.js -->
-        </div>
-      </aside>
-    </div>
-
-    <!-- VIEW 2: Documents & Deliverables Matrix -->
-    <div id="viewDocs" class="hidden flex-1 flex flex-col overflow-hidden">
-      <div class="pb-4">
-        <h2 class="text-base font-bold text-white tracking-tight">SDLC Swarm Deliverables Matrix</h2>
-        <p class="text-xs text-neutral-400">All documentation and code artifacts produced across project phases</p>
-      </div>
-      <div id="docsMatrixContainer" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5 overflow-y-auto pr-1 flex-1">
-        <!-- Populated by app.js -->
-      </div>
-    </div>
-
-    <!-- VIEW 3: Live Project Progress Dashboard Blueprint -->
-    <div id="viewDashboard" class="hidden flex-1 flex flex-col items-center justify-center overflow-y-auto p-4">
-      <div class="text-center max-w-lg mb-6">
-        <span class="text-2xl mb-1 block">📊</span>
-        <h2 class="text-lg font-bold text-white">Visual Project Progress Protocol</h2>
-        <p class="text-xs text-neutral-400 mt-1 leading-relaxed">
-          When this swarm is activated in a project, it automatically generates a visual <strong class="text-white">`progress.html`</strong> file in the project workspace, replacing raw markdown tracking with an interactive dashboard:
-        </p>
-      </div>
-
-      <div id="dashLivePreview" class="w-full flex justify-center">
-        <!-- Live preview card rendered by app.js -->
-      </div>
-    </div>
-
+<body>
+  <main aria-label="PM workflow visualizer">
+    <div id="vModelContainer"></div>
+    <noscript>Enable JavaScript to explore the workflow.</noscript>
   </main>
-
   <script src="app.js"></script>
 </body>
 </html>

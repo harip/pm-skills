@@ -36,30 +36,32 @@
 
     <!-- Visual Milestone Stepper -->
     <section class="bg-neutral-900/60 border border-neutral-800 rounded-3xl p-6">
-      <h2 class="text-xs font-semibold uppercase tracking-wider text-neutral-400 mb-4">Milestone Progress</h2>
-      <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 text-center text-xs font-mono">
-        <div class="p-2.5 rounded-xl border {{STEP_1_STYLE}}">1. Contract</div>
-        <div class="p-2.5 rounded-xl border {{STEP_2_STYLE}}">2. PRD</div>
-        <div class="p-2.5 rounded-xl border {{STEP_3_STYLE}}">3. Spec</div>
-        <div class="p-2.5 rounded-xl border {{STEP_4_STYLE}}">4. Build</div>
-        <div class="p-2.5 rounded-xl border {{STEP_5_STYLE}}">5. QA</div>
-        <div class="p-2.5 rounded-xl border {{STEP_6_STYLE}}">6. UAT ⚡</div>
-        <div class="p-2.5 rounded-xl border {{STEP_7_STYLE}}">7. Release</div>
+      <h2 class="text-xs font-semibold uppercase tracking-wider text-neutral-400 mb-4">Milestone Progress · {{ACTIVE_STORY}}</h2>
+      <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-9 gap-2 text-center text-xs font-mono">
+        <div class="p-2.5 rounded-xl border {{STEP_1_STYLE}}">1. Discovery &amp; Contract</div>
+        <div class="p-2.5 rounded-xl border {{STEP_2_STYLE}}">2. Scope</div>
+        <div class="p-2.5 rounded-xl border {{STEP_3_STYLE}}">3. Technical Spec</div>
+        <div class="p-2.5 rounded-xl border {{STEP_4_STYLE}}">4. Schemas</div>
+        <div class="p-2.5 rounded-xl border {{STEP_5_STYLE}}">5. UI/UX</div>
+        <div class="p-2.5 rounded-xl border {{STEP_6_STYLE}}">6. DB &amp; Services</div>
+        <div class="p-2.5 rounded-xl border {{STEP_7_STYLE}}">7. QA</div>
+        <div class="p-2.5 rounded-xl border {{STEP_8_STYLE}}">8. UAT</div>
+        <div class="p-2.5 rounded-xl border {{RELEASE_STYLE}}">Release</div>
       </div>
     </section>
 
-    <!-- UAT Cloud Sandbox Banner -->
+    <!-- Populate UAT access only when available; otherwise render a disabled pending-access label. -->
     <section class="bg-gradient-to-r from-blue-950/40 via-cyan-950/30 to-purple-950/40 border border-cyan-500/30 rounded-3xl p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
       <div>
         <div class="flex items-center gap-2">
           <span class="text-base">⚡</span>
-          <h3 class="text-base font-bold text-white">Temporary StackBlitz UAT Sandbox</h3>
+          <h3 class="text-base font-bold text-white">Target-platform UAT</h3>
         </div>
-        <p class="text-xs text-neutral-400 mt-1">Review live interactive application in a cloud WebContainer sandbox without server setup.</p>
+        <p class="text-xs text-neutral-400 mt-1">{{UAT_ENVIRONMENT_SUMMARY}}</p>
       </div>
 
-      <a href="redirect_stackblitz.html" target="_blank" class="px-5 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black font-semibold text-xs shadow-lg transition-all flex items-center justify-center gap-1.5 shrink-0">
-        <span>Launch UAT Sandbox</span> <span>↗</span>
+      <a href="{{UAT_ACCESS_URL}}" target="_blank" class="px-5 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black font-semibold text-xs shadow-lg transition-all flex items-center justify-center gap-1.5 shrink-0">
+        <span>Open UAT Environment</span> <span>↗</span>
       </a>
     </section>
 

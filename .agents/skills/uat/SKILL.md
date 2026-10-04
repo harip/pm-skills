@@ -1,67 +1,31 @@
 ---
 name: uat
-description: User Acceptance Testing (UAT) Coordinator. Deploys applications to temporary StackBlitz cloud sandboxes for stakeholder evaluation, validates acceptance criteria, and manages review feedback before final production release.
+description: Phase 8 lead. Coordinates stakeholder acceptance in a target-platform test environment, records build-specific evidence, and manages feedback before Release.
 ---
 
-# User Acceptance Testing (UAT) Coordinator
+# UAT Coordinator (Phase 8 Lead)
 
-## 1. Overview & Purpose
-The **UAT Coordinator** bridges engineering verification and stakeholder approval. While the **QA Agent** verifies technical correctness, unit tests, and edge cases, the **UAT Coordinator** validates that the application fulfills user expectations, business goals, and usability standards.
+Follow Global Rules §8 for acceptance environments and evidence. Gate 3 records stakeholder acceptance; Gate 4 separately authorizes Release.
 
-To provide instant, zero-friction stakeholder testing without incurring infrastructure costs or complex CI/CD deployments, the UAT Coordinator deploys the build into an **isolated, temporary StackBlitz WebContainer cloud sandbox**.
+## Entry & Environment Selection
+Start after all in-scope slices and aggregate Phase 7 QA pass, preserving any mock-only qualification. Read the contract, PRD, user stories, technical spec, and test manifest.
+- **Web:** Use a compatible StackBlitz sandbox, existing preview, or representative local/staging build. Check runtime and integration compatibility before selecting it. Read [StackBlitz reference](references/stackblitz-template.md) only when using that sandbox.
+- **Native mobile:** Use an installable test build on the target device/OS. A compatible Expo preview may cover supported behavior; native permissions, storage, lifecycle, and other device-dependent ACs require the appropriate native build/device evidence. A web rendering cannot approve those ACs.
+- **Multiple targets:** Record acceptance evidence for each required target. If build access, device access, or integration prerequisites are missing, keep acceptance pending and guide the user to the next prerequisite. Do not silently substitute a web preview.
+Use existing test access when available. Preparing test access does not authorize production publication or store submission.
 
----
+## Acceptance & Feedback
+1. Reuse acceptance scenarios defined in Phase 2; refine them for the actual environment and applicable NFRs.
+2. Record `source revision/build | platform/device/OS | environment | data mode (live/test/mocks) | AC/NFR-ID | expected/actual result | evidence | limitation` in `docs/10_UAT_CHECKLIST.md`.
+3. Set `[AWAITING UAT SIGN-OFF]` and present the test access and checklist to the stakeholder. Record approver, decision, revision, and scope. Untested required behavior cannot count as accepted.
+4. On revisions, write `UAT_FEEDBACK.md` with reproduction steps, expected/actual behavior, severity, and affected AC/NFR IDs; route through PM to the responsible lead, then rerun affected QA/regressions and UAT.
+5. On acceptance, hand off to Release. Mock-demo acceptance stays qualified and cannot authorize production with required integrations unverified. Changed builds or environments require impact review and renewed affected evidence/sign-off.
 
-## 2. Core Responsibilities
-1. **Cloud Sandbox Packaging**:
-   - Package the current working application into an on-the-fly StackBlitz WebContainer payload.
-   - Generate both a direct auto-submitting launcher (`redirect_stackblitz.html`) and an interactive container modal.
-2. **Acceptance Criteria Validation**:
-   - Extract the acceptance criteria from the Product Owner's `PRD.md`.
-   - Formulate a human-readable **UAT Checklist** for the user/stakeholder to test interactively.
-3. **Feedback & Sign-off Management**:
-   - Collect and categorize stakeholder feedback into either:
-     - **Sign-off / Approved**: Ready for final production release.
-     - **Revisions Requested**: Clear actionable defect or refinement items.
-4. **Visual Dashboard Synchronization**:
-   - Update the project's `progress.html` with the active StackBlitz UAT link, testing checklist, and current review status.
+## Deliverables
+- `docs/10_UAT_CHECKLIST.md`: scenarios, tested build/environment, results, limitations, and stakeholder decision.
+- `progress.html`: selected environment access and pending/accepted scope.
+- `UAT_FEEDBACK.md`: only when revisions are requested.
+- `open_stackblitz.html` / `redirect_stackblitz.html`: only for compatible web sandbox use; native testing uses its build/install access instead.
 
----
-
-## 3. Workflow & Phase Handoffs
-
-```
-[Phase 5: QA Agent]
-       │
-       ▼ (Technical Tests Passed)
-[Phase 6: UAT Coordinator]
-       ├──> Generates StackBlitz WebContainer sandbox
-       ├──> Updates `progress.html` with live UAT link
-       └──> Presents UAT Acceptance Checklist to User
-       │
-       ├──> [If Approved] ──> Handoff to Phase 7: Deployment Agent
-       └──> [If Changes]  ──> Generates UAT_FEEDBACK.md ──> Handoff to PM / Dev
-```
-
----
-
-## 4. Deliverables & Documentation Created
-Whenever the UAT Coordinator runs, it delivers:
-
-* **`UAT_CHECKLIST.md`**: Feature-by-feature test scenarios derived directly from the PRD user stories.
-* **`open_stackblitz.html` & `redirect_stackblitz.html`**: Zero-config launcher files allowing instant opening of the temporary StackBlitz container.
-* **`UAT_FEEDBACK.md`** *(if revisions needed)*: Structured feedback containing reproduction steps, expected vs. actual behavior, and priority level.
-* **`progress.html` (Updated)**: Advances the project lifecycle stepper to Phase 6: UAT and embeds the cloud sandbox link.
-
----
-
-## 5. StackBlitz Deployment Protocol
-For web applications (HTML/JS, React, Vite, Next.js):
-1. Read all distribution/source files.
-2. Escape content for HTML form serialization.
-3. Formulate the POST request targeting `https://stackblitz.com/run` with:
-   - `project[title]`: Project Name
-   - `project[description]`: Short summary
-   - `project[template]`: `html` or `javascript` or `node`
-   - `project[files][...]`: Full file map
-4. Provide both the in-browser link and the in-chat agent embed.
+## StackBlitz Packaging (Web Only)
+Confirm compatibility and use the linked reference to prepare the file map and launcher targeting `https://stackblitz.com/run`. Package only the project files needed for the test; exclude credentials, ignored environment files, and private production data. Escape serialized content. Record the tested revision and sandbox limitations in the checklist.

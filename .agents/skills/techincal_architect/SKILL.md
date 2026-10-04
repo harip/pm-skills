@@ -24,3 +24,7 @@ Every task in `docs/05_TASK_MANIFEST.md` MUST specify:
   1. `docs/04_TECHNICAL_SPEC.md` (System Context, Runtime Arch, Scoped Module Boundaries, Data Model, Typed API Contracts, Sync/Outbox Protocol, Tenant & Auth Guards, Security/Zod Validation, Observability).
   2. `docs/05_TASK_MANIFEST.md` (Executable prerequisite tasks: `INF-001`, `SEC-001`, `DATA-001`, `DEV-001`, `CI-001`).
 - **Handoff:** Set Phase 3 status to `[AWAITING PEER REVIEW]` → Invoke Architecture Reviewer.
+
+## Verification Design & Slice Scheduling
+Map architecture and external API boundaries to integration checks, including applicable errors, authorization, and recovery cases. Map each NFR-ID to its planned check, conditions, owner, and expected evidence in the technical spec.
+Group implementation tasks by story with Phase 5 → 6 → 7 dependencies, developer tests in Phases 5–6, and integrated regression QA before UAT. Identify shared infrastructure prerequisites without turning feature stories into separate frontend/backend backlogs.

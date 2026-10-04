@@ -5,7 +5,7 @@ description: Entry point for the PM SDLC swarm. Handles /pm commands.
 
 # PM Command (Swarm Entry Point)
 
-See `.agents/rules/GLOBAL_RULES.md` for shared protocols and document numbering.
+Use `.agents/rules/GLOBAL_RULES.md` as the authority for roles, phases, gates, and artifact paths. `../PROJECT_BUILDER_SKILL.md` describes the controller workflow; Orchestrator persists state.
 
 ## Commands
 - `/pm` — Show active project or start intake.
@@ -17,6 +17,7 @@ See `.agents/rules/GLOBAL_RULES.md` for shared protocols and document numbering.
 - `/pm help` — Display command list.
 
 ## Routing Matrix
+Paths are relative to `.agents/skills/`. The contract and architecture brief both belong to Phase 1.
 | Target | Agent | Skill Path |
 |---|---|---|
 | Phase 1 | IT Consultant | `it_consultant/SKILL.md` |
@@ -26,11 +27,17 @@ See `.agents/rules/GLOBAL_RULES.md` for shared protocols and document numbering.
 | Phase 5 | Frontend Developer | `frontend_developer/SKILL.md` |
 | Phase 6 (database setup first) | Service Engineer | `service_engineer/SKILL.md` |
 | Phase 7 | QA Agent | `qa_agent/SKILL.md` |
+| Phase 8 | UAT Coordinator | `uat/SKILL.md` |
 | Release (provider setup, approval, deployment) | Deployment Lead | `deployment/SKILL.md` |
 | Audit | Architecture Reviewer | `architecture_reviewer/SKILL.md` |
 | State | Orchestrator | `orchestrator/SKILL.md` |
+| Phase 5 design support | Apple Design (`apple-design`) | `apple_design/SKILL.md` |
+
+PM is the entry/routing skill. Audit, state, and design support are not sequential phases.
 
 ## Execution Protocol
 1. **Start:** If `PROJECT_STATUS.md` exists → suggest `/pm resume`. Else prompt pitch, set `NEXT_STEP_POINTER: Phase 1`, run IT Consultant.
 2. **Resume/Next:** Load `NEXT_STEP_POINTER` agent skill → execute step → run Architecture Reviewer → run Orchestrator to update `PROJECT_STATUS.md`.
-3. **Gate Rules:** Pause for user sign-off per active autonomy mode (`BALANCED`, `AUTOPILOT`, `SUPERVISED`). Mockup review, database setup/skip, and deployment selection/skip stop every mode using selectable controls. Database skip continues with explicit mock data/models and integration debt; deployment skip ends with a handoff and no deployment. Resume the saved prerequisite when deferred. After QA passes, route to Deployment Lead to prepare the release plan before final production sign-off. `/pm next` cannot bypass setup or release approval.
+3. **Gate Rules:** Follow Global Rules: Gate 1 = scope, Gate 2 = mockups, Gate 3 = UAT, Gate 4 = release plan. After slice QA, route to Phase 5 for the next story. After all slices and aggregate Phase 7 QA pass, route to Phase 8 UAT Coordinator; after UAT sign-off, route to Deployment Lead for Release. Database setup/skip remains at Phase 6 entry; deployment selection/skip remains in Release. `/pm next` and resume cannot bypass required setup or approvals.
+
+Apply Global Rules §8 for discovery uncertainty, per-story routing, early verification planning, NFR evidence, and target-platform UAT. Resume the active story recorded in the state pointer; do not treat a passing slice as a completed release.
