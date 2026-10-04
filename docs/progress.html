@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PM Workflow — Minimalist V-Model Visualizer</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 20px; background: #fafafa; color: #171717; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif; -webkit-font-smoothing: antialiased; }
+    
+    .visualizer-wrapper { width: 100%; max-width: 1240px; }
+
+    /* Side-by-Side Master-Detail Split Layout */
+    .v-split-layout { display: grid; grid-template-columns: 1.25fr 0.75fr; gap: 20px; align-items: stretch; }
+    .v-left-pane { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+    .v-right-pane { display: flex; flex-direction: column; min-width: 0; }
+
+    /* Minimalist Folder Tabs attached to container */
+    .folder-tabs-bar { display: flex; align-items: flex-end; gap: 4px; padding-left: 8px; margin-bottom: -1px; position: relative; z-index: 10; }
+    .folder-tab { border: 1px solid #e5e5e5; border-bottom: none; background: #f5f5f5; padding: 9px 20px; border-radius: 10px 10px 0 0; font-family: inherit; font-size: 12px; font-weight: 600; color: #737373; cursor: pointer; transition: all 0.15s ease; position: relative; }
+    .folder-tab:hover { background: #eeeeee; color: #171717; }
+    
+    /* Active Tab merges smoothly into main container */
+    .folder-tab.active { background: #ffffff; color: #171717; font-weight: 700; border-color: #e5e5e5; padding-bottom: 11px; }
+    .folder-tab[data-mode="autopilot"].active { color: #166534; }
+    .folder-tab[data-mode="balanced"].active { color: #9a3412; }
+    .folder-tab[data-mode="supervised"].active { color: #991b1b; }
+    .folder-tab.active::after { content: ""; position: absolute; bottom: -2px; left: 0; right: 0; height: 3px; background: #ffffff; }
+
+    /* Main Folder Container */
+    main { width: 100%; padding: 24px; background: #ffffff; border: 1px solid #e5e5e5; border-radius: 0 14px 14px 14px; position: relative; z-index: 1; }
+
+    /* Audit Strip */
+    .audit-strip { display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 4px; padding: 10px 16px; border: 1px solid #e5e5e5; border-radius: 10px; background: #fafafa; color: #404040; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.15s ease; }
+    .audit-strip span:last-child { color: #737373; font-weight: 400; font-size: 11px; }
+    .audit-strip:hover, .audit-strip.selected { border-color: #171717; background: #ffffff; color: #171717; }
+    .audit-strip:focus-visible { outline: 2px solid #171717; outline-offset: 2px; }
+
+    /* V-Model Grid */
+    .v-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: stretch; gap: 10px; padding: 12px; background: #fafafa; border: 1px solid #e5e5e5; border-radius: 12px; height: 100%; }
+    .phase-column { --accent: #2563eb; --badge-bg: #eff6ff; --badge-text: #1d4ed8; }
+    .implementation { --accent: #7c3aed; --badge-bg: #f5f3ff; --badge-text: #6d28d9; }
+    .validation { --accent: #16a34a; --badge-bg: #f0fdf4; --badge-text: #15803d; }
+    .phase-column h2 { margin: 0 0 12px; padding: 0 0 6px; border-bottom: 1px solid #e5e5e5; color: var(--accent); text-align: center; text-transform: uppercase; font-size: 10px; line-height: 14px; font-weight: 700; letter-spacing: 1px; }
+    .phase-cards { display: grid; gap: 10px; }
+
+    /* Apple-style Fluid Spring Physics Easing Curves & Micro-Interactions */
+    .role-card { position: relative; display: block; width: 100%; padding: 10px 12px; border: 1px solid #e5e5e5; border-radius: 10px; background: #ffffff; color: #171717; text-align: left; font: inherit; cursor: pointer; transition: transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.15), border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.15); }
+    .role-card:hover { transform: translateY(-2px) scale(1.01); border-color: #a3a3a3; background: #fafafa; }
+    .role-card:active { transform: scale(0.97); }
+    
+    .card-heading { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 2px; }
+    .card-role { font-size: 11px; font-weight: 700; color: #171717; display: flex; align-items: center; gap: 4px; min-width: 0; word-break: break-word; }
+    .card-label { display: block; color: #737373; font-size: 10px; line-height: 14px; }
+    .card-pills-row { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
+    
+    /* Gate Pill on Cards - Minimalist "🚧 Gate" */
+    .gate-badge-pill { display: inline-flex; align-items: center; gap: 3px; padding: 2px 6px; border-radius: 4px; font-size: 9px; font-weight: 700; text-transform: uppercase; transition: transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.15); }
+    .gate-badge-pill.gate-active { background: #fef2f2; border: 1px solid #fca5a5; color: #991b1b; }
+    .gate-badge-pill.gate-passive { background: #fafafa; border: 1px solid #e5e5e5; color: #737373; }
+
+    /* Active Project Stage (where project execution currently resides) */
+    .role-card.active-project-stage { background: #f0fdf4; border-color: #22c55e; }
+    .role-card.active-project-stage .card-role { color: #15803d; }
+    .role-card.active-project-stage .badge { background: #16a34a; color: #ffffff; }
+    .active-stage-pill { font-size: 8px; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; background: #dcfce7; color: #15803d; padding: 1px 4px; border-radius: 3px; border: 1px solid #86efac; display: inline-block; }
+
+    /* Completed Stage Checkmark (Positioned Centered On Top of Connector Line) */
+    .completed-checkmark { position: absolute; bottom: 8px; right: 14px; width: 16px; height: 16px; border-radius: 50%; background: #dcfce7; color: #15803d; border: 2px solid #ffffff; font-size: 10px; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; line-height: 1; z-index: 12; box-shadow: 0 0 0 1px #86efac, 0 1px 3px rgba(0,0,0,0.08); }
+
+    /* Inspected Stage (currently selected by user for viewing details) */
+    .role-card.inspected { outline: 2px solid #2563eb; outline-offset: -1px; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.15); }
+
+    /* Connector Lines Joining Stage Badges (1.5px Dotted rgba(0,0,0,0.08)) */
+    .phase-cards { position: relative; }
+    .phase-cards::before { content: ''; position: absolute; top: 20px; bottom: 20px; right: 21px; width: 0; border-right: 1.5px dotted rgba(0, 0, 0, 0.08); z-index: 10; pointer-events: none; }
+    .badge { position: relative; z-index: 11; border: 2px solid #ffffff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06); display: inline-grid; place-items: center; width: 20px; height: 20px; flex: 0 0 20px; border-radius: 50%; color: var(--badge-text); background: var(--badge-bg); font-size: 10px; font-weight: 700; }
+
+    /* Fixed Height Detail Panel matching left pane (Zero Layout Shift & Pure Opacity Transition) */
+    .detail-panel { margin-top: 0; padding: 20px; border: 1px solid #e5e5e5; border-radius: 12px; background: #ffffff; height: 100%; min-height: 480px; max-height: 520px; overflow-y: auto; display: flex; flex-direction: column; justify-content: flex-start; box-shadow: 0 2px 8px rgba(0,0,0,0.02); transition: border-color 0.2s ease; animation: contentFadeIn 0.25s ease-out forwards; }
+    
+    @keyframes contentFadeIn {
+      0% { opacity: 0.3; }
+      100% { opacity: 1; }
+    }
+
+    @media (max-width: 960px) {
+      .v-split-layout { grid-template-columns: 1fr; }
+      .v-right-pane { position: static; }
+      .detail-panel { max-height: none; min-height: 200px; }
+    }
+    
+    @keyframes appleSpringSlide {
+      0% {
+        opacity: 0;
+        transform: translateY(12px) scale(0.985);
+      }
+      70% {
+        transform: translateY(-2px) scale(1.002);
+      }
+      100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+    .detail-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid #e5e5e5; padding-bottom: 10px; margin-bottom: 14px; }
+    .detail-title-group { display: flex; align-items: center; gap: 8px; }
+    .detail-icon { font-size: 22px; line-height: 1; }
+    .detail-title { margin: 0; color: #171717; font-size: 14px; font-weight: 700; }
+    .detail-subtitle { margin: 2px 0 0; color: #737373; font-size: 11px; }
+
+    /* Minimalist Gate Callout Banner */
+    .stop-point-banner { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 14px; padding: 10px 14px; border: 1px solid #fca5a5; border-radius: 8px; background: #fef2f2; color: #991b1b; }
+    .stop-point-banner-icon { font-size: 18px; line-height: 1; flex-shrink: 0; }
+    .stop-point-banner-title { font-size: 11px; font-weight: 700; margin-bottom: 2px; }
+    .stop-point-banner-desc { font-size: 11px; line-height: 15px; color: #404040; }
+
+    /* Minimalist Document Links Pills */
+    .doc-links-section { margin-bottom: 14px; }
+    .section-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #737373; margin-bottom: 6px; }
+    .doc-pills { display: flex; flex-wrap: wrap; gap: 6px; }
+    .doc-pill { display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border: 1px solid #e5e5e5; border-radius: 6px; background: #ffffff; color: #2563eb; font-size: 11px; font-weight: 600; text-decoration: none; transition: all 0.15s; }
+    .doc-pill:hover { border-color: #2563eb; background: #2563eb; color: #ffffff; }
+    .doc-pill.disabled { color: #94a3b8; background: #f8fafc; border-color: #e2e8f0; cursor: not-allowed; opacity: 0.75; }
+    .doc-pill.disabled:hover { background: #f8fafc; border-color: #e2e8f0; color: #94a3b8; }
+
+    /* Pending Stage Status Box for Unstarted Phases */
+    .pending-stage-box { margin-top: 14px; padding: 14px; border: 1px dashed #cbd5e1; border-radius: 10px; background: #fafafa; }
+    .pending-stage-header { display: flex; justify-content: space-between; align-items: center; font-size: 11px; font-weight: 700; color: #475569; margin-bottom: 6px; }
+    .pending-badge { font-size: 9px; font-weight: 700; background: #f1f5f9; color: #64748b; padding: 2px 6px; border-radius: 4px; border: 1px solid #e2e8f0; }
+    .pending-stage-desc { margin: 0; font-size: 11px; color: #64748b; line-height: 16px; }
+
+    /* User Stories Grid with Scroll Container for Stability */
+    .stories-scroll-box { max-height: 240px; overflow-y: auto; padding-right: 4px; }
+    .stories-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; margin-top: 8px; }
+    .story-card { padding: 12px; border: 1px solid #e5e5e5; border-radius: 8px; background: #fafafa; }
+    .story-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+    .story-id { font-family: monospace; font-size: 10px; font-weight: 700; color: #2563eb; background: #eff6ff; padding: 2px 5px; border-radius: 4px; }
+    .story-status { font-size: 9px; font-weight: 700; padding: 2px 5px; border-radius: 4px; background: #16a34a; color: #fff; text-transform: uppercase; }
+    .story-title { font-size: 11px; font-weight: 700; color: #171717; margin-bottom: 4px; }
+    .story-statement { font-size: 10px; color: #404040; line-height: 14px; margin-bottom: 6px; background: #ffffff; padding: 6px; border-radius: 4px; border: 1px solid #e5e5e5; font-style: italic; }
+    .story-ac-title { font-size: 9px; font-weight: 700; color: #737373; text-transform: uppercase; margin-bottom: 3px; }
+    .story-ac-list { margin: 0; padding-left: 14px; font-size: 10px; color: #525252; line-height: 14px; }
+
+    /* Project Header Bar & Completion Progress */
+    .project-header-bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; padding: 14px 18px; background: #ffffff; border: 1px solid #e5e5e5; border-radius: 12px; }
+    .project-title-group { display: flex; align-items: center; gap: 12px; }
+    .project-icon { font-size: 22px; line-height: 1; }
+    .project-name { margin: 0; font-size: 15px; font-weight: 700; color: #171717; }
+    .project-mode-badge { font-size: 11px; font-weight: 600; color: #737373; display: block; margin-top: 2px; }
+    .progress-section { width: 200px; flex-shrink: 0; }
+    .progress-label-row { display: flex; justify-content: space-between; align-items: center; font-size: 11px; font-weight: 600; color: #737373; margin-bottom: 6px; }
+    .progress-percent { font-family: monospace; font-weight: 700; color: #2563eb; }
+    .progress-track { width: 100%; height: 7px; background: #f5f5f5; border: 1px solid #e5e5e5; border-radius: 999px; overflow: hidden; }
+    .progress-fill { height: 100%; background: #2563eb; border-radius: 999px; transition: width 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.15); }
+
+    /* QA Test Results Summary Box */
+    .qa-summary-box { padding: 14px; border: 1px solid #bbf7d0; border-radius: 10px; background: #f0fdf4; margin-bottom: 14px; }
+    .qa-summary-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 1px solid #dcfce7; padding-bottom: 8px; }
+    .qa-verdict-title { font-size: 12px; font-weight: 700; color: #166534; display: flex; align-items: center; gap: 6px; }
+    .qa-coverage-tag { font-family: monospace; font-size: 10px; font-weight: 700; background: #166534; color: #ffffff; padding: 2px 7px; border-radius: 4px; }
+    .qa-metrics-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 10px; text-align: center; }
+    .qa-metric-card { background: #ffffff; border: 1px solid #dcfce7; padding: 8px; border-radius: 6px; }
+    .qa-metric-value { font-size: 14px; font-weight: 700; color: #166534; }
+    .qa-metric-label { font-size: 9px; color: #737373; text-transform: uppercase; margin-top: 2px; }
+    .qa-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: 11px; color: #166534; }
+    .qa-list li { display: flex; justify-content: space-between; background: #ffffff; padding: 5px 10px; border-radius: 6px; border: 1px solid #dcfce7; }
+
+    @media (max-width: 768px) {
+      body { padding: 16px 8px; display: block; overflow-x: auto; }
+      .visualizer-wrapper { min-width: 680px; }
+      main { padding: 16px; }
+      .v-grid { gap: 10px; padding: 10px; }
+      .stories-grid { grid-template-columns: 1fr; }
+      .project-header-bar { flex-direction: column; align-items: flex-start; }
+      .progress-section { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="visualizer-wrapper">
+    <!-- Top Project Header & Progress % -->
+    <header class="project-header-bar">
+      <div class="project-title-group">
+        <span class="project-icon">🚀</span>
+        <div>
+          <h1 class="project-name" id="projectName">PM Skills SDLC</h1>
+          <span class="project-mode-badge" id="projectModeBadge">Autonomy Mode: 🟢 Autopilot</span>
+        </div>
+      </div>
+
+      <div class="progress-section">
+        <div class="progress-label-row">
+          <span>Project Completion</span>
+          <span class="progress-percent" id="progressPercent">62%</span>
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill" id="progressFill" style="width: 62%;"></div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Minimalist Folder-Style Top Mode Tabs -->
+    <div class="folder-tabs-bar">
+      <button type="button" class="folder-tab active" data-mode="autopilot" onclick="switchAutonomyMode('autopilot')">🟢 Autopilot</button>
+      <button type="button" class="folder-tab" data-mode="balanced" onclick="switchAutonomyMode('balanced')">🟡 Balanced</button>
+      <button type="button" class="folder-tab" data-mode="supervised" onclick="switchAutonomyMode('supervised')">🔴 Supervised</button>
+    </div>
+
+    <main aria-label="PM workflow visualizer">
+      <div id="vModelContainer"></div>
+      <noscript>Enable JavaScript to explore the workflow.</noscript>
+    </main>
+  </div>
+  <script src="progress.js"></script>
+</body>
+</html>

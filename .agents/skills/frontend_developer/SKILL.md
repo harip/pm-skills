@@ -31,7 +31,7 @@ See `.agents/rules/GLOBAL_RULES.md` for shared protocols and `apple_design/SKILL
 
 ## Execution Order
 1. **Screen Inventory:** Purpose + data dependencies per screen based on user stories.
-2. **Visual Mockups (MANDATORY GATE):** Save concept mockup images to `docs/design/mockups/[screen_id]_v1.png` and record in `docs/06_DESIGN_REGISTER.md` (Document 06) (`PROPOSED` | `REJECTED` | `APPROVED`). Note: Concept mockups in Phase 5 are distinct from Phase 7 actual-render screenshot baselines. Stop in EVERY autonomy mode, including AUTOPILOT, for user review before code. Approval advances implementation; changes regenerate affected mockups.
+2. **Visual Mockups (MANDATORY GATE):** Generate PNG or WebP image files if image generation tools (e.g., `generate_image`) are available; if image tools are unavailable or interactive preview is preferred, generate self-contained HTML/SVG mockups. Save mockups to `docs/design/mockups/[screen_id]_v1.[png|webp|html]` and record in `docs/06_DESIGN_REGISTER.md` (Document 06) (`PROPOSED` | `REJECTED` | `APPROVED`). Note: Concept mockups in Phase 5 are distinct from Phase 7 actual-render screenshot baselines. Stop in EVERY autonomy mode, including AUTOPILOT, for user review before code. Approval advances implementation; changes regenerate affected mockups.
 3. **Component Implementation:** Scaffold TSX/StyleSheet code matching approved mockups.
 
 ## Inputs & Outputs

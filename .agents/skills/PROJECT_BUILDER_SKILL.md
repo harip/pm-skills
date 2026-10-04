@@ -30,7 +30,7 @@ See `.agents/rules/GLOBAL_RULES.md` and `.agents/rules/PROJECT_CONTRACT.md` for 
 PM routes commands, Orchestrator maintains state/dashboard, Architecture Reviewer audits throughout, and Apple Design supports Phase 5. These are support roles, not numbered phases. This controller document is not an additional skill. The authoritative registry is in Global Rules.
 
 ## Interactive Setup, Skip Paths & Final Release
-- **Mockup Review (Phase 5):** Pause for generated mockup review before writing UI code.
+- **Mockup Review (Phase 5):** Pause for generated mockup review (PNG/WebP image files if image tools exist, or self-contained HTML/SVG mockups) before writing UI code.
 - **Database Setup (Phase 6):** Offer free DB or user provider; record progress in `docs/08_SETUP_REGISTER.md`. Explicit skip continues with mocks (`[SKIPPED — MOCKS ONLY]`); production deploy remains BLOCKED until DB configured.
 - **UAT (Phase 8):** After all slices and aggregate Phase 7 QA pass, UAT Coordinator gathers acceptance sign-off at Gate 3 before handing off to Release.
 - **Deployment & Release (Release):** Ask destination (Vercel/EAS/Other) or accept explicit skip (`[SKIPPED — USER MANAGED]`). On skip, execute no commands and set `NEXT_STEP_POINTER: COMPLETE — USER MANAGED HANDOFF`. Otherwise prepare `docs/09_RELEASE_PLAN.md` for Gate 4 sign-off.
