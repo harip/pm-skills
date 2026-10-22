@@ -68,12 +68,16 @@ Paths are relative to `.agents/skills/`. This registry defines the existing work
 There are 13 skills: eight phase leads, one release lead, and four supporting skills. Folders in `.agents/skills/` are numbered `00_` through `12_` for visual ordering. `PROJECT_BUILDER_SKILL.md` is the controller document, not a discoverable skill. Caveman is a rule in `CAVEMAN.md`. Phases 1–4 establish the baseline; Phases 5–7 repeat per approved feature slice, followed by aggregate QA, Phase 8, and Release; the reviewer audits throughout, and Apple Design supports Phase 5 without adding a phase.
 
 ## 7. Visual Progress Dashboard Protocol (`progress.html`)
-- **Visual Over Textual:** Whenever the swarm operates on an active project, it must maintain an interactive `progress.html` at the project root. Stakeholders should never have to manually parse disjointed markdown files to assess project health.
+- **Visual Over Textual:** Whenever the swarm operates on an active project, it must maintain an interactive `progress.html` at the project root (consuming `progress.min.js`). Stakeholders should never have to manually parse disjointed markdown files to assess project health or approve stages.
 - **Mandatory Dashboard Elements:**
   1. **Visual Milestone Stepper:** Displays active phase, completed milestones, and upcoming gates.
   2. **Live Environment Hub:** Embedded links to local dev servers and the selected UAT environment (compatible web preview or native test build).
   3. **Deliverables Index:** Clean cards linking to and summarizing `02_PRD.md`, `04_TECHNICAL_SPEC.md`, `07_TEST_MANIFEST.md`, and `10_UAT_CHECKLIST.md`.
   4. **Acceptance Sign-off:** Interactive checklist for stakeholders to test and approve the release.
+  5. **Interactive Approvals Studio (⚡ Approvals Tab):** At each gate, renders stage decisions curated by the Architecture Reviewer with **opinionated standard recommendations pre-selected by default (zero typing required)** and optional cool out-of-the-box perks. Clicking "Save & Submit Approval" persists decisions into `docs/APPROVALS.json`.
+- **Gate Stop & Resume Protocol:** At every gate or required review checkpoint, the agent halts its turn and outputs:
+  `👉 Review decisions in docs/progress.html. When done, type "approved" to continue.`
+  When the user responds with `approved` (or `/pm resume`), the swarm ingests `docs/APPROVALS.json`, applies the recorded decisions, and launches the next phase lead.
 
 ## 8. Requirements, Feature Iterations & Verification
 - **Discovery evidence:** In Document 00, record capability decisions as confirmed or assumed with their source; uncertainty is not evidence for `none`. Track unresolved users, workflows, constraints, and capabilities in the PRD. Gate 1 confirms these in BALANCED/SUPERVISED. AUTOPILOT may carry documented low-impact assumptions, but pauses within scope clarification when an unresolved decision would exclude a core workflow or determine platform/data/security architecture. No new gate.

@@ -187,6 +187,217 @@ const SUPPORT_ROLES = [
 const ALL_ROLES = [...WORKFLOW_STAGES, ...SUPPORT_ROLES];
 let selectedRoleId = 'services';
 let currentAutonomyMode = 'autopilot';
+let currentView = 'vmodel'; // 'vmodel' | 'approvals'
+
+// Authoritative Stage Decisions Schema (Curated by Architecture Reviewer)
+const STAGE_DECISIONS = {
+  discovery: {
+    phase: 1,
+    title: 'Phase 1 Gate: Discovery & Contract',
+    role: 'IT Consultant',
+    questions: [
+      {
+        id: 'platform_target',
+        title: 'Target Platform & Distribution Strategy',
+        desc: 'Select the primary application deployment environment and form factor.',
+        options: [
+          { name: 'Web PWA + Responsive Mobile', desc: 'Zero installation barriers, instant updates, full touch & desktop support.', recommended: true },
+          { name: 'Native iOS / Android (React Native)', desc: 'Direct App Store release and native OS background services.', recommended: false }
+        ]
+      },
+      {
+        id: 'auth_strategy',
+        title: 'Authentication & Tenant Context',
+        desc: 'Establish credential model and isolation boundaries.',
+        options: [
+          { name: 'Passkey / Magic Link + Local Tenant Context', desc: 'Passwordless security, zero credential leaks, frictionless onboarding.', recommended: true },
+          { name: 'Traditional OAuth 2.0 + Password Auth', desc: 'Standard enterprise social and credential login.', recommended: false }
+        ]
+      }
+    ],
+    perks: [
+      { id: 'dark_mode_auto', name: 'Apple Dynamic Theme (Auto Dark/Light)', desc: 'Seamlessly tracks OS appearance preferences.' },
+      { id: 'offline_sync_engine', name: 'Instant Local-First Sync Engine', desc: 'Allows full offline operation with optimistic local sync.' }
+    ]
+  },
+  scope: {
+    phase: 2,
+    title: 'Phase 2 Gate: Scope & Core Workflows',
+    role: 'Product Owner',
+    questions: [
+      {
+        id: 'delivery_sequence',
+        title: 'Feature Delivery Sequence',
+        desc: 'Structure how features flow through implementation and testing.',
+        options: [
+          { name: 'Vertical Slices (UI → Service → QA per Story)', desc: 'Ships working end-to-end features incrementally with zero integration cliff.', recommended: true },
+          { name: 'Horizontal Layering (All UI, then Backend)', desc: 'Builds all visual mockups first before connecting database logic.', recommended: false }
+        ]
+      },
+      {
+        id: 'ac_validation_rigor',
+        title: 'Acceptance Criteria & INVEST Guardrails',
+        desc: 'Define validation strictness for user stories.',
+        options: [
+          { name: 'Strict Binary Acceptance Criteria', desc: 'Every story has testable, binary pass/fail AC with zero ambiguity.', recommended: true },
+          { name: 'Qualitative Story Guidance', desc: 'Flexible user story outlines without rigid automated verification hooks.', recommended: false }
+        ]
+      }
+    ],
+    perks: [
+      { id: 'cmdk_palette', name: 'Cmd+K Global Spotlight Palette', desc: 'Instant keyboard shortcut navigation across all project resources.' },
+      { id: 'json_export_tools', name: '1-Click JSON / Markdown State Export', desc: 'Download complete requirement snapshots directly from the UI.' }
+    ]
+  },
+  architecture: {
+    phase: 3,
+    title: 'Phase 3 Gate: Technical Specification',
+    role: 'Technical Architect',
+    questions: [
+      {
+        id: 'state_architecture',
+        title: 'Client State & Cache Engine',
+        desc: 'Determine how state is stored and propagated across components.',
+        options: [
+          { name: 'Local-First Reactive Store (Zustand + IndexedDB)', desc: 'Sub-millisecond reads, offline durability, minimal boilerplate.', recommended: true },
+          { name: 'Centralized Redux Toolkit with Cloud REST', desc: 'Action-driven state for complex multi-screen enterprise trees.', recommended: false }
+        ]
+      },
+      {
+        id: 'contract_validation',
+        title: 'Runtime Schema Validation',
+        desc: 'Enforce type safety at system and network boundaries.',
+        options: [
+          { name: 'Strict Zod Runtime Contracts (additionalProperties: false)', desc: 'Rejects malformed payloads at runtime with full TypeScript inference.', recommended: true },
+          { name: 'Compile-Time TypeScript Interfaces Only', desc: 'Zero runtime bundle overhead, relies on build checks.', recommended: false }
+        ]
+      }
+    ],
+    perks: [
+      { id: 'optimistic_ui', name: 'Optimistic UI Updates with Auto-Rollback', desc: 'Instant UI changes on user action; auto-rolls back if backend check fails.' },
+      { id: 'web_worker_pipeline', name: 'Web Worker Background Computation', desc: 'Offloads complex data processing off the main UI thread.' }
+    ]
+  },
+  frontend: {
+    phase: 5,
+    title: 'Phase 5 Gate: UI / UX Mockup Checkpoint',
+    role: 'Frontend Developer',
+    questions: [
+      {
+        id: 'design_aesthetic',
+        title: 'Visual Design Language & Tokens',
+        desc: 'Establish visual personality, surface hierarchy, and typography.',
+        options: [
+          { name: 'Apple HIG Minimalist Dynamic Glass', desc: 'SF typography, 80ms spring physics, subtle borders, frosted glass.', recommended: true },
+          { name: 'Clean Functional Monochrome', desc: 'High contrast black/white layout with flat geometric accents.', recommended: false }
+        ]
+      },
+      {
+        id: 'interaction_physics',
+        title: 'Interaction & Micro-Physics',
+        desc: 'Choose how buttons, lists, and dialogs respond to user interaction.',
+        options: [
+          { name: 'Fluid Interruptible Spring Animations (cubic-bezier)', desc: 'Natural physical feel matching native macOS/iOS UI.', recommended: true },
+          { name: 'Instant Linear CSS Transitions', desc: 'Snappy minimal animations with zero spring elasticity.', recommended: false }
+        ]
+      }
+    ],
+    perks: [
+      { id: 'micro_haptics', name: 'Subtle Micro-Haptic Audio Clicks', desc: 'Gentle Web Audio API clicks on button presses for rich tactile feedback.' },
+      { id: 'gesture_swipe', name: 'Fluid Touch Swipe Gestures', desc: 'Natural swipe-to-dismiss and swipe-to-navigate interactions.' }
+    ]
+  },
+  services: {
+    phase: 6,
+    title: 'Phase 6 Gate: Database & Services Setup',
+    role: 'Service Engineer',
+    questions: [
+      {
+        id: 'db_adapter_mode',
+        title: 'Database Persistence Adapter',
+        desc: 'Determine database engine and isolation strategy.',
+        options: [
+          { name: 'Local-First SQLite / IndexedDB with Outbox Queue', desc: 'Zero external cloud setup; instant setup, runs 100% locally.', recommended: true },
+          { name: 'Cloud Postgres (Supabase / Neon)', desc: 'Live relational database hosted on managed cloud infrastructure.', recommended: false }
+        ]
+      }
+    ],
+    perks: [
+      { id: 'audit_outbox', name: 'Atomic Audit Outbox Queue', desc: 'Guarantees reliable mutation replay and zero lost writes on network drops.' }
+    ]
+  },
+  qa: {
+    phase: 7,
+    title: 'Phase 7 Gate: Automated QA Verification',
+    role: 'QA Agent',
+    questions: [
+      {
+        id: 'test_coverage_threshold',
+        title: 'Automated Test Coverage Guardrail',
+        desc: 'Minimum branch coverage threshold before production readiness.',
+        options: [
+          { name: 'Strict ≥80% Coverage + IDOR Security Checks', desc: 'Mandates full automated test suite covering all critical user story ACs.', recommended: true },
+          { name: 'Pragmatic ≥60% Core Path Smoke Testing', desc: 'Focuses verification on primary happy-path and authentication flows.', recommended: false }
+        ]
+      }
+    ],
+    perks: [
+      { id: 'visual_snapshots', name: 'Playwright Visual Diff Snapshots', desc: 'Catches unintended layout and CSS regression across releases.' }
+    ]
+  },
+  uat: {
+    phase: 8,
+    title: 'Phase 8 Gate: Target-Platform UAT Acceptance',
+    role: 'UAT Coordinator',
+    questions: [
+      {
+        id: 'acceptance_target',
+        title: 'User Acceptance Testing Environment',
+        desc: 'Select environment where stakeholder testing occurs.',
+        options: [
+          { name: 'Interactive Local Sandbox Preview', desc: 'Immediate in-browser verification using hot-reloading dev environment.', recommended: true },
+          { name: 'Staging Cloud Deployment', desc: 'Deploys to private preview URL for remote team sign-off.', recommended: false }
+        ]
+      }
+    ],
+    perks: [
+      { id: 'feedback_recorder', name: 'Integrated Feedback Capture Widget', desc: 'Allows testers to submit inline annotations directly from the preview.' }
+    ]
+  },
+  release: {
+    phase: null,
+    title: 'Release Gate: Production Deployment',
+    role: 'Deployment Lead',
+    questions: [
+      {
+        id: 'deployment_provider',
+        title: 'Deployment Target',
+        desc: 'Select where the production release is hosted.',
+        options: [
+          { name: 'Automated 1-Click Hosting (Vercel / Cloudflare)', desc: 'Instant global CDN, automatic SSL, zero server management.', recommended: true },
+          { name: 'User-Managed Static Release Bundle (Local Export)', desc: 'Packages production assets into docs/build/ for manual hosting.', recommended: false }
+        ]
+      }
+    ],
+    perks: [
+      { id: 'healthcheck_probe', name: 'Automatic Production Healthcheck Probe', desc: 'Validates site 200 OK and SSL certificate immediately after deploy.' }
+    ]
+  }
+};
+
+// Approvals state management
+let approvalsData = {
+  stages: {}
+};
+
+function loadStoredApprovals() {
+  try {
+    const raw = localStorage.getItem('pm_skills_approvals');
+    if (raw) approvalsData = JSON.parse(raw);
+  } catch (e) {
+    // fallback
+  }
+}
 
 // Live project state derived dynamically from docs/PROJECT_STATUS.md
 let projectState = {
@@ -576,6 +787,252 @@ function renderVModelView() {
   `;
 }
 
+function switchView(view) {
+  currentView = view;
+  const vmodelTab = document.getElementById('viewTabVmodel');
+  const approvalsTab = document.getElementById('viewTabApprovals');
+  if (vmodelTab) vmodelTab.classList.toggle('active', view === 'vmodel');
+  if (approvalsTab) approvalsTab.classList.toggle('active', view === 'approvals');
+
+  if (view === 'vmodel') {
+    renderVModelView();
+  } else {
+    renderApprovalsView();
+  }
+}
+
+let activeApprovalStageId = null;
+
+function renderApprovalsView() {
+  const container = document.getElementById('vModelContainer');
+  if (!container) return;
+
+  const stageId = activeApprovalStageId || projectState.activeStageId || 'services';
+  activeApprovalStageId = stageId;
+
+  const stageDecision = STAGE_DECISIONS[stageId] || STAGE_DECISIONS['scope'];
+  const stageData = approvalsData.stages[stageId] || { approved: false, decisions: {}, perks: [] };
+  
+  // Set default recommendation selections if not already made
+  stageDecision.questions.forEach((q, idx) => {
+    if (stageData.decisions[q.id] === undefined) {
+      const recIdx = q.options.findIndex(o => o.recommended);
+      stageData.decisions[q.id] = recIdx >= 0 ? recIdx : 0;
+    }
+  });
+
+  // Calculate pending count
+  const isCurrentActivePending = !approvalsData.stages[projectState.activeStageId]?.approved;
+  const badgeEl = document.getElementById('pendingApprovalsBadge');
+  if (badgeEl) {
+    if (isCurrentActivePending) {
+      badgeEl.textContent = '1 Pending';
+      badgeEl.style.background = '#ea580c';
+    } else {
+      badgeEl.textContent = '✓ Ready';
+      badgeEl.style.background = '#16a34a';
+    }
+  }
+
+  // Stages available for review
+  const reviewableStages = [
+    { id: 'discovery', label: 'Phase 1: Discovery' },
+    { id: 'scope', label: 'Phase 2: Scope' },
+    { id: 'architecture', label: 'Phase 3: Tech Spec' },
+    { id: 'frontend', label: 'Phase 5: UI Mockups' },
+    { id: 'services', label: 'Phase 6: Services' },
+    { id: 'qa', label: 'Phase 7: QA' },
+    { id: 'uat', label: 'Phase 8: UAT' },
+    { id: 'release', label: 'Release' }
+  ];
+
+  container.innerHTML = `
+    <div class="approvals-container">
+      <!-- Approvals Top Bar with Stage Filter -->
+      <div class="approvals-header">
+        <div>
+          <h2 class="approvals-title">⚡ Interactive Phase Approvals &amp; Architecture Decisions</h2>
+          <p class="approvals-subtitle">
+            Curated by the <strong>Architecture Reviewer</strong>. All standard best practices are pre-selected by default so typing is kept to zero. Review decisions, toggle perks, and submit to proceed.
+          </p>
+        </div>
+        <div style="display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end;">
+          ${reviewableStages.map(s => {
+            const isSelectedStage = s.id === stageId;
+            const isApproved = !!approvalsData.stages[s.id]?.approved;
+            const isCurrentActive = s.id === projectState.activeStageId;
+            const bg = isSelectedStage ? '#171717' : isApproved ? '#f0fdf4' : '#fafafa';
+            const color = isSelectedStage ? '#ffffff' : isApproved ? '#166534' : '#525252';
+            const border = isSelectedStage ? '#171717' : isApproved ? '#86efac' : '#e5e5e5';
+            return `
+              <button type="button" onclick="selectApprovalStage('${s.id}')" style="border: 1px solid ${border}; background: ${bg}; color: ${color}; font-size: 11px; font-weight: 600; padding: 5px 10px; border-radius: 6px; cursor: pointer; transition: all 0.15s ease;">
+                ${escapeHtml(s.label)} ${isApproved ? '✓' : isCurrentActive ? '⚡' : ''}
+              </button>
+            `;
+          }).join('')}
+        </div>
+      </div>
+
+      <!-- Current Stage Banner -->
+      <div class="approval-gate-banner ${stageData.approved ? 'approved' : ''}">
+        <span>${stageData.approved ? '✅' : '🚧'}</span>
+        <div>
+          <strong>${escapeHtml(stageDecision.title)}</strong> &bull; Lead: <code>${escapeHtml(stageDecision.role)}</code>
+          <div style="font-size: 11px; font-weight: 400; margin-top: 2px;">
+            ${stageData.approved 
+              ? 'Decisions submitted and approved. Return to chat and type <code>approved</code> to continue.' 
+              : 'Recommended standards are pre-selected. Click "Save &amp; Submit Approval" to sign off.'}
+          </div>
+        </div>
+      </div>
+
+      <!-- Decisions Questions Grid -->
+      <div class="questions-grid">
+        ${stageDecision.questions.map((q, qIndex) => {
+          const selectedOptionIdx = stageData.decisions[q.id];
+          return `
+            <div class="question-card">
+              <div class="question-title-row">
+                <h4 class="question-title">${qIndex + 1}. ${escapeHtml(q.title)}</h4>
+                <span style="font-size: 10px; color: #737373; font-weight: 600; text-transform: uppercase;">Decision ${qIndex + 1} of ${stageDecision.questions.length}</span>
+              </div>
+              <p class="question-desc">${escapeHtml(q.desc)}</p>
+
+              <div class="options-group">
+                ${q.options.map((opt, oIndex) => {
+                  const isChecked = selectedOptionIdx === oIndex;
+                  return `
+                    <label class="option-label ${isChecked ? 'selected' : ''}" onclick="selectDecisionOption('${stageId}', '${q.id}', ${oIndex})">
+                      <input type="radio" class="option-radio" name="question_${q.id}" value="${oIndex}" ${isChecked ? 'checked' : ''} onchange="selectDecisionOption('${stageId}', '${q.id}', ${oIndex})">
+                      <div class="option-text-group">
+                        <div class="option-header-row">
+                          <span class="option-name">${escapeHtml(opt.name)}</span>
+                          ${opt.recommended ? '<span class="recommended-badge">⭐️ Standard / Recommended</span>' : ''}
+                        </div>
+                        <span class="option-explanation">${escapeHtml(opt.desc)}</span>
+                      </div>
+                    </label>
+                  `;
+                }).join('')}
+              </div>
+            </div>
+          `;
+        }).join('')}
+
+        <!-- Cool Out-of-the-Box Perks Section -->
+        ${stageDecision.perks && stageDecision.perks.length > 0 ? `
+          <div class="perks-card">
+            <div class="perks-header">
+              <span>✨</span>
+              <span>Cool Out-of-the-Box Perks (Optional Add-ons)</span>
+            </div>
+            <p class="perks-sub">
+              High-leverage architectural and UX enhancements suggested for this phase. Check any you would like included:
+            </p>
+            <div class="perks-grid">
+              ${stageDecision.perks.map(perk => {
+                const isPerkChecked = stageData.perks.includes(perk.id);
+                return `
+                  <label class="perk-label" onclick="togglePerkOption('${stageId}', '${perk.id}', event)">
+                    <input type="checkbox" class="perk-checkbox" value="${perk.id}" ${isPerkChecked ? 'checked' : ''} onchange="togglePerkOption('${stageId}', '${perk.id}', event)">
+                    <div>
+                      <div class="perk-title">${escapeHtml(perk.name)}</div>
+                      <div class="perk-desc">${escapeHtml(perk.desc)}</div>
+                    </div>
+                  </label>
+                `;
+              }).join('')}
+            </div>
+          </div>
+        ` : ''}
+      </div>
+
+      <!-- Action Notification Banner (Revealed on Submit) -->
+      <div id="approvalDoneBanner" class="approval-done-banner" style="display: ${stageData.approved ? 'flex' : 'none'};">
+        <div>
+          <span>🎉 <strong>Decisions Saved!</strong> Now switch back to your IDE chat and type: <code>approved</code></span>
+        </div>
+        <button type="button" class="copy-pill-btn" onclick="copyApprovedCommand()">📋 Copy "approved"</button>
+      </div>
+
+      <!-- Approvals Action Bar -->
+      <div class="approvals-action-bar">
+        <div style="font-size: 11px; color: #737373;">
+          Saved to <code>docs/APPROVALS.json</code> &bull; Zero typing needed in chat
+        </div>
+        <button type="button" class="submit-approval-btn ${stageData.approved ? 'approved-btn' : ''}" onclick="saveStageApproval('${stageId}')">
+          <span>${stageData.approved ? '✓ Update Approval' : '🟢 Save &amp; Submit Approval'}</span>
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+function selectApprovalStage(stageId) {
+  activeApprovalStageId = stageId;
+  renderApprovalsView();
+}
+
+function selectDecisionOption(stageId, questionId, optionIndex) {
+  if (!approvalsData.stages[stageId]) {
+    approvalsData.stages[stageId] = { approved: false, decisions: {}, perks: [] };
+  }
+  approvalsData.stages[stageId].decisions[questionId] = optionIndex;
+  renderApprovalsView();
+}
+
+function togglePerkOption(stageId, perkId, event) {
+  if (event && event.stopPropagation) event.stopPropagation();
+  if (!approvalsData.stages[stageId]) {
+    approvalsData.stages[stageId] = { approved: false, decisions: {}, perks: [] };
+  }
+  const perks = approvalsData.stages[stageId].perks;
+  const idx = perks.indexOf(perkId);
+  if (idx >= 0) {
+    perks.splice(idx, 1);
+  } else {
+    perks.push(perkId);
+  }
+  renderApprovalsView();
+}
+
+function saveStageApproval(stageId) {
+  if (!approvalsData.stages[stageId]) {
+    approvalsData.stages[stageId] = { approved: false, decisions: {}, perks: [] };
+  }
+  approvalsData.stages[stageId].approved = true;
+  approvalsData.stages[stageId].timestamp = new Date().toISOString();
+
+  // Save to localStorage
+  try {
+    localStorage.setItem('pm_skills_approvals', JSON.stringify(approvalsData));
+  } catch (e) {
+    // ignore
+  }
+
+  // Attempt to trigger file download/save or display banner
+  const banner = document.getElementById('approvalDoneBanner');
+  if (banner) {
+    banner.style.display = 'flex';
+    banner.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  // Re-render to show updated badge and checkmarks
+  renderApprovalsView();
+}
+
+function copyApprovedCommand() {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText('approved').then(() => {
+      alert('Copied "approved" to clipboard! Paste it into the IDE chat to resume.');
+    }).catch(() => {
+      prompt('Copy this command and paste into chat:', 'approved');
+    });
+  } else {
+    prompt('Copy this command and paste into chat:', 'approved');
+  }
+}
+
 function parseUserStoriesMarkdown(text) {
   const stories = [];
   const storyBlocks = text.split(/(?=###\s*US-)/i);
@@ -630,6 +1087,7 @@ async function fetchAndParseUserStories() {
 }
 
 async function initProjectStatus() {
+  loadStoredApprovals();
   try {
     const res = await fetch('docs/PROJECT_STATUS.md');
     if (res.ok) {
@@ -647,5 +1105,6 @@ async function initProjectStatus() {
 document.addEventListener('DOMContentLoaded', () => {
   initProjectStatus();
 });
+
 
 

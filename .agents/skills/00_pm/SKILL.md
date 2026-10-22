@@ -11,7 +11,7 @@ Use `.agents/rules/GLOBAL_RULES.md` as the authority for roles, phases, gates, a
 - `/pm` — Show active project or start intake.
 - `/pm start <name> [mode]` — Initialize project in specified mode (`balanced`, `autopilot`, or `supervised`; defaults to `balanced`) and start Phase 1 intake.
 - `/pm mode <balanced|autopilot|supervised>` — Switch or set active autonomy mode at any time.
-- `/pm resume` — Read `NEXT_STEP_POINTER` in `PROJECT_STATUS.md` and execute assigned agent.
+- `/pm resume` or `approved` — Ingest `docs/APPROVALS.json`, read `NEXT_STEP_POINTER` in `PROJECT_STATUS.md`, and execute next assigned phase lead.
 - `/pm status` — Display project, mode, phase, agent, and next step without executing.
 - `/pm next` — Force execute `NEXT_STEP_POINTER` (respecting gate approvals).
 - `/pm help` — Display command list.

@@ -36,3 +36,10 @@ Save review report directly to disk. Chat response MUST be a 2-sentence verdict 
 - Phases 3–4: check architecture→integration and contract→unit test mappings and per-story task dependencies.
 - Phases 5–7: inspect developer test evidence per slice and aggregate regression results; reject production readiness on required unmet/unverified NFRs despite passing coverage.
 - Phase 8: verify the accepted revision/build and environment represent the target platform; retain native-device, mock, or integration limitations in approval scope.
+
+## Decision Matrix Architecture (Zero-Typing User Approvals)
+At each gate and phase review, the Architecture Reviewer formulates the interactive Decision Matrix rendered in `docs/progress.html`:
+1. **Standard/Best Recommendation**: Formulates the opinionated best practice (pre-selected by default so user typing is zero).
+2. **Alternative Standard**: Viable second choice with distinct tradeoffs.
+3. **Cool Out-of-the-Box Perks**: 2–3 innovative, high-leverage features (e.g. Cmd+K spotlight command palette, Apple spring micro-haptics, instant local sync) provided as optional checkboxes.
+Users review decisions in `docs/progress.html` under the ⚡ Approvals tab and resume by typing `approved`.

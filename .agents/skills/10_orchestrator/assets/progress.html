@@ -166,6 +166,55 @@
     .qa-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: 11px; color: #166534; }
     .qa-list li { display: flex; justify-content: space-between; background: #ffffff; padding: 5px 10px; border-radius: 6px; border: 1px solid #dcfce7; }
 
+    /* Approvals & Decision Studio Styling */
+    .approvals-container { display: flex; flex-direction: column; gap: 20px; animation: contentFadeIn 0.25s ease-out forwards; }
+    .approvals-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; padding-bottom: 16px; border-bottom: 1px solid #e5e5e5; }
+    .approvals-title { margin: 0; font-size: 16px; font-weight: 700; color: #171717; display: flex; align-items: center; gap: 8px; }
+    .approvals-subtitle { margin: 4px 0 0; font-size: 12px; color: #737373; line-height: 16px; }
+    
+    .approval-gate-banner { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 8px; background: #fff7ed; border: 1px solid #fed7aa; color: #c2410c; font-size: 12px; font-weight: 600; }
+    .approval-gate-banner.approved { background: #f0fdf4; border-color: #bbf7d0; color: #15803d; }
+
+    .questions-grid { display: grid; gap: 16px; }
+    .question-card { background: #fafafa; border: 1px solid #e5e5e5; border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+    .question-title-row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+    .question-title { font-size: 13px; font-weight: 700; color: #171717; margin: 0; }
+    .question-desc { font-size: 11px; color: #737373; margin: 0; line-height: 15px; }
+    
+    .options-group { display: grid; gap: 8px; margin-top: 4px; }
+    .option-label { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border: 1px solid #e5e5e5; border-radius: 8px; background: #ffffff; cursor: pointer; transition: all 0.15s ease; position: relative; }
+    .option-label:hover { border-color: #a3a3a3; background: #fafafa; }
+    .option-label.selected { border-color: #2563eb; background: #eff6ff; box-shadow: 0 0 0 1px #2563eb; }
+    .option-radio { margin-top: 3px; cursor: pointer; accent-color: #2563eb; }
+    .option-text-group { display: flex; flex-direction: column; gap: 2px; flex: 1; }
+    .option-header-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .option-name { font-size: 12px; font-weight: 700; color: #171717; }
+    .recommended-badge { display: inline-flex; align-items: center; gap: 3px; font-size: 9px; font-weight: 800; background: #fef08a; color: #854d0e; padding: 2px 6px; border-radius: 4px; border: 1px solid #fde047; text-transform: uppercase; }
+    .option-explanation { font-size: 11px; color: #525252; line-height: 15px; }
+
+    /* Cool Out-of-the-Box Perks Section */
+    .perks-card { background: #faf5ff; border: 1px solid #e9d5ff; border-radius: 10px; padding: 16px; margin-top: 4px; }
+    .perks-header { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; color: #6b21a8; margin-bottom: 4px; }
+    .perks-sub { font-size: 11px; color: #7e22ce; margin-bottom: 12px; }
+    .perks-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 8px; }
+    .perk-label { display: flex; align-items: flex-start; gap: 8px; padding: 10px; border: 1px solid #e9d5ff; border-radius: 8px; background: #ffffff; cursor: pointer; transition: all 0.15s ease; }
+    .perk-label:hover { border-color: #c084fc; background: #faf5ff; }
+    .perk-checkbox { margin-top: 2px; cursor: pointer; accent-color: #7c3aed; }
+    .perk-title { font-size: 11px; font-weight: 700; color: #171717; }
+    .perk-desc { font-size: 10px; color: #737373; line-height: 14px; margin-top: 2px; }
+
+    /* Approvals Action Bar */
+    .approvals-action-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 10px; padding-top: 16px; border-top: 1px solid #e5e5e5; }
+    .submit-approval-btn { display: inline-flex; align-items: center; gap: 6px; padding: 10px 20px; border: none; border-radius: 8px; background: #16a34a; color: #ffffff; font-family: inherit; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.15); box-shadow: 0 2px 6px rgba(22, 163, 74, 0.25); }
+    .submit-approval-btn:hover { background: #15803d; transform: translateY(-1px); }
+    .submit-approval-btn:active { transform: scale(0.97); }
+    .submit-approval-btn.approved-btn { background: #2563eb; }
+
+    /* Toast / Confirmation Notification */
+    .approval-done-banner { display: none; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; border-radius: 8px; background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; font-size: 12px; font-weight: 600; animation: contentFadeIn 0.2s ease-out; }
+    .copy-pill-btn { border: 1px solid #6ee7b7; background: #ffffff; color: #065f46; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 6px; cursor: pointer; font-family: monospace; transition: all 0.15s; }
+    .copy-pill-btn:hover { background: #065f46; color: #ffffff; border-color: #065f46; }
+
     @media (max-width: 768px) {
       body { padding: 16px 8px; display: block; overflow-x: auto; }
       .visualizer-wrapper { min-width: 680px; }
@@ -174,6 +223,8 @@
       .stories-grid { grid-template-columns: 1fr; }
       .project-header-bar { flex-direction: column; align-items: flex-start; }
       .progress-section { width: 100%; }
+      .approvals-action-bar { flex-direction: column; align-items: stretch; }
+      .perks-grid { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -200,11 +251,22 @@
       </div>
     </header>
 
-    <!-- Minimalist Folder-Style Top Mode Tabs -->
-    <div class="folder-tabs-bar">
-      <button type="button" class="folder-tab active" data-mode="autopilot" onclick="switchAutonomyMode('autopilot')">🟢 Autopilot</button>
-      <button type="button" class="folder-tab" data-mode="balanced" onclick="switchAutonomyMode('balanced')">🟡 Balanced</button>
-      <button type="button" class="folder-tab" data-mode="supervised" onclick="switchAutonomyMode('supervised')">🔴 Supervised</button>
+    <!-- Minimalist Folder-Style Top Navigation & Mode Tabs -->
+    <div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: -1px; position: relative; z-index: 10;">
+      <!-- Primary View Switcher -->
+      <div class="folder-tabs-bar" style="padding-left: 0;">
+        <button type="button" class="folder-tab active" id="viewTabVmodel" data-view="vmodel" onclick="switchView('vmodel')">🗺️ Workflow (V-Model)</button>
+        <button type="button" class="folder-tab" id="viewTabApprovals" data-view="approvals" onclick="switchView('approvals')">
+          ⚡ Approvals &amp; Decisions <span class="badge-pending-indicator" id="pendingApprovalsBadge" style="display: inline-flex; align-items: center; justify-content: center; background: #ea580c; color: #fff; font-size: 9px; font-weight: 800; border-radius: 999px; padding: 1px 6px; margin-left: 4px;">1 Pending</span>
+        </button>
+      </div>
+
+      <!-- Autonomy Mode Switcher -->
+      <div class="folder-tabs-bar" id="autonomyTabsBar">
+        <button type="button" class="folder-tab active" data-mode="autopilot" onclick="switchAutonomyMode('autopilot')">🟢 Autopilot</button>
+        <button type="button" class="folder-tab" data-mode="balanced" onclick="switchAutonomyMode('balanced')">🟡 Balanced</button>
+        <button type="button" class="folder-tab" data-mode="supervised" onclick="switchAutonomyMode('supervised')">🔴 Supervised</button>
+      </div>
     </div>
 
     <main aria-label="PM workflow visualizer">
@@ -212,6 +274,6 @@
       <noscript>Enable JavaScript to explore the workflow.</noscript>
     </main>
   </div>
-  <script src="progress.js"></script>
+  <script src="progress.min.js"></script>
 </body>
 </html>

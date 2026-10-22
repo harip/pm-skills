@@ -12,10 +12,10 @@ See `.agents/rules/GLOBAL_RULES.md` for shared protocols and document numbering.
 - **Invisible Execution:** Overwrite `docs/PROJECT_STATUS.md` silently on disk at the end of *every user turn*. Never dump raw table in chat unless requested.
 - **Line Limit & Session Cap:** Keep `PROJECT_STATUS.md` under 65 lines. Maintain rolling **3-session log cap** (delete oldest rows).
 - **Status Enums:** Use the authoritative vocabulary in Global Rules, including `[AWAITING USER SETUP]`, `[AWAITING UAT SIGN-OFF]`, and `[STALE — REVISION REQUIRED]`.
-- **Visual Progress Synchronization:** Copy `assets/progress.html` and `assets/progress.js` into `docs/progress.html` and `docs/progress.js` in the project `docs/` folder at every turn with current phase, deliverables index, interactive User Stories viewer, automated QA test summary, and selected UAT environment link.
+- **Visual Progress Synchronization:** Copy `assets/progress.html`, `assets/progress.js`, and `assets/progress.min.js` into `docs/` in the project folder at every turn with current phase, deliverables index, interactive User Stories viewer, automated QA test summary, and the ⚡ Approvals & Decisions Studio.
 - **Document Links Alignment:** Ensure `docs/progress.html` links directly to all project deliverables (`docs/00_PROJECT_CONTRACT.md`, `docs/01_ARCH_BRIEF.md`, `docs/02_PRD.md`, `docs/03_USER_STORIES.md`, `docs/04_TECHNICAL_SPEC.md`, `docs/05_TASK_MANIFEST.md`, `src/assets/schemas/`, `docs/06_DESIGN_REGISTER.md`, `tests/07_TEST_MANIFEST.md`, `docs/08_SETUP_REGISTER.md`, `docs/09_RELEASE_PLAN.md`, `docs/10_UAT_CHECKLIST.md`).
 - **Gate 2 UI Mockup Stop Point:** Clearly flag Phase 5 (UI/UX) as a mandatory autonomy stop point. When UI mockups are created, pause execution for manager approval before frontend code implementation.
-- **Dashboard Template:** Use `assets/progress.html` + `assets/progress.js` in `.agents/skills/orchestrator/assets/` as master templates; copy them into `docs/progress.html` and `docs/progress.js` to render the live visualizer dashboard. Before access exists, render a disabled pending-access label instead of an empty or placeholder link.
+- **Dashboard Template & Minification:** Use `assets/progress.html` + `assets/progress.min.js` (compiled from `assets/progress.js` via `npx terser`) in `.agents/skills/orchestrator/assets/` as master templates; copy them into `docs/` to render the live visualizer dashboard with zero load lag. Before access exists, render a disabled pending-access label instead of an empty or placeholder link.
 
 ## Template: `docs/PROJECT_STATUS.md`
 ```markdown
@@ -64,8 +64,9 @@ See `.agents/rules/GLOBAL_RULES.md` for shared protocols and document numbering.
 6. On explicit deployment skip, record `[SKIPPED — USER MANAGED]` for Release and set `NEXT_STEP_POINTER: COMPLETE — USER MANAGED HANDOFF`.
 
 ## Cold-Start Resumption
-When user says *"Read PROJECT_STATUS.md and continue"*:
-1. Parse `NEXT_STEP_POINTER`.
-2. Announce: `🔄 Session Resumed. Autonomy: [Mode]. Executing → [Agent].`
-3. Execute the next actionable step. If awaiting setup or sign-off, reopen that pending action; resume is not consent. If the pointer is terminal, report the recorded outcome.
+When user types `approved` or says *"Read PROJECT_STATUS.md and continue"*:
+1. If `docs/APPROVALS.json` exists, load and record approved stage decisions and requested perks.
+2. Parse `NEXT_STEP_POINTER`.
+3. Announce: `🔄 Session Resumed. Autonomy: [Mode]. Decisions applied. Executing → [Agent].`
+4. Execute the next actionable step. If awaiting setup or sign-off, reopen that pending action; resume is not consent. If the pointer is terminal, report the recorded outcome.
 
