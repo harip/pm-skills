@@ -51,21 +51,21 @@ Paths are relative to `.agents/skills/`. This registry defines the existing work
 
 | Stage | Role | Skill name | Skill path |
 |---|---|---|---|
-| Phase 1 — Discovery & Contract | IT Consultant | `it_consultant` | `it_consultant/SKILL.md` |
-| Phase 2 — Scope | Product Owner | `product_owner` | `product_owner/SKILL.md` |
-| Phase 3 — Technical Specification | Technical Architect | `technical_architect` | `techincal_architect/SKILL.md` |
-| Phase 4 — Schemas | Content Parser | `content_parser` | `content_parser/SKILL.md` |
-| Phase 5 — UI/UX | Frontend Developer | `frontend_developer` | `frontend_developer/SKILL.md` |
-| Phase 6 — Database Setup & Services | Service Engineer | `service_engineer` | `service_engineer/SKILL.md` |
-| Phase 7 — QA | QA Agent | `qa_agent` | `qa_agent/SKILL.md` |
-| Phase 8 — UAT | UAT Coordinator | `uat` | `uat/SKILL.md` |
-| Release | Deployment Lead | `deployment` | `deployment/SKILL.md` |
-| Entry & routing | PM | `pm` | `pm/SKILL.md` |
-| State & dashboard | Orchestrator | `orchestrator` | `orchestrator/SKILL.md` |
-| Cross-phase audit | Architecture Reviewer | `architecture_reviewer` | `architecture_reviewer/SKILL.md` |
-| Phase 5 design support | Apple Design | `apple-design` | `apple_design/SKILL.md` |
+| Entry & routing | PM | `pm` | `00_pm/SKILL.md` |
+| Phase 1 — Discovery & Contract | IT Consultant | `it_consultant` | `01_it_consultant/SKILL.md` |
+| Phase 2 — Scope | Product Owner | `product_owner` | `02_product_owner/SKILL.md` |
+| Phase 3 — Technical Specification | Technical Architect | `technical_architect` | `03_technical_architect/SKILL.md` |
+| Phase 4 — Schemas | Content Parser | `content_parser` | `04_content_parser/SKILL.md` |
+| Phase 5 — UI/UX | Frontend Developer | `frontend_developer` | `05_frontend_developer/SKILL.md` |
+| Phase 6 — Database Setup & Services | Service Engineer | `service_engineer` | `06_service_engineer/SKILL.md` |
+| Phase 7 — QA | QA Agent | `qa_agent` | `07_qa_agent/SKILL.md` |
+| Phase 8 — UAT | UAT Coordinator | `uat` | `08_uat/SKILL.md` |
+| Release | Deployment Lead | `deployment` | `09_deployment/SKILL.md` |
+| State & dashboard | Orchestrator | `orchestrator` | `10_orchestrator/SKILL.md` |
+| Cross-phase audit | Architecture Reviewer | `architecture_reviewer` | `11_architecture_reviewer/SKILL.md` |
+| Phase 5 design support | Apple Design | `apple-design` | `12_apple_design/SKILL.md` |
 
-There are 13 skills: eight phase leads, one release lead, and four supporting skills. `PROJECT_BUILDER_SKILL.md` is the controller document, not a discoverable skill. Caveman is a rule in `CAVEMAN.md`. Keep existing folder names, including `techincal_architect`, when resolving paths. Phases 1–4 establish the baseline; Phases 5–7 repeat per approved feature slice, followed by aggregate QA, Phase 8, and Release; the reviewer audits throughout, and Apple Design supports Phase 5 without adding a phase.
+There are 13 skills: eight phase leads, one release lead, and four supporting skills. Folders in `.agents/skills/` are numbered `00_` through `12_` for visual ordering. `PROJECT_BUILDER_SKILL.md` is the controller document, not a discoverable skill. Caveman is a rule in `CAVEMAN.md`. Phases 1–4 establish the baseline; Phases 5–7 repeat per approved feature slice, followed by aggregate QA, Phase 8, and Release; the reviewer audits throughout, and Apple Design supports Phase 5 without adding a phase.
 
 ## 7. Visual Progress Dashboard Protocol (`progress.html`)
 - **Visual Over Textual:** Whenever the swarm operates on an active project, it must maintain an interactive `progress.html` at the project root. Stakeholders should never have to manually parse disjointed markdown files to assess project health.
