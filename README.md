@@ -28,7 +28,14 @@ In the chat prompt, type:
 ```text
 /pm start "My Dream App"
 ```
-*(Or simply describe your app idea: `/pm "Build a real-time habit tracker for runners"`)*
+> **Default Mode:** By default, projects start in **`BALANCED`** mode.
+> 
+> **Want a different mode?**
+> - Start directly in your preferred mode:
+>   - `/pm start "My Dream App" autopilot` ➔ Auto-advances across phases, pausing only for Gate 2 mockups, DB setup, Gate 3 UAT, and Release.
+>   - `/pm start "My Dream App" supervised` ➔ Pauses for your explicit approval after *every single phase*.
+> - Or change it at **any time** (before or during execution):
+>   - `/pm mode <balanced|autopilot|supervised>`
 
 The **IT Consultant** will immediately kick off Phase 1 intake. Open [`docs/progress.html`](docs/progress.html) in your browser at any time to watch the live interactive project visualizer!
 
@@ -40,17 +47,21 @@ Control project intake, phase execution, autonomy modes, and session resumption 
 
 | Command | Action & Description |
 |---|---|
-| `/pm start <name>` | Initialize a new project in `BALANCED` mode and launch Phase 1 intake. |
+| `/pm start <name> [mode]` | Initialize a new project and launch Phase 1 intake. `[mode]` is optional (`balanced`, `autopilot`, or `supervised`; defaults to `balanced`). |
+| `/pm mode <balanced\|autopilot\|supervised>` | Switch or set active autonomy mode at any time (before start or mid-flight). |
 | `/pm resume` | Read `NEXT_STEP_POINTER` from `docs/PROJECT_STATUS.md` and execute the assigned agent step. |
 | `/pm status` | Inspect project mode, active phase, lead agent, and next step without executing. |
 | `/pm next` | Force execute the next actionable step (respecting gate sign-offs). |
-| `/pm mode <balanced\|autopilot\|supervised>` | Switch active autonomy mode (`BALANCED`, `AUTOPILOT`, `SUPERVISED`). |
 | `/pm help` | Display full command list and role matrix. |
 
-### Starting, Pausing & Resuming Work
-- **Start New Project:** Type `/pm start "My App Name"` or provide your raw pitch.
-- **Pause Work:** Simply stop chatting at any turn. The state engine silently saves your exact step to disk in `docs/PROJECT_STATUS.md`.
-- **Resume Work:** When returning after hours or days, simply type `/pm resume`. Execution resumes instantly from your saved step.
+### How Starting & Modes Work:
+- **Default Start:** Just run `/pm start "My App"`. You do **not** need to set the mode first; it automatically starts in `BALANCED`.
+- **Custom Mode Start:** If you prefer Autopilot or Supervised from the very start, specify it in one command:
+  ```text
+  /pm start "My App" autopilot
+  ```
+- **Switching Mid-Project:** At any turn, you can type `/pm mode autopilot` (or `balanced`, `supervised`) and the swarm adjusts its pause frequency immediately.
+- **Pausing & Resuming:** Stop chatting whenever you want. Your step is saved in `docs/PROJECT_STATUS.md`. Type `/pm resume` to continue anytime.
 
 ---
 
