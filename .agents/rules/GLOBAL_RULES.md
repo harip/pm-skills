@@ -1,87 +1,62 @@
-# Global SDLC Swarm Rules & Protocols
+# Global SDLC Swarm Rules
 
-## 1. Core Operating Principles & Capability Model
-- **1-Person Company Model:** Solo founder + AI swarm. Features built as vertical slices (UI through DB per story).
-- **Capability-Driven Execution:** Phase 1 defines `docs/00_PROJECT_CONTRACT.md`. Agents skip infrastructure marked `none` and flag checks `N/A — CAPABILITY NOT REQUIRED`.
-- **Zero-Trust Audit:** Architecture Reviewer audits every deliverable against `00_PROJECT_CONTRACT.md`.
+Single authority for phases, paths, statuses, gates, and the review loop. Skills hold role-specific rules only and never restate these.
 
-## 2. Document Prefix Protocol & Canonical Paths
-- **Numbering:** Document prefixes are stable artifact IDs, not phase numbers or execution order. Document 00 belongs to Phase 1; Document 10 belongs to Phase 8. Release follows Phase 8 without a phase number.
-- **Tone:** Very terse, concise, and clear. Zero conversational filler.
-- **Canonical Document Paths:**
-  - `docs/00_PROJECT_CONTRACT.md` — Phase 1: Capability & Target Contract
-  - `docs/01_ARCH_BRIEF.md` — Phase 1: Architecture Brief
-  - `docs/02_PRD.md` — Phase 2: Product Requirements Document
-  - `docs/03_USER_STORIES.md` — Phase 2: Full-Stack User Stories
-  - `docs/04_TECHNICAL_SPEC.md` — Phase 3: Technical Specification
-  - `docs/05_TASK_MANIFEST.md` — Phase 3: Executable Task Manifest
-  - `docs/06_DESIGN_REGISTER.md` — Phase 5: UI Mockup Register
-  - `tests/07_TEST_MANIFEST.md` — Phase 7: Automated Test Manifest *(Canonical path)*
-  - `docs/08_SETUP_REGISTER.md` — Database/Prerequisite Progress Register
-  - `docs/09_RELEASE_PLAN.md` — Release Approval & Verified Plan
-  - `docs/10_UAT_CHECKLIST.md` — User Acceptance Testing & Target Environment Checklist
-  - `UAT_FEEDBACK.md` — Phase 8 revision feedback, when requested
-  - `open_stackblitz.html`, `redirect_stackblitz.html` — Optional Phase 8 web sandbox launchers
-  - `docs/PROJECT_STATUS.md` — Orchestrator state and next action
-  - `progress.html` — Live Visual Project Progress Dashboard (Project Root)
-  - `docs/reviews/0[N]_ARCH_REVIEW_PHASE_[N].md` — Phase Audit Reports
+## 1. Principles
+- Solo founder + AI swarm. Features ship as vertical slices (UI → service → DB per story).
+- **Capabilities:** `docs/00_PROJECT_CONTRACT.md` sets each capability `required | none | deferred`.
+  - `none` → skip that layer; mark its checks `[N/A — CAPABILITY NOT REQUIRED]`. authentication: login, JWT, `AuthContext`, 401 tests · persistence: schemas, ORM, migrations, cloud DB · offline_writes: outbox, retry workers, tombstones · shared_records: tenant/team checks (creator ownership only) · backend: service engineering.
+  - `deferred` → mocks; mark `[UNVERIFIED — DEPENDENCY DEFERRED]`; production blocked until resolved.
+  - Never set an uncertain essential capability to `none` to avoid work.
+- Architecture Reviewer audits every phase deliverable against Document 00.
+- **Output:** write artifacts to disk; in chat return file links + ≤3 bullets. Terse, no filler. Load only the artifacts the active step needs.
 
-## 3. Revision Invalidation & Traceability Protocol
-- **Artifact Sign-off:** Approvals record artifact path, revision hash, approver, scope, and evidence.
-- **Cascading Invalidation:** Modifying an upstream artifact (story, contract, platform, capability, permission policy, schema, tech spec) invalidates affected downstream artifacts and reopens approvals from the earliest affected phase.
+## 2. Flow
+Phase 1 Discovery → 2 Scope → 3 Tech Spec → 4 Schemas → per story [5 UI → 6 Services → 7 QA] → aggregate QA → 8 UAT → Release.
+Passing slice QA moves to the next story; only aggregate QA reaches Phase 8; only Gate 3 reaches Release. Role registry and commands: `.agents/skills/00_pm/SKILL.md`.
 
-## 4. Status Vocabulary & Terminal States
-- **Status Enums:** `[NOT STARTED]`, `[IN PROGRESS]`, `[AWAITING USER SETUP]`, `[AWAITING PEER REVIEW]`, `[AWAITING MANAGER APPROVAL]`, `[AWAITING UAT SIGN-OFF]`, `[COMPLETED & LOCKED]`, `[SKIPPED — MOCKS ONLY]`, `[SKIPPED — USER MANAGED]`, `[N/A — CAPABILITY NOT REQUIRED]`, `[UNVERIFIED — DEPENDENCY DEFERRED]`, `[STALE — REVISION REQUIRED]`.
-- **Terminal Pointer:** After verified release use `NEXT_STEP_POINTER: COMPLETE — RELEASE VERIFIED`; after explicit deployment skip use `NEXT_STEP_POINTER: COMPLETE — USER MANAGED HANDOFF`.
+## 3. Canonical Paths
+Document prefixes are stable IDs, not phase order.
+| ID | Path | Owner |
+|---|---|---|
+| 00 | `docs/00_PROJECT_CONTRACT.md` | Phase 1 |
+| 01 | `docs/01_ARCH_BRIEF.md` | Phase 1 |
+| 02 | `docs/02_PRD.md` | Phase 2 |
+| 03 | `docs/03_USER_STORIES.md` | Phase 2 |
+| 04 | `docs/04_TECHNICAL_SPEC.md` | Phase 3 |
+| 05 | `docs/05_TASK_MANIFEST.md` | Phase 3 |
+| — | `src/assets/schemas/` | Phase 4 |
+| 06 | `docs/06_DESIGN_REGISTER.md` (+ `docs/design/mockups/`) | Phase 5 |
+| 07 | `tests/07_TEST_MANIFEST.md` | Phase 7 |
+| 08 | `docs/08_SETUP_REGISTER.md` | Phase 6 / Release |
+| 09 | `docs/09_RELEASE_PLAN.md` | Release |
+| 10 | `docs/10_UAT_CHECKLIST.md` | Phase 8 |
+| — | `docs/PROJECT_STATUS.md`, `docs/DECISIONS.md`, `docs/progress.html`, `docs/progress-data.js` | Orchestrator |
+| — | `docs/reviews/0N_ARCH_REVIEW_PHASE_N.md` | Reviewer |
+| — | `UAT_FEEDBACK.md` | Phase 8 (on revisions) |
 
-## 5. Token & Context Efficiency Protocol
-- **Write-to-File, Link-in-Chat:** Save code/schemas/specs directly to disk. In chat, return file links + 3-bullet summary.
-- **Lazy Loading:** Load ONLY the specific artifact required for the active step.
-- **Bounded State Window:** `docs/PROJECT_STATUS.md` maintains a rolling 3-session log cap (≤ 65 lines).
+## 4. Statuses
+`[NOT STARTED]` `[IN PROGRESS]` `[AWAITING USER SETUP]` `[AWAITING PEER REVIEW]` `[AWAITING MANAGER APPROVAL]` `[AWAITING UAT SIGN-OFF]` `[COMPLETED & LOCKED]` `[SKIPPED — MOCKS ONLY]` `[SKIPPED — USER MANAGED]` `[N/A — CAPABILITY NOT REQUIRED]` `[UNVERIFIED — DEPENDENCY DEFERRED]` `[STALE — REVISION REQUIRED]`
+Terminal pointers: `COMPLETE — RELEASE VERIFIED`, `COMPLETE — USER MANAGED HANDOFF`.
 
-## 6. Autonomy Modes
-- **`BALANCED`** (Default): Stop for sign-off at Gate 1 (`02_PRD.md` & `03_USER_STORIES.md`), Gate 2 (`06_DESIGN_REGISTER.md`), Gate 3 (target-platform UAT), and Gate 4 (`09_RELEASE_PLAN.md`).
-- **`AUTOPILOT`**: Auto-advance between required checkpoints. Stop at Gate 2 (mockups), DB setup/skip, Gate 3 (UAT), deployment selection/skip, and Gate 4 (release approval).
-- **`SUPERVISED`**: Stop for user sign-off after EVERY phase (1–8), plus setup checkpoints and Gate 4. Phase 8 sign-off is Gate 3, not a second approval.
-- **All modes:** Database setup/skip occurs at Phase 6 entry. Deployment selection/skip occurs in Release after UAT. Explicit deployment skip ends Release without publishing; deferred required backend work stays mock-only. Passing QA hands off to UAT, not directly to Release.
+## 5. Stop Points & Autonomy
+| Stop point | BALANCED (default) | AUTOPILOT | SUPERVISED |
+|---|:-:|:-:|:-:|
+| Gate 1 — Scope (02, 03) | ✅ | — | ✅ |
+| Gate 2 — Mockups (06) | ✅ | ✅ | ✅ |
+| DB setup/skip (Phase 6 entry) | ✅ | ✅ | ✅ |
+| Gate 3 — UAT sign-off (10) | ✅ | ✅ | ✅ |
+| Deployment select/skip (Release) | ✅ | ✅ | ✅ |
+| Gate 4 — Release plan (09) | ✅ | ✅ | ✅ |
+| End of every other phase | — | — | ✅ |
+- AUTOPILOT may carry documented low-impact assumptions but stops when an open decision would drop a core workflow or fix platform, data, or security architecture.
+- Approvals carry across slices until the approved artifact or setup changes.
+- **Revision cascade:** an upstream change marks downstream artifacts `[STALE — REVISION REQUIRED]` and reopens approvals from the earliest affected phase. Sign-offs record artifact, revision, approver, and scope.
+- Mock-backed results stay qualified and never authorize production.
 
-### Canonical Roles & Phase Order
-
-Paths are relative to `.agents/skills/`. This registry defines the existing workflow for routing tables and visualizers.
-
-| Stage | Role | Skill name | Skill path |
-|---|---|---|---|
-| Entry & routing | PM | `pm` | `00_pm/SKILL.md` |
-| Phase 1 — Discovery & Contract | IT Consultant | `it_consultant` | `01_it_consultant/SKILL.md` |
-| Phase 2 — Scope | Product Owner | `product_owner` | `02_product_owner/SKILL.md` |
-| Phase 3 — Technical Specification | Technical Architect | `technical_architect` | `03_technical_architect/SKILL.md` |
-| Phase 4 — Schemas | Content Parser | `content_parser` | `04_content_parser/SKILL.md` |
-| Phase 5 — UI/UX | Frontend Developer | `frontend_developer` | `05_frontend_developer/SKILL.md` |
-| Phase 6 — Database Setup & Services | Service Engineer | `service_engineer` | `06_service_engineer/SKILL.md` |
-| Phase 7 — QA | QA Agent | `qa_agent` | `07_qa_agent/SKILL.md` |
-| Phase 8 — UAT | UAT Coordinator | `uat` | `08_uat/SKILL.md` |
-| Release | Deployment Lead | `deployment` | `09_deployment/SKILL.md` |
-| State & dashboard | Orchestrator | `orchestrator` | `10_orchestrator/SKILL.md` |
-| Cross-phase audit | Architecture Reviewer | `architecture_reviewer` | `11_architecture_reviewer/SKILL.md` |
-| Phase 5 design support | Apple Design | `apple-design` | `12_apple_design/SKILL.md` |
-
-There are 13 skills: eight phase leads, one release lead, and four supporting skills. Folders in `.agents/skills/` are numbered `00_` through `12_` for visual ordering. `PROJECT_BUILDER_SKILL.md` is the controller document, not a discoverable skill. Caveman is a rule in `CAVEMAN.md`. Phases 1–4 establish the baseline; Phases 5–7 repeat per approved feature slice, followed by aggregate QA, Phase 8, and Release; the reviewer audits throughout, and Apple Design supports Phase 5 without adding a phase.
-
-## 7. Visual Progress Dashboard Protocol (`progress.html`)
-- **Visual Over Textual:** Whenever the swarm operates on an active project, it must maintain an interactive `progress.html` at the project root (consuming `progress.min.js`). Stakeholders should never have to manually parse disjointed markdown files to assess project health or approve stages.
-- **Mandatory Dashboard Elements:**
-  1. **Visual Milestone Stepper:** Displays active phase, completed milestones, and upcoming gates.
-  2. **Live Environment Hub:** Embedded links to local dev servers and the selected UAT environment (compatible web preview or native test build).
-  3. **Deliverables Index:** Clean cards linking to and summarizing `02_PRD.md`, `04_TECHNICAL_SPEC.md`, `07_TEST_MANIFEST.md`, and `10_UAT_CHECKLIST.md`.
-  4. **Acceptance Sign-off:** Interactive checklist for stakeholders to test and approve the release.
-  5. **Interactive Approvals Studio (⚡ Approvals Tab):** At each gate, renders stage decisions curated by the Architecture Reviewer with **opinionated standard recommendations pre-selected by default (zero typing required)** and optional cool out-of-the-box perks. Clicking "Save & Submit Approval" persists decisions into `docs/APPROVALS.json`.
-- **Gate Stop & Resume Protocol:** At every gate or required review checkpoint, the agent halts its turn and outputs:
-  `👉 Review decisions in docs/progress.html. When done, type "approved" to continue.`
-  When the user responds with `approved` (or `/pm resume`), the swarm ingests `docs/APPROVALS.json`, applies the recorded decisions, and launches the next phase lead.
-
-## 8. Requirements, Feature Iterations & Verification
-- **Discovery evidence:** In Document 00, record capability decisions as confirmed or assumed with their source; uncertainty is not evidence for `none`. Track unresolved users, workflows, constraints, and capabilities in the PRD. Gate 1 confirms these in BALANCED/SUPERVISED. AUTOPILOT may carry documented low-impact assumptions, but pauses within scope clarification when an unresolved decision would exclude a core workflow or determine platform/data/security architecture. No new gate.
-- **Feature iteration:** Track the active story and remaining stories in the existing task manifest and status pointer. For each slice, run Phase 5 UI → Phase 6 applicable services → Phase 7 verification. Passing slice QA advances to the next slice; only aggregate QA of the integrated in-scope release advances to Phase 8. Reuse approvals/setup unless the approved artifact or setup scope changes. Retain mandatory mockup and DB checkpoints and capability skips.
-- **Test relationships:** Phase 2 maps each story/AC to acceptance scenarios; Phase 3 maps architecture/API boundaries to integration checks; Phase 4 maps applicable component/data contracts to unit/contract cases. Store plans in existing stories, technical spec/task manifest, and contracts. Developers execute relevant tests during Phases 5–6; QA independently checks evidence, gaps, and regressions in Phase 7.
-- **Quality requirements:** Give each applicable NFR an ID, measurable threshold, workload/device/network conditions, verification method, and evidence owner in the PRD. Technical spec maps it to checks; QA records measured results and evidence. Coverage percentages support, but cannot replace, requirement verification. Required unmet or unverified targets block production readiness; mocks retain their qualified verdict. Logging/monitoring provisioning remains excluded.
-- **Acceptance environment:** Phase 8 uses the target platform and relevant real integrations. Record source revision/build, environment/device, data mode, test outcomes, limitations, and approval scope in Document 10. Web previews cannot establish native-device acceptance; mock acceptance cannot establish live integration readiness.
+## 6. Review Loop (every stop point)
+1. Orchestrator refreshes `docs/progress-data.js`. The Reviewer supplies the decisions: recommended option first, alternatives, optional perks.
+2. End the turn with: `👉 Review in docs/progress.html (⚡ Approvals). Type "approved" to accept the recommended options, or reply with changes (e.g. "D2: B", "add P1", or free text).`
+3. Changes → revise, refresh the dashboard, stop again. Repeat until the user types `approved`.
+4. `approved` → record decisions in `docs/DECISIONS.md` and advance.
+Silence, `/pm resume`, and `/pm next` are never approval.

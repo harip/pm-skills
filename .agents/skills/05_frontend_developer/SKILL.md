@@ -1,43 +1,24 @@
 ---
 name: frontend_developer
-description: Phase 5 lead. Scaffolds Apple-native UI component trees, mockups, and docs/06_DESIGN_REGISTER.md.
+description: Phase 5 lead. Produces screen mockups, docs/06_DESIGN_REGISTER.md, and the UI component tree for each story.
 ---
 
-# Frontend Developer (Phase 5 Lead)
+# Frontend Developer (Phase 5)
 
-Keep conversation response terse, condensed, and clear. Use canonical document IDs from Global Rules; they do not define phase order.
-See `.agents/rules/GLOBAL_RULES.md` for shared protocols and `apple_design/SKILL.md` for animation standards.
+**Inputs:** Document 00 (platform), the active story in 03 and its tasks in 05, Document 06, `src/assets/schemas/*.contract.ts`.
+**Outputs:** Document 06; `src/components/` plus `src/screens/` or `src/app/`. Motion rules: `12_apple_design/SKILL.md`.
 
-## Contract & Platform Inspection
-1. Read `docs/00_PROJECT_CONTRACT.md` (Document 00) to confirm target platform (`web` | `native` | `hybrid`).
-2. Read `docs/06_DESIGN_REGISTER.md` (Document 06) and `src/assets/schemas/*.contract.ts`.
+## Per Story
+1. Screen inventory: purpose and data dependencies per screen.
+2. **Mockups (Gate 2):** PNG/WebP if an image tool exists, else self-contained HTML/SVG → `docs/design/mockups/[screen_id]_v1.[png|webp|html]`. Register in 06 as `PROPOSED | REJECTED | APPROVED`. Stop for review before writing UI code; already-approved, unchanged screens skip review.
+3. Implement components to match approved mockups; run component/unit checks before Phase 6.
 
-## Platform-Specific Implementation Rules
-- **Native (Expo / React Native):**
-  - Apple HIG spring physics & fluid motion (`apple_design/SKILL.md`).
-  - Virtualized lists (`FlashList`/`FlatList` for >10 items). Spacing grid (multiples of 8).
-  - Min touch target 44×44pt.
-  - Test ID: `testID` (snake_case) + `accessibilityLabel` on interactive elements.
-- **Web (Next.js / DOM):**
-  - Semantic HTML5 layout, CSS design system tokens, responsive grid.
-  - Interactive elements have explicit `data-testid` (kebab-case) for Playwright testing.
-  - Keyboard navigation, ARIA roles, contrast ≥4.5:1.
+## Platform Rules
+- **Native:** Apple HIG springs; `FlashList`/`FlatList` for >10 items; 8pt grid; ≥44×44pt targets; `testID` (snake_case) + `accessibilityLabel`.
+- **Web:** semantic HTML, design tokens, responsive grid; `data-testid` (kebab-case); keyboard navigation, ARIA roles, contrast ≥4.5:1.
 
-## Architecture & State Standards
-- **3-Layer Architecture:** Screen (route/data orchestration) → Layout (safe-area/keyboard) → Components (stateless, prop-driven).
-- **Required Component File Tree:** `src/components/[Name]/index.tsx + styles.ts + types.ts + [Name].test.tsx`.
-- **4 Data States (Every Component):** Loading (skeleton loader), Error (banner + retry), Empty state, Content render.
-- **Multi-Tenant & Role Guards:** Wrap restricted UI in `<PermissionGate allowedRoles={['ADMIN']} tenantId={tenantId}>`. Check `role === 'ADMIN' || record.tenantId === activeTenantId || record.createdBy === userId`.
-
-## Execution Order
-1. **Screen Inventory:** Purpose + data dependencies per screen based on user stories.
-2. **Visual Mockups (MANDATORY GATE):** Generate PNG or WebP image files if image generation tools (e.g., `generate_image`) are available; if image tools are unavailable or interactive preview is preferred, generate self-contained HTML/SVG mockups. Save mockups to `docs/design/mockups/[screen_id]_v1.[png|webp|html]` and record in `docs/06_DESIGN_REGISTER.md` (Document 06) (`PROPOSED` | `REJECTED` | `APPROVED`). Note: Concept mockups in Phase 5 are distinct from Phase 7 actual-render screenshot baselines. Stop in EVERY autonomy mode, including AUTOPILOT, for user review before code. Approval advances implementation; changes regenerate affected mockups.
-3. **Component Implementation:** Scaffold TSX/StyleSheet code matching approved mockups.
-
-## Inputs & Outputs
-- **Inputs:** `docs/00_PROJECT_CONTRACT.md`, `docs/06_DESIGN_REGISTER.md`, `src/assets/schemas/*.contract.ts`.
-- **Output Artifacts:** `docs/06_DESIGN_REGISTER.md` (Document 06), UI component tree in `src/components/` and `src/screens/` or `src/app/`.
-- **Chat Output:** Markdown links to `docs/06_DESIGN_REGISTER.md` + created components + 3-bullet summary.
-
-## Per-Feature Execution
-Read the active story in `docs/03_USER_STORIES.md` and its tasks/test plan in `docs/05_TASK_MANIFEST.md`. Implement its approved UI and execute relevant component/unit checks before Phase 6 integration. Reuse unchanged mockup approvals; changed or new screens require Gate 2 review. After slice QA, return for the next story as directed by Orchestrator. Do not mark all frontend work complete after one slice.
+## Architecture
+- Screen (data orchestration) → Layout (safe area, keyboard) → Components (stateless, prop-driven).
+- Files: `src/components/[Name]/index.tsx`, `styles.ts`, `types.ts`, `[Name].test.tsx`.
+- Every component handles 4 states: loading (skeleton), error (banner + retry), empty, content.
+- Wrap restricted UI in `<PermissionGate allowedRoles={[...]} tenantId={tenantId}>`; allow when `role === 'ADMIN' || record.tenantId === activeTenantId || record.createdBy === userId`.
