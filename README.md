@@ -6,24 +6,51 @@
 
 ---
 
+## ⚡ Quickstart: Create a New App in 3 Steps
+
+Follow these exact steps whenever you want to create a brand-new application using this swarm:
+
+### 1. Create Repo from Template on GitHub
+1. Navigate to [**github.com/harip/pm-skills**](https://github.com/harip/pm-skills).
+2. Click the green **"Use this template"** button (top right) ➔ **"Create a new repository"**.
+3. Name your repository (e.g. `my-dream-app`), select Public/Private, and click **"Create repository"**.
+
+### 2. Clone & Open in Antigravity IDE
+Open your terminal and run:
+```bash
+git clone https://github.com/harip/my-dream-app.git
+cd my-dream-app
+```
+Then open this folder in **Antigravity IDE** (or your editor).
+
+### 3. Kick Off the AI Swarm!
+In the chat prompt, type:
+```text
+/pm start "My Dream App"
+```
+*(Or simply describe your app idea: `/pm "Build a real-time habit tracker for runners"`)*
+
+The **IT Consultant** will immediately kick off Phase 1 intake. Open [`docs/progress.html`](docs/progress.html) in your browser at any time to watch the live interactive project visualizer!
+
+---
+
 ## 💻 Swarm Commands (`/pm`)
 
 Control project intake, phase execution, autonomy modes, and session resumption using simple slash commands:
 
 | Command | Action & Description |
 |---|---|
-| `/pm` | View active project overview or prompt project intake. |
 | `/pm start <name>` | Initialize a new project in `BALANCED` mode and launch Phase 1 intake. |
 | `/pm resume` | Read `NEXT_STEP_POINTER` from `docs/PROJECT_STATUS.md` and execute the assigned agent step. |
 | `/pm status` | Inspect project mode, active phase, lead agent, and next step without executing. |
 | `/pm next` | Force execute the next actionable step (respecting gate sign-offs). |
-| `/pm mode <balanced|autopilot|supervised>` | Switch active autonomy mode (`BALANCED`, `AUTOPILOT`, `SUPERVISED`). |
+| `/pm mode <balanced\|autopilot\|supervised>` | Switch active autonomy mode (`BALANCED`, `AUTOPILOT`, `SUPERVISED`). |
 | `/pm help` | Display full command list and role matrix. |
 
 ### Starting, Pausing & Resuming Work
-- **Start New Project:** Type `/pm start "My App Name"` or provide your raw pitch (e.g. `/pm "Build a food truck menu tracker"`). The **IT Consultant** kicks off Phase 1.
-- **Pause Work:** Simply stop chatting at any turn. The state engine silently saves your exact step to disk.
-- **Resume Work:** When returning after hours or days, simply type `/pm resume` (or tell the AI *"Read `docs/PROJECT_STATUS.md` and continue"*). Execution resumes instantly from your saved step.
+- **Start New Project:** Type `/pm start "My App Name"` or provide your raw pitch.
+- **Pause Work:** Simply stop chatting at any turn. The state engine silently saves your exact step to disk in `docs/PROJECT_STATUS.md`.
+- **Resume Work:** When returning after hours or days, simply type `/pm resume`. Execution resumes instantly from your saved step.
 
 ---
 
