@@ -46,4 +46,5 @@ Where `<platform>` is bound in Document 00 to `ios`, `android`, or `web`:
 
 ## Step Protocol
 1. **Workspace Root Detection**: If running via `/pm test`, all docs and code are isolated inside `sandbox/`. Otherwise in root workspace.
-2. **Execution**: Read `NEXT_STEP_POINTER` from `PROJECT_STATUS.md` → load ONLY that skill file → execute → Architecture Reviewer → Orchestrator.
+2. **True Concurrency in Phase 5 & 6**: Phases 1–4 establish the architecture, INVEST stories, and schemas. Once Phase 4 completes, the swarm uses `invoke_subagent` to spawn **Frontend Developer** and **Service Engineer** as concurrent parallel subagents. Both run simultaneously and synchronize before Phase 7 QA.
+3. **Execution**: Read `NEXT_STEP_POINTER` from `PROJECT_STATUS.md` → load ONLY that skill file → execute → Architecture Reviewer → Orchestrator.

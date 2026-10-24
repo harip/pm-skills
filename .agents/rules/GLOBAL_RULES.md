@@ -11,9 +11,18 @@ Single authority for phases, paths, statuses, gates, and the review loop. Skills
 - Architecture Reviewer audits every phase deliverable against Document 00.
 - **Output (Always-On Terse Mode):** Write all artifacts to disk; in chat return strictly file links + ≤3 terse bullets. Zero filler, zero conversational preamble, zero robotic fluff. Focus purely on actionable state. Load only the artifacts the active step needs.
 
-## 2. Flow
-Phase 1 Discovery → 2 Scope → 3 Tech Spec → 4 Schemas → per story [5 UI → 6 Services → 7 QA] → aggregate QA → 8 UAT → Release.
-Passing slice QA moves to the next story; only aggregate QA reaches Phase 8; only Gate 3 reaches Release. Role registry and commands: `.agents/skills/00_pm/SKILL.md`.
+## 2. Flow & Parallel Concurrency
+Phase 1 Discovery → 2 Scope → 3 Tech Spec → 4 Schemas → **[Phase 5 UI || Phase 6 Services (Parallel Subagents)]** → Phase 7 QA → Phase 8 UAT → Release.
+
+### Parallel Subagent Dispatch (Phase 5 & Phase 6)
+Once Phase 4 locks the schemas and data contracts:
+1. The Orchestrator dispatches **Phase 5 Frontend Developer** and **Phase 6 Service Engineer** simultaneously using `invoke_subagent`.
+2. **Zero-Conflict Boundaries**:
+   - Frontend Subagent owns: `src/components/`, `src/screens/`, `src/app/`, `docs/design/mockups/`, `docs/06_DESIGN_REGISTER.md`.
+   - Service Engineer owns: `src/db/`, `src/services/`, `src/hooks/`, `docs/08_SETUP_REGISTER.md`.
+   - Shared Read-Only Contract: Both read and conform to `src/assets/schemas/`. Neither modifies schemas.
+3. **Compile Gate**: Both subagents must verify `npx tsc --noEmit` exits 0 before reporting completion.
+4. **Join & Verification**: When both parallel subagents complete, the Orchestrator integrates the deliverables and routes to Phase 7 QA for unified verification. Passing aggregate QA reaches Phase 8; Gate 3 reaches Release.
 
 ## 3. Canonical Paths
 Document prefixes are stable IDs, not phase order.

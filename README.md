@@ -93,11 +93,13 @@ flowchart TB
     IT --> PO["2. Product Owner: scope — Gate 1"]
     PO --> TA["3. Technical Architect: platform spec & scaffolding"]
     TA --> CP["4. Content Parser: schemas & contracts"]
-    CP --> FE["5. Frontend Developer: mockups — Gate 2, then UI"]
-    FE --> SE["6. Service Engineer: database setup & services"]
-    SE --> QA["7. QA Agent: verification & fidelity check"]
+    CP --> PARALLEL{"Parallel Subagent Dispatch"}
+    PARALLEL -->|Subagent 1| FE["5. Frontend Developer: mockups & UI"]
+    PARALLEL -->|Subagent 2| SE["6. Service Engineer: database & services"]
+    FE --> JOIN{"Synchronize & Join"}
+    SE --> JOIN
+    JOIN --> QA["7. QA Agent: verification & fidelity check"]
     QA -->|All slices pass| UAT["8. UAT Coordinator: target acceptance — Gate 3"]
-    QA -->|Next slice| FE
     UAT --> DEP["Release: Deployment Lead — release plan & Gate 4"]
 ```
 

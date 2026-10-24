@@ -16,6 +16,18 @@ When setting `NEXT_STEP_POINTER`:
 - For Phases 1, 2, 4, State, Audit: point to `.agents/skills/core/${skill}`.
 - Explicitly instruct the agent to **load ONLY the skill specified in the pointer** and never inspect other platform directories.
 
+## Parallel Subagent Dispatch Engine (Phase 5 & 6)
+When entering implementation after Phase 4 Schemas are approved:
+1. Do NOT execute Phase 5 and Phase 6 sequentially.
+2. Dispatch both workers concurrently using `invoke_subagent`:
+   - `invoke_subagent(TypeName="self", Role="Frontend UI Engineer", Prompt="Execute Phase 5: Read platforms/<platform>/05_frontend_developer. Generate mockups, build component tree, verify compilation (npx tsc --noEmit), and return completion report.")`
+   - `invoke_subagent(TypeName="self", Role="Database & Service Engineer", Prompt="Execute Phase 6: Read platforms/<platform>/06_service_engineer. Configure Drizzle SQLite/DB schemas, write services/hooks, verify compilation (npx tsc --noEmit), and return completion report.")`
+3. Record both subagent conversation IDs in `docs/PROJECT_STATUS.md`.
+4. Wait for messages from both subagents (Reactive Wakeup).
+5. When both report green build exit code 0:
+   - Run Architecture Reviewer audit on combined output.
+   - Advance `NEXT_STEP_POINTER` to Phase 7 QA.
+
 ## Every Turn (silent; never dump state into chat)
 1. Rewrite `docs/PROJECT_STATUS.md` (≤65 lines; keep the last 3 session rows).
 2. Rewrite `docs/progress-data.js`, following the schema in `assets/progress-data.sample.js`.
