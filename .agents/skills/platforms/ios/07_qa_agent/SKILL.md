@@ -19,6 +19,11 @@ description: Phase 7 lead for iOS. Writes and runs automated tests, enforces 100
 - Compare rendered component tree against approved Gate 2 HTML/SVG mockups in `docs/design/mockups/`.
 - Any missing buttons, deviated typography, or shifted layouts fail QA verification.
 
-## Compile & Test Execution
-- Run `npm run typecheck` (`tsc --noEmit`).
-- Run `npm test` (`vitest run`). Coverage table and binary AC results recorded in `tests/07_TEST_MANIFEST.md`.
+## Compile, Unit Test & Headless Runtime Render Execution
+1. Run `npm run typecheck` (`tsc --noEmit`) — must pass with 0 errors.
+2. Run `npm test` (`vitest run`) — coverage table and binary AC results recorded in `tests/07_TEST_MANIFEST.md`.
+3. **Mandatory Live Runtime Render Gate (Playwright WebKit)**:
+   - Static unit tests and `curl` bundle checks do **not** catch runtime React render errors (e.g., `Cannot read properties of undefined (reading 'PathBuilder')`).
+   - Before QA can pass, launch the Expo dev server and run a real headless browser (`playwright` `webkit`) against `http://localhost:8081`:
+     - Verify `pageerror` and `console.error` are completely empty (`[]`).
+     - Verify `await page.innerText('body')` is non-empty, contains zero RedBox/ErrorOverlay stack traces, and renders the expected static text for every screen in the inventory.

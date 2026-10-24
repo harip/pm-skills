@@ -15,10 +15,10 @@ description: Cross-phase zero-trust auditor. Audits each phase deliverable and d
 | 2 (02, 03) | INVEST; vertical slices; binary ACs with acceptance scenarios; ≤10 P1; explicit out-of-scope; measurable NFRs. |
 | 3 (04, 05) | Strict TS; base entity fields; `AuthContext` first argument; role/tenant guards; runnable foundation task (`package.json`, `tsconfig.json`); complete task rows; boundary→integration and NFR→check mappings; per-story dependencies. |
 | 4 (schemas) | Valid schemas; `additionalProperties: false`; UUID/ISO formats; `x-pii`; valid mocks; contract→unit case mapping. |
-| 5 (06, UI) | Platform rules (web testid/a11y or native HIG/testID); complete mockups for every screen in inventory; 100% mockup fidelity check on component tree; `<PermissionGate>`; 4 data states; 44×44pt targets; developer test evidence. |
+| 5 (06, UI) | Platform rules (web testid/a11y or native HIG/testID); complete mockups for every screen in inventory; 100% mockup fidelity check on component tree; all inventory screens navigable; no unguarded `CanvasKit`/Skia crashes in Expo Go; `<PermissionGate>`; 4 data states; 44×44pt targets; developer test evidence. |
 | 6 (services) | DB setup/skip recorded in 08; queue isolation on logout/switch; no secrets in 08; `useEffect` cleanup; soft delete; access tokens in memory only. |
-| 7 (07) | Coverage ≥80%/60%; P1 ACs automated; IDOR and tenant tests; real rendered evidence (not JSDOM placeholders); NFRs measured; unmet required NFRs block readiness. |
-| 8 (10) | Tested build and environment match the target platform; limitations kept in approval scope; Gate 3 decision recorded; feedback routed. |
+| 7 (07) | Coverage ≥80%/60%; P1 ACs automated; IDOR and tenant tests; real Playwright headless browser runtime render evidence (`await page.innerText('body')` non-empty, `runtimeErrors === []`, never `curl`-only); NFRs measured; unmet required NFRs block readiness. |
+| 8 (10) | Tested build and environment match the target platform; Playwright headless browser runtime render check passed with zero runtime errors and verified static DOM text before surfacing QR/URL; limitations kept in approval scope; Gate 3 decision recorded; feedback routed. |
 | Release (09) | QA evidence, Gate 3, Gate 4 approval, verified outcome or explicit skip. |
 
 ## Output
