@@ -201,8 +201,8 @@ function initDiscoveryFormDefaults() {
     } catch (e) {}
   }
 
-  // Also fetch latest from /api/discovery-answers if served via dashboard-server.js
-  fetch('/api/discovery-answers')
+  // Also fetch latest from local file-save helper (works from both file:// and http://)
+  fetch('http://127.0.0.1:8080/api/discovery-answers')
     .then(r => (r.ok ? r.json() : null))
     .then(data => {
       if (data && data.saved) {
@@ -487,7 +487,7 @@ window.saveDiscoveryQuestionnaire = async function(actionMode) {
 
   let savedToServer = false;
   try {
-    const res = await fetch('/api/save-discovery', {
+    const res = await fetch('http://127.0.0.1:8080/api/save-discovery', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
