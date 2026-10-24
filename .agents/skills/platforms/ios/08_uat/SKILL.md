@@ -8,16 +8,21 @@ description: Phase 8 lead for iOS. Coordinates real stakeholder acceptance on iO
 Starts after aggregate QA passes. **Inputs:** Documents 00, 02, 03, 04, 07. **Outputs:** Document 10; environment link in `docs/progress-data.js`.
 
 ## Live Preview Protocol (Expo Native Auto-Launch)
-The AI agent must **automatically launch the native Expo Metro bundler** in the background as a daemon process:
-- **Expo Account Verification**: Run `npx expo whoami`.
-  - If not logged in, prompt the user with interactive steps:
-    1. "You need to log into your Expo CLI to pair with Expo Go on your iPhone."
-    2. Instruct user to run `npx expo login` or provide `EXPO_TOKEN`.
-    3. Once logged in, rerun bundler with `npx expo start --go --lan`.
-- Launch command: `cd sandbox && CI=1 npx expo start --go --lan` (or in root for production runs).
-- Verified endpoint: `http://localhost:8081` (returns HTTP 200 OK).
-- The agent must generate a scannable QR code image for the user using `npx --yes qrcode "exp://<IP>:8081" -t png -o docs/expo-qr.png`.
-- The agent presents the direct `exp://` deep-link and instructions to open on a physical iPhone via **Expo Go**. Never ask the user to open terminal or run commands unless an interactive auth action like `npx expo login` is required.
+The AI agent must **verify the bundle compilation BEFORE presenting the QR code to the user**:
+1. **Expo Account Verification**: Run `npx expo whoami`.
+  - If not logged in, prompt user to run `npx expo login` or supply `EXPO_TOKEN`.
+2. **Launch Metro Bundler**:
+  - Run `cd sandbox && CI=1 npx expo start -c --port 8081` (with `IsDaemon=true`).
+  - Wait for endpoint `http://localhost:8081` to return HTTP 200.
+3. **Mandatory Pre-Flight Bundle Check (Zero-Crashing Gate)**:
+  - Curl the bundle endpoint directly:
+    ```bash
+    curl -s "http://localhost:8081/node_modules/expo-router/entry.bundle?platform=ios&dev=true" | head -n 30
+    ```
+  - Inspect output: If it contains `UnableToResolveError`, missing modules, or JavaScript syntax crashes, **DO NOT surface the QR code**. Fix the missing dependencies (`expo-doctor`, peer dependencies, router modules) until the bundle returns valid JavaScript (`var __BUNDLE_START_TIME__...`).
+4. **Present Verified QR Code**:
+  - Only after the bundle compiles cleanly, generate the QR code using `npx --yes qrcode "exp://<IP>:8081" -t png -o docs/expo-qr.png`.
+  - Present the QR code and direct deep-link to the user.
 
 ## Anti-Hallucination Rule
 The AI agent must **never simulate or fabricate live iOS device testing**.
