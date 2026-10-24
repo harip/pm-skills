@@ -9,7 +9,7 @@ description: Phase 3 lead for iOS. Turns scope into docs/04_TECHNICAL_SPEC.md an
 
 ## iOS Architectural Rules
 - **Stack**: React Native with Latest Expo SDK (matching App Store Expo Go, e.g. SDK 57+), TypeScript Strict (`noImplicitAny: true`). Never pin to obsolete SDK versions.
-- **Graphics & Motion**: `@shopify/react-native-skia`, `react-native-reanimated` (Springs: damping 1.0/0.8 per `12_apple_design`), `react-native-gesture-handler`.
+- **Graphics & Motion**: Universal React Native Vector Geometry / `react-native-svg` (100% Expo Go & Web compatible without unguarded `CanvasKit` crashes), Apple HIG springs (`12_apple_design`).
 - **Hardware Integration**: Native iOS camera permissions (`NSCameraUsageDescription`), optional Apple RoomPlan LiDAR bridge for iPhone Pro models.
 - **Persistence**: `expo-sqlite` embedded with Drizzle ORM, `expo-file-system` for sandboxed image files.
 - **Base Entity Fields**: Canonical base fields: `id` (UUID v4), `createdBy`, `createdAt`, `updatedAt`, `deletedAt` (soft delete).
