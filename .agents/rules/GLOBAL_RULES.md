@@ -9,8 +9,8 @@ Single authority for phases, paths, statuses, gates, and the review loop. Skills
   - `deferred` → mocks; mark `[UNVERIFIED — DEPENDENCY DEFERRED]`; production blocked until resolved.
   - Never set an uncertain essential capability to `none` to avoid work.
 - Architecture Reviewer audits every phase deliverable against Document 00.
-- **Output (Terse Execution Mode with Phase 1 Consultative Exception):**
-  - **Phase 1 Intake Exception (`01_it_consultant`)**: During Phase 1 Discovery, Terse Mode is suspended. The IT Consultant must be thorough, proactive, and consultative—explaining what is possible on the platform, suggesting high-value features and UX best practices based on domain knowledge, and asking all necessary clarifying questions before generating Documents 00 and 01.
+- **Output (Terse Execution Mode with Phase 1 Interactive Questionnaire Exception):**
+  - **Phase 1 Intake Exception (`01_it_consultant`)**: During Phase 1 Discovery, Terse Mode is suspended. The IT Consultant must populate `window.PM_DATA.consultantDiscovery` in `docs/progress-data.js` with an Executive Advisory Brief, 8–12 AI-recommended domain features (interactive checkboxes), and 8–12 thorough multi-dimensional questions (with per-question custom note inputs and open-ended Consultant Q&A textareas), served via `node docs/dashboard-server.js 8080 docs`. All user answers save directly to `docs/00_DISCOVERY_ANSWERS.json` so the workflow reads them and the user can go back and edit answers at any point.
   - **Phases 2–9 Execution**: Write all artifacts to disk; in chat return strictly file links + ≤3 terse bullets. Zero filler, zero conversational preamble, zero robotic fluff. Focus purely on actionable state. Load only the artifacts the active step needs.
 
 ## 2. Flow & Parallel Concurrency
@@ -30,7 +30,7 @@ Once Phase 4 locks the schemas and data contracts:
 Document prefixes are stable IDs, not phase order.
 | ID | Path | Owner |
 |---|---|---|
-| 00 | `docs/00_PROJECT_CONTRACT.md` | Phase 1 |
+| 00 | `docs/00_DISCOVERY_ANSWERS.json`, `docs/00_PROJECT_CONTRACT.md` | Phase 1 |
 | 01 | `docs/01_ARCH_BRIEF.md` | Phase 1 |
 | 02 | `docs/02_PRD.md` | Phase 2 |
 | 03 | `docs/03_USER_STORIES.md` | Phase 2 |
@@ -42,7 +42,7 @@ Document prefixes are stable IDs, not phase order.
 | 08 | `docs/08_SETUP_REGISTER.md` | Phase 6 / Release |
 | 09 | `docs/09_RELEASE_PLAN.md` | Release |
 | 10 | `docs/10_UAT_CHECKLIST.md` | Phase 8 |
-| — | `docs/PROJECT_STATUS.md`, `docs/DECISIONS.md`, `docs/progress.html`, `docs/progress-data.js` | Orchestrator |
+| — | `docs/PROJECT_STATUS.md`, `docs/DECISIONS.md`, `docs/progress.html`, `docs/progress-data.js`, `docs/dashboard-server.js` | Orchestrator |
 | — | `docs/reviews/0N_ARCH_REVIEW_PHASE_N.md` | Reviewer |
 | — | `UAT_FEEDBACK.md` | Phase 8 (on revisions) |
 
