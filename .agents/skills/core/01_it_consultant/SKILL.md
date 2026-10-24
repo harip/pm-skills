@@ -53,9 +53,10 @@ Never ask fewer than **8 detailed questions**. Design **8 to 12 structured quest
 > - **`💬 Save & Ask Consultant Follow-Up / Refine`** (`action: "refine"`)
 > - **`💾 Save Answers & Proceed to Contract →`** (`action: "proceed"`)
 
-### 3. Present the Interactive Questionnaire to the User & Wait
-- Verify `http://localhost:8080/progress.html` returns HTTP 200.
-- In chat, provide a concise executive summary of your **Consultant Advisory** and direct the user to open **`http://localhost:8080/progress.html`** (which opens directly to the **`💼 IT Consultant Questionnaire`** tab), fill out their selections/notes, click **Save**, and reply **`submitted`** (to proceed) or **`refine`** (to ask follow-up questions).
+### 3. Present the Interactive Questionnaire (`progress.html`) to the User & Wait
+- Open `docs/progress.html` directly for the user (`open docs/progress.html`) AND provide the direct clickable file link `[progress.html](file:///.../docs/progress.html)`.
+- `progress.html` works directly as a local `file://` HTML page and saves answers directly to `docs/00_DISCOVERY_ANSWERS.json` and `docs/discovery-answers.js` in the same folder when the user clicks **Save**.
+- In chat, provide a concise executive summary of your **Consultant Advisory** and ask the user to fill out their selections/notes in [progress.html](file:///Volumes/Samsung%20990%201TB/hp/projects/pm-skills/sandbox/docs/progress.html), click **Save**, and reply **`submitted`** (to proceed) or **`refine`** (to ask follow-up questions).
 - **STOP AND WAIT** for the user's response (unless explicitly running in `autopilot` mode).
 
 ### 4. Reading `docs/00_DISCOVERY_ANSWERS.json` & Iterative Refinement Loop
