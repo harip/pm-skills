@@ -7,12 +7,11 @@ description: Phase 8 lead for iOS. Coordinates real stakeholder acceptance on iO
 
 Starts after aggregate QA passes. **Inputs:** Documents 00, 02, 03, 04, 07. **Outputs:** Document 10; environment link in `docs/progress-data.js`.
 
-## Live Preview Protocol
-The AI agent must **automatically launch the dev server for the user** in the background:
-- If running in sandbox: automatically run `cd sandbox && npx expo start` (with `IsDaemon=true`).
-- If running in root workspace: automatically run `npx expo start` (with `IsDaemon=true`).
-- Provide the user with the direct localhost/tunnel link or QR code directly in chat.
-- Never make the user manually open their terminal to type commands.
+## Live Preview Protocol (Expo Native)
+The AI agent must **automatically launch the Expo server** in the background (`IsDaemon=true`):
+- Command: `cd sandbox && npx expo start` (or `npx expo start` in root).
+- Never fall back to static HTTP web servers for iOS; always run the native Expo bundler.
+- Present the terminal QR code, Expo Go connection instructions, and simulator hotkeys (`i` for iOS simulator) directly in chat so the user can test immediately without typing commands.
 
 ## Anti-Hallucination Rule
 The AI agent must **never simulate or fabricate live iOS device testing**.
