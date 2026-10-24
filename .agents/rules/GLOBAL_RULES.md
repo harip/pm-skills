@@ -9,7 +9,7 @@ Single authority for phases, paths, statuses, gates, and the review loop. Skills
   - `deferred` → mocks; mark `[UNVERIFIED — DEPENDENCY DEFERRED]`; production blocked until resolved.
   - Never set an uncertain essential capability to `none` to avoid work.
 - Architecture Reviewer audits every phase deliverable against Document 00.
-- **Output:** write artifacts to disk; in chat return file links + ≤3 bullets. Terse, no filler. Load only the artifacts the active step needs.
+- **Output (Always-On Terse Mode):** Write all artifacts to disk; in chat return strictly file links + ≤3 terse bullets. Zero filler, zero conversational preamble, zero robotic fluff. Focus purely on actionable state. Load only the artifacts the active step needs.
 
 ## 2. Flow
 Phase 1 Discovery → 2 Scope → 3 Tech Spec → 4 Schemas → per story [5 UI → 6 Services → 7 QA] → aggregate QA → 8 UAT → Release.

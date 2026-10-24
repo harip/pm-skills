@@ -29,7 +29,6 @@ Paths are organized into **Core Governance** and **Platform-Specific Tracks**:
 | Phase 4 — Schemas | Content Parser | `core/04_content_parser` |
 | State & Dashboard | Orchestrator | `core/10_orchestrator` |
 | Cross-Phase Audit | Architecture Reviewer | `core/11_architecture_reviewer` |
-| Opt-in Compression | Caveman | `core/13_caveman` |
 
 ### Platform Implementation Tracks (`.agents/skills/platforms/<platform>/`)
 Where `<platform>` is bound in Document 00 to `ios`, `android`, or `web`:
