@@ -10,7 +10,12 @@ description: Phase 1 lead. Asks platform (iOS, Android, or Web), then binds the 
   1. **iOS**: React Native + Expo (Latest SDK, matching latest Expo Go on App Store), Apple HIG (`12_apple_design`), `expo-sqlite`, EAS / TestFlight.
   2. **Android**: React Native + Expo (Latest SDK), Material 3 Design, `expo-sqlite`, EAS / Google Play.
   3. **Web**: Next.js (Latest stable App Router), TypeScript Strict, Tailwind CSS, IndexedDB (`Dexie.js`), Vercel.
-- Always check and use the latest release version of Expo (`npm view expo version` or `^57.0.0`+) to ensure 100% compatibility with the current App Store Expo Go client. Never hardcode outdated SDKs.
+- Always check and use the latest release version of Expo (`npm view expo version` or `^58.0.0`+) to ensure 100% compatibility with the current App Store / Play Store Expo Go client. Never hardcode outdated SDKs.
+- **Expo Mobile Prerequisites Warning**: For mobile platforms (iOS and Android), explicitly notify the stakeholder during Phase 1 that physical device previewing via Expo Go requires:
+  1. Creating an Expo account at [expo.dev](https://expo.dev/signup).
+  2. Installing the latest **Expo Go** app on their mobile device and logging into that account.
+  3. Authenticating the local CLI session (`npx expo login`) so that local dev builds can be authenticated and opened in the mobile Expo Go client.
+  4. Note to user: During Phase 8 (UAT), they will be prompted to authenticate CLI if not already logged in.
 - Once selected, write `platform: ios | android | web` into `docs/00_PROJECT_CONTRACT.md`.
 - Downstream tasks will strictly route to `.agents/skills/platforms/<platform>/`.
 
