@@ -24,25 +24,33 @@ cd my-dream-app
 Then open this folder in **Antigravity IDE** (or your editor).
 
 ### 3. Kick Off the AI Swarm!
+
+#### A. Production Mode (Root Workspace)
 In the chat prompt, run:
 ```text
-/pm start "My App Name"
+/pm start "My App Name" [balanced|autopilot|supervised]
 ```
-*This starts in **Balanced** mode by default.*
 
-Want a different autonomy mode right away? Specify it directly:
+#### B. Isolated Test-Drive Mode (`sandbox/`)
+Want to experiment or test-drive an idea without touching your root repository?
 ```text
-/pm start "My App Name" autopilot
-/pm start "My App Name" supervised
+/pm test <ios|android|web> "Your app pitch" [mode]
 ```
+- Completely isolated in `sandbox/` (automatically gitignored).
+- Maintains its own project status and dashboard.
+- Clean up anytime with `/pm test clean`.
 
-- **`balanced`** (default): Stops for your sign-off at 4 key milestones (Scope, UI Mockups, UAT, Release).
-- **`autopilot`**: Auto-advances across phases, pausing only for Gate 2 mockups, DB setup, UAT, and Release.
-- **`supervised`**: Pauses for your approval after *every single phase*.
+---
 
-*(You can also change modes at any point later by typing `/pm mode <mode>`)*
+## 📱 Platform-Specialized Tracks
 
-The **IT Consultant** will immediately kick off Phase 1 intake. Open [`docs/progress.html`](docs/progress.html) in your browser at any time to watch the live interactive project visualizer!
+Instead of generic cross-platform approximations, the swarm provides dedicated platform-specialized tracks:
+
+| Platform Track | Core Tech Stack | UI & Design System | Target Distribution |
+|---|---|---|---|
+| **iOS** | React Native (Expo SDK 51+), `expo-sqlite`, Skia, Reanimated | Apple HIG (`12_apple_design`), SF Pro | Apple TestFlight / App Store |
+| **Android** | React Native (Expo SDK 51+), `expo-sqlite`, Keystore | Material Design 3, dynamic elevation | Google Play Console (AAB) / EAS |
+| **Web** | Next.js 14+ (App Router), `Dexie.js` (IndexedDB), Drizzle | Tailwind CSS, Radix, ARIA a11y | Vercel / Cloudflare Pages |
 
 ---
 
@@ -50,29 +58,16 @@ The **IT Consultant** will immediately kick off Phase 1 intake. Open [`docs/prog
 
 | Command | What it Does |
 |---|---|
-| `/pm start "App Name"` | Start a new project in default **Balanced** mode. |
+| `/pm start "App Name"` | Start a new production project in default **Balanced** mode. |
 | `/pm start "App Name" <mode>` | Start directly in `autopilot`, `supervised`, or `balanced`. |
+| `/pm test <ios\|android\|web> <pitch>` | Run an isolated test drive in `sandbox/` (gitignored). |
+| `/pm test clean` | Wipe the `sandbox/` folder. |
 | `/pm mode <mode>` | Change mode at any time (`balanced`, `autopilot`, `supervised`). |
 | `/pm resume` | Resume from where you left off (reads saved state). |
-| `/pm status` | Check current phase, mode, and next step. |
+| `/pm status` | Check current phase, mode, platform, and next step. |
 | `/pm next` | Force execute the next step. |
+| `approved` | Accept the pending gate review and advance to next phase. |
 | `/pm help` | Show all available commands. |
-
-### Pausing & Resuming Work:
-- **Pause:** Simply stop chatting at any turn. The state engine silently saves your exact step to `docs/PROJECT_STATUS.md`.
-- **Resume:** When returning after hours or days, simply type `/pm resume` to pick up right where you left off.
-
----
-
-## 📂 Key Locations & Dashboard
-
-All project status tracking and generated deliverables live inside your project's `docs/` and `tests/` folders:
-
-| Location | Purpose & Description |
-|---|---|
-| 📊 **`docs/progress.html`** | **Interactive Progress Dashboard:** Launch `docs/progress.html` in any browser to inspect real-time project completion, active autonomy mode, full-stack user story statuses, and clickable links to all generated stage documents (`00_PROJECT_CONTRACT.md` through `10_UAT_CHECKLIST.md`). |
-| 🔄 **`docs/PROJECT_STATUS.md`** | **Living State Machine:** Tracks current phase progress, completed steps, rolling session log, and `NEXT_STEP_POINTER`. |
-| 🧪 **`tests/07_TEST_MANIFEST.md`** | **QA Test Results & Coverage:** Canonical manifest containing unit test outputs, multi-tenant security IDOR checks, ARIA accessibility scores, and visual regression baselines. |
 
 ---
 
@@ -82,16 +77,16 @@ Every user story is engineered as a complete vertical feature slice (UI through 
 
 ```mermaid
 flowchart TB
-    PM["PM: entry & routing"] --> IT["1. IT Consultant: contract & brief"]
+    PM["PM: entry & routing"] --> IT["1. IT Consultant: intake & platform binding"]
     IT --> PO["2. Product Owner: scope — Gate 1"]
-    PO --> TA["3. Technical Architect: spec & tasks"]
-    TA --> CP["4. Content Parser: schemas"]
+    PO --> TA["3. Technical Architect: platform spec & scaffolding"]
+    TA --> CP["4. Content Parser: schemas & contracts"]
     CP --> FE["5. Frontend Developer: mockups — Gate 2, then UI"]
-    FE --> SE["6. Service Engineer: database setup/skip & services"]
-    SE --> QA["7. QA Agent: verification"]
-    QA -->|All slices and aggregate QA pass| UAT["8. UAT Coordinator: acceptance — Gate 3"]
-    QA -->|Next feature slice| FE
-    UAT --> DEP["Release: Deployment Lead — setup/skip, Gate 4 if deploying"]
+    FE --> SE["6. Service Engineer: database setup & services"]
+    SE --> QA["7. QA Agent: verification & fidelity check"]
+    QA -->|All slices pass| UAT["8. UAT Coordinator: target acceptance — Gate 3"]
+    QA -->|Next slice| FE
+    UAT --> DEP["Release: Deployment Lead — release plan & Gate 4"]
 ```
 
 ### Autonomy Modes
@@ -101,23 +96,25 @@ flowchart TB
 
 ---
 
-## 📂 Standard Directory Layout
+## 📂 Skill & Swarm Architecture
 
-```
-docs/
-├── progress.html           # 📊 Interactive Progress Visualizer Dashboard
-├── PROJECT_STATUS.md       # 🔄 Living state machine & NEXT_STEP_POINTER
-├── 00_PROJECT_CONTRACT.md  # Phase 1: Capability contract & platform boundaries
-├── 01_ARCH_BRIEF.md        # Phase 1: Architecture Brief & Permission Matrix
-├── 02_PRD.md               # Phase 2: Product Requirements Document
-├── 03_USER_STORIES.md      # Phase 2: Full-stack INVEST user story inventory
-├── 04_TECHNICAL_SPEC.md    # Phase 3: Technical Specification
-├── 05_TASK_MANIFEST.md     # Phase 3: Task manifest per story slice
-├── 06_DESIGN_REGISTER.md   # Phase 5: Screen mockup inventory & approvals
-├── 08_SETUP_REGISTER.md   # Phase 6/Release: Non-secret setup & connection evidence
-├── 09_RELEASE_PLAN.md      # Release: Production deployment & recovery plan
-└── 10_UAT_CHECKLIST.md     # Phase 8: Stakeholder target-platform acceptance (Gate 3)
-
-tests/
-└── 07_TEST_MANIFEST.md     # Phase 7: Automated test suite results & coverage evidence
+```text
+.agents/
+├── rules/
+│   ├── GLOBAL_RULES.md         # Single authority for SDLC swarm gates & statuses
+│   └── 13_caveman.md           # Terse output communication standard
+│
+└── skills/
+    ├── core/                   # Shared Swarm Lifecycle Governance
+    │   ├── 00_pm/              # Entry point, /pm commands & sandbox router
+    │   ├── 01_it_consultant/   # Discovery, intake & platform binding
+    │   ├── 02_product_owner/   # PRD, INVEST user stories & NFRs
+    │   ├── 04_content_parser/  # JSON Schemas, Zod contracts & mock fixtures
+    │   ├── 10_orchestrator/    # State engine & minimalist progress dashboard
+    │   └── 11_architecture_reviewer/ # Cross-phase zero-trust auditor
+    │
+    └── platforms/              # Platform Implementation Tracks
+        ├── ios/                # React Native/Expo, Apple HIG, Skia, TestFlight
+        ├── android/            # React Native/Expo, Material 3, Google Play
+        └── web/                # Next.js App Router, Tailwind, IndexedDB, Vercel
 ```
