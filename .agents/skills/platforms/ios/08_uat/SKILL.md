@@ -9,7 +9,8 @@ Starts after aggregate QA passes. **Inputs:** Documents 00, 02, 03, 04, 07. **Ou
 
 ## Live Preview Protocol (Expo Native Auto-Launch)
 The AI agent must **automatically launch the native Expo Metro bundler** in the background as a daemon process:
-- Command: `cd sandbox && CI=1 npx expo start --offline` (or in root for production runs).
+- Check login state: Run `npx expo whoami`. If not logged in and physical device testing requires account pairing, inform the user or verify whether `--offline` / LAN mode matches their Expo Go session. When Expo Go requires an authenticated session matching CLI, check whether `EXPO_TOKEN` or `npx expo login` is needed.
+- Launch command: `cd sandbox && CI=1 npx expo start --offline` (or without `--offline` if logged into Expo account, using `npx expo start -c`).
 - Verified endpoint: `http://localhost:8081` (returns HTTP 200 OK).
 - The agent must generate a scannable QR code image for the user using `npx --yes qrcode "exp://<IP>:8081" -t png -o docs/expo-qr.png`.
 - The agent presents the direct `exp://` deep-link and instructions to open on a physical iPhone via **Expo Go**. Never ask the user to open terminal or run commands.
