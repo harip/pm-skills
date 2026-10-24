@@ -8,7 +8,7 @@ description: Phase 3 lead for iOS. Turns scope into docs/04_TECHNICAL_SPEC.md an
 **Inputs:** Documents 00–03. **Outputs:** 04, 05. Then set `[AWAITING PEER REVIEW]` for the Architecture Reviewer.
 
 ## iOS Architectural Rules
-- **Stack**: React Native with Expo SDK 51+, TypeScript Strict (`noImplicitAny: true`).
+- **Stack**: React Native with Latest Expo SDK (matching App Store Expo Go, e.g. SDK 57+), TypeScript Strict (`noImplicitAny: true`). Never pin to obsolete SDK versions.
 - **Graphics & Motion**: `@shopify/react-native-skia`, `react-native-reanimated` (Springs: damping 1.0/0.8 per `12_apple_design`), `react-native-gesture-handler`.
 - **Hardware Integration**: Native iOS camera permissions (`NSCameraUsageDescription`), optional Apple RoomPlan LiDAR bridge for iPhone Pro models.
 - **Persistence**: `expo-sqlite` embedded with Drizzle ORM, `expo-file-system` for sandboxed image files.

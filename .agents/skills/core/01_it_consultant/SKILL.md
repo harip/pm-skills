@@ -7,16 +7,17 @@ description: Phase 1 lead. Asks platform (iOS, Android, or Web), then binds the 
 
 ## Intake & Platform Binding
 - **Platform Intake**: Determine the exact target platform first:
-  1. **iOS**: React Native + Expo (iOS SDK 51+), Apple HIG (`12_apple_design`), `expo-sqlite`, EAS / TestFlight.
-  2. **Android**: React Native + Expo (Android), Material 3 Design, `expo-sqlite`, EAS / Google Play.
-  3. **Web**: Next.js 14+ App Router, TypeScript Strict, Tailwind CSS, IndexedDB (`Dexie.js`), Vercel.
+  1. **iOS**: React Native + Expo (Latest SDK, matching latest Expo Go on App Store), Apple HIG (`12_apple_design`), `expo-sqlite`, EAS / TestFlight.
+  2. **Android**: React Native + Expo (Latest SDK), Material 3 Design, `expo-sqlite`, EAS / Google Play.
+  3. **Web**: Next.js (Latest stable App Router), TypeScript Strict, Tailwind CSS, IndexedDB (`Dexie.js`), Vercel.
+- Always check and use the latest release version of Expo (`npm view expo version` or `^57.0.0`+) to ensure 100% compatibility with the current App Store Expo Go client. Never hardcode outdated SDKs.
 - Once selected, write `platform: ios | android | web` into `docs/00_PROJECT_CONTRACT.md`.
 - Downstream tasks will strictly route to `.agents/skills/platforms/<platform>/`.
 
 ## Stack Defaults by Platform
 | Concern | iOS | Android | Web |
 |---|---|---|---|
-| Framework | React Native (Expo SDK 51+) | React Native (Expo SDK 51+) | Next.js 14+ App Router |
+| Framework | React Native (Latest Expo SDK) | React Native (Latest Expo SDK) | Next.js (Latest App Router) |
 | UI System | Apple HIG (`12_apple_design`) | Material Design 3 | Tailwind CSS / Radix |
 | Graphics / Canvas | React Native Skia / Reanimated | React Native Skia / Reanimated | HTML5 Canvas / SVG |
 | Local DB | `expo-sqlite` (embedded) | `expo-sqlite` (embedded) | `Dexie.js` (IndexedDB) |
