@@ -11,7 +11,7 @@ description: Cross-phase zero-trust auditor. Audits each phase deliverable and d
 ## Checklist
 | Phase | Audit |
 |---|---|
-| 1 (00, 01) | Explicit capabilities and targets; confirmed vs assumed decisions; no essential capability set `none` on a guess; stack fit; Permission Matrix (roles, tenant boundaries, CRUD, ownership). |
+| 1 (00, 01) | Consultative Discovery Interview completed before contract generation; Confirmed Feature & UX Scope Table recorded in 00; explicit capabilities and targets; confirmed vs assumed decisions; no essential capability set `none` on a guess; stack fit; Permission Matrix (roles, tenant boundaries, CRUD, ownership). |
 | 2 (02, 03) | INVEST; vertical slices; binary ACs with acceptance scenarios; ≤10 P1; explicit out-of-scope; measurable NFRs. |
 | 3 (04, 05) | Strict TS; base entity fields; `AuthContext` first argument; role/tenant guards; runnable foundation task (`package.json`, `tsconfig.json`); complete task rows; boundary→integration and NFR→check mappings; per-story dependencies. |
 | 4 (schemas) | Valid schemas; `additionalProperties: false`; UUID/ISO formats; `x-pii`; valid mocks; contract→unit case mapping. |

@@ -9,7 +9,9 @@ Single authority for phases, paths, statuses, gates, and the review loop. Skills
   - `deferred` → mocks; mark `[UNVERIFIED — DEPENDENCY DEFERRED]`; production blocked until resolved.
   - Never set an uncertain essential capability to `none` to avoid work.
 - Architecture Reviewer audits every phase deliverable against Document 00.
-- **Output (Always-On Terse Mode):** Write all artifacts to disk; in chat return strictly file links + ≤3 terse bullets. Zero filler, zero conversational preamble, zero robotic fluff. Focus purely on actionable state. Load only the artifacts the active step needs.
+- **Output (Terse Execution Mode with Phase 1 Consultative Exception):**
+  - **Phase 1 Intake Exception (`01_it_consultant`)**: During Phase 1 Discovery, Terse Mode is suspended. The IT Consultant must be thorough, proactive, and consultative—explaining what is possible on the platform, suggesting high-value features and UX best practices based on domain knowledge, and asking all necessary clarifying questions before generating Documents 00 and 01.
+  - **Phases 2–9 Execution**: Write all artifacts to disk; in chat return strictly file links + ≤3 terse bullets. Zero filler, zero conversational preamble, zero robotic fluff. Focus purely on actionable state. Load only the artifacts the active step needs.
 
 ## 2. Flow & Parallel Concurrency
 Phase 1 Discovery → 2 Scope → 3 Tech Spec → 4 Schemas → **[Phase 5 UI || Phase 6 Services (Parallel Subagents)]** → Phase 7 QA → Phase 8 UAT → Release.
@@ -51,6 +53,7 @@ Terminal pointers: `COMPLETE — RELEASE VERIFIED`, `COMPLETE — USER MANAGED H
 ## 5. Stop Points & Autonomy
 | Stop point | BALANCED (default) | AUTOPILOT | SUPERVISED |
 |---|:-:|:-:|:-:|
+| Gate 0 — Consultative Discovery Interview (Phase 1 Intake) | ✅ | — | ✅ |
 | Gate 1 — Scope (02, 03) | ✅ | — | ✅ |
 | Gate 2 — Mockups (06) | ✅ | ✅ | ✅ |
 | DB setup/skip (Phase 6 entry) | ✅ | ✅ | ✅ |
