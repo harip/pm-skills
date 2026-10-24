@@ -6,9 +6,8 @@ description: Entry point for the PM SDLC swarm. Handles /pm commands and routes 
 # PM (Entry & Routing)
 
 ## Commands
-- `/pm` — show the active project, or start intake.
-- `/pm start <name> [balanced|autopilot|supervised]` — initialize project in workspace root.
-- `/pm test <ios|android|web> <pitch> [mode]` — start an isolated test drive in `sandbox/`.
+- `/pm <ios|android|web> start "<pitch>" [balanced|autopilot|supervised]` — start a production project in root workspace for the chosen platform.
+- `/pm test <ios|android|web> "<pitch>" [balanced|autopilot|supervised]` — start an isolated test drive in `sandbox/`.
 - `/pm test clean` — delete the `sandbox/` directory.
 - `/pm mode <mode>` — switch autonomy mode (`balanced`, `autopilot`, `supervised`).
 - `/pm resume` — execute `NEXT_STEP_POINTER`; at a pending stop point, re-present the review.
@@ -46,5 +45,5 @@ Where `<platform>` is bound in Document 00 to `ios`, `android`, or `web`:
 - The agent is **strictly forbidden from reading or referencing** unselected platform directories (e.g., never load `platforms/web/` or `platforms/android/` during an iOS run).
 
 ## Step Protocol
-1. **Workspace Root Detection**: If `sandbox/` is active (test mode), all docs and code are isolated inside `sandbox/`. Otherwise in root workspace.
+1. **Workspace Root Detection**: If running via `/pm test`, all docs and code are isolated inside `sandbox/`. Otherwise in root workspace.
 2. **Execution**: Read `NEXT_STEP_POINTER` from `PROJECT_STATUS.md` → load ONLY that skill file → execute → Architecture Reviewer → Orchestrator.

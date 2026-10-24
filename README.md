@@ -8,7 +8,7 @@
 
 ## ⚡ Quickstart: Create a New App in 3 Steps
 
-Follow these exact steps whenever you want to create a brand-new application using this swarm:
+Use this repository as a template whenever you start a brand-new project:
 
 ### 1. Create Repo from Template on GitHub
 1. Navigate to [**github.com/harip/pm-skills**](https://github.com/harip/pm-skills).
@@ -23,16 +23,28 @@ cd my-dream-app
 ```
 Then open this folder in **Antigravity IDE** (or your editor).
 
-### 3. Kick Off the AI Swarm!
+### 3. Kick Off the AI Swarm by Platform!
 
-#### A. Production Mode (Root Workspace)
-In the chat prompt, run:
+Launch directly for your target platform in the root workspace:
+
 ```text
-/pm start "My App Name" [balanced|autopilot|supervised]
+/pm ios start "My iPhone app pitch" [balanced|autopilot|supervised]
+/pm android start "My Android app pitch" [balanced|autopilot|supervised]
+/pm web start "My web SaaS pitch" [balanced|autopilot|supervised]
 ```
 
-#### B. Isolated Test-Drive Mode (`sandbox/`)
-Want to experiment or test-drive an idea without touching your root repository?
+- **`balanced`** (default): Stops for your sign-off at 4 key milestones (Scope, UI Mockups, UAT, Release).
+- **`autopilot`**: Auto-advances across phases, pausing only for Gate 2 mockups, DB setup, UAT, and Release.
+- **`supervised`**: Pauses for your approval after *every single phase*.
+
+*(You can also change modes at any point later by typing `/pm mode <mode>`)*
+
+---
+
+## 🧪 Isolated Test-Drive Mode (`sandbox/`)
+
+Want to test drive an idea without committing code to your repo? Add `test`:
+
 ```text
 /pm test <ios|android|web> "Your app pitch" [mode]
 ```
@@ -46,11 +58,11 @@ Want to experiment or test-drive an idea without touching your root repository?
 
 Instead of generic cross-platform approximations, the swarm provides dedicated platform-specialized tracks:
 
-| Platform Track | Core Tech Stack | UI & Design System | Target Distribution |
-|---|---|---|---|
-| **iOS** | React Native (Expo SDK 51+), `expo-sqlite`, Skia, Reanimated | Apple HIG (`12_apple_design`), SF Pro | Apple TestFlight / App Store |
-| **Android** | React Native (Expo SDK 51+), `expo-sqlite`, Keystore | Material Design 3, dynamic elevation | Google Play Console (AAB) / EAS |
-| **Web** | Next.js 14+ (App Router), `Dexie.js` (IndexedDB), Drizzle | Tailwind CSS, Radix, ARIA a11y | Vercel / Cloudflare Pages |
+| Platform Track | Command | Core Tech Stack | UI & Design System | Target Distribution |
+|---|---|---|---|---|
+| **iOS** | `/pm ios start "..."` | React Native (Expo SDK 51+), `expo-sqlite`, Skia, Reanimated | Apple HIG (`12_apple_design`), SF Pro | Apple TestFlight / App Store |
+| **Android** | `/pm android start "..."` | React Native (Expo SDK 51+), `expo-sqlite`, Keystore | Material Design 3, dynamic elevation | Google Play Console (AAB) / EAS |
+| **Web** | `/pm web start "..."` | Next.js 14+ (App Router), `Dexie.js` (IndexedDB), Drizzle | Tailwind CSS, Radix, ARIA a11y | Vercel / Cloudflare Pages |
 
 ---
 
@@ -58,9 +70,9 @@ Instead of generic cross-platform approximations, the swarm provides dedicated p
 
 | Command | What it Does |
 |---|---|
-| `/pm start "App Name"` | Start a new production project in default **Balanced** mode. |
-| `/pm start "App Name" <mode>` | Start directly in `autopilot`, `supervised`, or `balanced`. |
-| `/pm test <ios\|android\|web> <pitch>` | Run an isolated test drive in `sandbox/` (gitignored). |
+| `/pm <ios\|android\|web> start "..."` | Start a production project in root workspace for target platform. |
+| `/pm <ios\|android\|web> start "..." <mode>` | Start directly in `autopilot`, `supervised`, or `balanced`. |
+| `/pm test <ios\|android\|web> "..."` | Run an isolated test drive in `sandbox/` (gitignored). |
 | `/pm test clean` | Wipe the `sandbox/` folder. |
 | `/pm mode <mode>` | Change mode at any time (`balanced`, `autopilot`, `supervised`). |
 | `/pm resume` | Resume from where you left off (reads saved state). |
@@ -88,11 +100,6 @@ flowchart TB
     QA -->|Next slice| FE
     UAT --> DEP["Release: Deployment Lead — release plan & Gate 4"]
 ```
-
-### Autonomy Modes
-- 🟢 **`AUTOPILOT`**: Auto-advances between phases. Always stops for UI mockup review (Gate 2), DB setup/skip, UAT sign-off (Gate 3), and Release approval (Gate 4).
-- 🟡 **`BALANCED`** (Default): Pauses for explicit founder sign-off at strategic gates (Gate 1 Scope, Gate 2 Mockups, Gate 3 UAT, Gate 4 Release).
-- 🔴 **`SUPERVISED`**: Pauses for approval after *every single phase*.
 
 ---
 
