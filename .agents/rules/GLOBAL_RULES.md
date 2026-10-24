@@ -55,8 +55,11 @@ Terminal pointers: `COMPLETE — RELEASE VERIFIED`, `COMPLETE — USER MANAGED H
 - Mock-backed results stay qualified and never authorize production.
 
 ## 6. Review Loop (every stop point)
-1. Orchestrator refreshes `docs/progress-data.js`. The Reviewer supplies the decisions: recommended option first, alternatives, optional perks.
-2. End the turn with: `👉 Review in docs/progress.html (⚡ Approvals). Type "approved" to accept the recommended options, or reply with changes (e.g. "D2: B", "add P1", or free text).`
-3. Changes → revise, refresh the dashboard, stop again. Repeat until the user types `approved`.
-4. `approved` → record decisions in `docs/DECISIONS.md` and advance.
-Silence, `/pm resume`, and `/pm next` are never approval.
+Keep stop-point messages simple, direct, and unambiguous:
+1. Orchestrator refreshes `docs/progress-data.js`.
+2. In chat, output a clean 3-part message:
+   - **Current Step**: Exactly what phase and milestone was just completed.
+   - **What to Review**: 1–2 direct links to the relevant deliverables.
+   - **Next Action**: State clearly: *"Reply `approved` to advance to [Next Phase], or reply with changes."*
+3. `approved` → records decisions in `docs/DECISIONS.md` and advances immediately to the next phase.
+4. Silence, `/pm resume`, and `/pm next` are never approval.

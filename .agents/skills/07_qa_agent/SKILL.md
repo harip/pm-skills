@@ -19,6 +19,7 @@ description: Phase 7 lead. Writes and runs automated tests, enforces coverage, a
 - Every `describe` names `US-NNN/ACn`.
 - Security (when auth or shared_records apply): IDOR (user A cannot read B's record → 403), tenant isolation, role boundary (non-ADMIN blocked on ADMIN mutation), unauthenticated → 401.
 - Visual: capture actual renders to `tests/visual/baselines/[screen_id]_actual.png` and compare them with the Phase 5 concept mockups in 06.
+- **100% Mockup Fidelity Verification:** Inspect rendered UI against approved Gate 2 mockups in `docs/design/mockups/`. Any missing elements, styling deviations, omitted controls, or layout shifts fail QA verification.
 - Cover risk-relevant negative and recovery flows, not just P1 happy paths.
 - Verify developer evidence independently; run missing checks and regressions. Coverage never replaces AC/NFR verification.
 

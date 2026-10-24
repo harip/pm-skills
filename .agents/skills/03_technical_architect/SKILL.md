@@ -9,6 +9,7 @@ description: Phase 3 lead. Turns scope into docs/04_TECHNICAL_SPEC.md and docs/0
 
 ## Rules
 - TypeScript strict, no `any`; explicit types for every API and DB shape.
+- **Mandatory Foundation Scaffolding (`DEV-001`)**: The first prerequisite task in Document 05 must establish a real, runnable environment (`package.json`, `tsconfig.json`, core engine dependencies) before Phase 5/6 code begins.
 - **Base entity fields** (canonical; Phase 4 reuses them): `id` UUID v4 · `createdBy` UUID (audit only) · `tenantId` UUID (if `shared_records`) · `createdAt`, `updatedAt` ISO 8601 · `deletedAt` ISO 8601 | null (soft delete).
 - Access levels: Public, Creator, Team/Tenant Member, Tenant Admin, Platform Admin, Explicit Sharing.
 - If `offline_writes: required`: atomic outbox write, stable op IDs, server idempotency, tenant-scoped queues (account B never replays account A), tombstones, pull cursors.

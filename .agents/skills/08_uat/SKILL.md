@@ -16,6 +16,13 @@ Starts after aggregate QA passes. **Inputs:** Documents 00, 02, 03, 04, 07. **Ou
 | 4 | Staging / cloud preview | Pre-production on staging data | [staging](references/staging-preview.md) |
 Load only the chosen reference. Never request secrets in chat or use production data. Web previews cannot prove native-device acceptance.
 
+## Acceptance & Gate 3
+1. Adapts Phase 2 scenarios to the target environment.
+2. Generates `docs/10_UAT_CHECKLIST.md` with execution commands (`npx expo start`) and criteria.
+3. Sets `[AWAITING UAT SIGN-OFF]` (Gate 3).
+4. Clearly prompts user: *"Review the checklist. Reply `approved` to sign off and advance to Release, or reply with issues."*
+5. Approved → records sign-off and advances to Release.
+
 ## Acceptance
 1. Reuse the Phase 2 scenarios, adapted to the environment and NFRs.
 2. Record in 10: `revision/build | platform/device/OS | environment | data mode | AC/NFR-ID | expected | actual | evidence | limitation`.

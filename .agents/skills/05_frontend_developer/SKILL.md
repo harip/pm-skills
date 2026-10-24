@@ -10,12 +10,16 @@ description: Phase 5 lead. Produces screen mockups, docs/06_DESIGN_REGISTER.md, 
 
 ## Per Story
 1. Screen inventory: purpose and data dependencies per screen.
-2. **Mockups (Gate 2):** PNG/WebP if an image tool exists, else self-contained HTML/SVG → `docs/design/mockups/[screen_id]_v1.[png|webp|html]`. Register in 06 as `PROPOSED | REJECTED | APPROVED`. Stop for review before writing UI code; already-approved, unchanged screens skip review.
-3. Implement components to match approved mockups; run component/unit checks before Phase 6.
+2. **Mockups (Gate 2):** Must generate a mockup for **every** screen registered in the screen inventory (no partial omissions). Format: PNG/WebP if an image tool exists, else self-contained interactive HTML/SVG → `docs/design/mockups/[screen_id]_v1.[png|webp|html]`. Register all screens in 06 as `PROPOSED | REJECTED | APPROVED`. Stop for review before writing UI code; already-approved, unchanged screens skip review.
+3. **100% Mockup Fidelity Rule:** Implementation must match the approved mockups with 100% precision. All layout structures, colors, typography hierarchy, button positions, states (loading, empty, error, content), and interaction controls depicted in the approved mockups must be implemented exactly as presented—no improvised omissions, styling deviations, or simplified placeholders. Run component/unit checks before Phase 6.
 
-## Platform Rules
-- **Native:** Apple HIG springs; `FlashList`/`FlatList` for >10 items; 8pt grid; ≥44×44pt targets; `testID` (snake_case) + `accessibilityLabel`.
-- **Web:** semantic HTML, design tokens, responsive grid; `data-testid` (kebab-case); keyboard navigation, ARIA roles, contrast ≥4.5:1.
+## Project Scaffolding Checkpoint (Before Any Code Execution)
+Before writing any components or tests:
+1. Verify if `package.json` exists in project root. If missing:
+   - For Mobile: Scaffold Expo project (`npx create-expo-app@latest .` or generate valid `package.json`, `tsconfig.json`, `app.json`, and dependencies: `expo`, `react`, `react-native`, `@shopify/react-native-skia`, `react-native-reanimated`, `expo-sqlite`, `drizzle-orm`, `zod`).
+   - For Web: Scaffold Next.js (`package.json`, `tsconfig.json`, `next.config.js`).
+2. Run installation and verify compilation: `npm install` and `npm run build` or `npx tsc --noEmit` exit 0.
+3. Never write isolated TypeScript or React files without their runnable project environment.
 
 ## Architecture
 - Screen (data orchestration) → Layout (safe area, keyboard) → Components (stateless, prop-driven).

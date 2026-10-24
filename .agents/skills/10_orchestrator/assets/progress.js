@@ -317,13 +317,7 @@ function renderApprovalsView() {
     container.innerHTML = `
       <div class="approvals-container">
         <div class="approval-gate-banner approved">
-          <span>✅</span>
-          <div>
-            <strong>All Checkpoints Approved</strong>
-            <div style="font-size: 11px; font-weight: 400; margin-top: 2px;">
-              No pending reviews. The swarm is advancing or execution is completed.
-            </div>
-          </div>
+          <span>All Checkpoints Approved &bull; Ready to proceed</span>
         </div>
       </div>
     `;
@@ -334,41 +328,55 @@ function renderApprovalsView() {
     <div class="approvals-container">
       <div class="approvals-header">
         <div>
-          <h2 class="approvals-title">⚡ ${escapeHtml(rev.gateName)}</h2>
-          <p class="approvals-subtitle">Lead: <code>${escapeHtml(rev.role)}</code> &bull; Curated by Architecture Reviewer. Recommended standards pre-selected.</p>
+          <h2 class="approvals-title">${escapeHtml(rev.gateName)}</h2>
+          <p class="approvals-subtitle">${escapeHtml(rev.subtitle || '')}</p>
         </div>
-        <div class="approval-gate-banner" style="margin: 0;">
-          <span>🚧</span>
+        <div class="approval-gate-banner">
           <span>Awaiting Review</span>
         </div>
       </div>
+
+      ${rev.mockups && rev.mockups.length > 0 ? `
+        <div class="mockups-preview-section">
+          <h3 class="mockups-section-title">Design Mockups for Approval (${rev.mockups.length})</h3>
+          <div class="mockups-scroll-row">
+            ${rev.mockups.map(m => `
+              <div class="mockup-frame-card">
+                <div class="mockup-card-header">
+                  <span class="mockup-card-title">${escapeHtml(m.name)}</span>
+                  <a href="${escapeHtml(m.path)}" target="_blank" style="font-size: 11px; color: #2563eb; text-decoration: none; font-weight: 500;">Open full screen &nearr;</a>
+                </div>
+                <div class="mockup-iframe-wrap">
+                  <iframe src="${escapeHtml(m.path)}" class="mockup-iframe" title="${escapeHtml(m.name)}"></iframe>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      ` : ''}
 
       <div class="questions-grid">
         ${(rev.decisions || []).map((d, idx) => `
           <div class="question-card">
             <div class="question-title-row">
-              <h4 class="question-title">${d.id}. ${escapeHtml(d.title)}</h4>
-              <span style="font-size: 10px; color: #737373; font-weight: 700;">DECISION ${idx + 1}</span>
+              <h4 class="question-title">${escapeHtml(d.title)}</h4>
             </div>
             <p class="question-desc">${escapeHtml(d.desc)}</p>
             <div class="options-group">
               <div class="option-label selected">
-                <span style="font-weight: 700; color: #2563eb; font-size: 13px;">[A]</span>
                 <div class="option-text-group">
                   <div class="option-header-row">
                     <span class="option-name">${escapeHtml(d.recommended.name)}</span>
-                    <span class="recommended-badge">⭐️ Recommended Standard</span>
+                    <span class="recommended-badge">Recommended</span>
                   </div>
                   <span class="option-explanation">${escapeHtml(d.recommended.desc)}</span>
                 </div>
               </div>
               ${d.alternative ? `
-                <div class="option-label" style="opacity: 0.85;">
-                  <span style="font-weight: 700; color: #737373; font-size: 13px;">[B]</span>
+                <div class="option-label">
                   <div class="option-text-group">
                     <div class="option-header-row">
-                      <span class="option-name">${escapeHtml(d.alternative.name)}</span>
-                      <span style="font-size: 9px; color: #737373; font-weight: 700; text-transform: uppercase;">Alternative</span>
+                      <span class="option-name" style="color: #4b5563;">${escapeHtml(d.alternative.name)}</span>
                     </div>
                     <span class="option-explanation">${escapeHtml(d.alternative.desc)}</span>
                   </div>
@@ -381,16 +389,14 @@ function renderApprovalsView() {
         ${rev.perks && rev.perks.length > 0 ? `
           <div class="perks-card">
             <div class="perks-header">
-              <span>✨</span>
-              <span>Cool Out-of-the-Box Perks (Optional Add-ons)</span>
+              <span>Optional Enhancements</span>
             </div>
-            <p class="perks-sub">Reply in chat to add any of these perks (e.g. <code>add P1</code>):</p>
+            <p class="perks-sub">You can optionally include any of these (e.g. reply <code>add P1</code> in chat):</p>
             <div class="perks-grid">
               ${rev.perks.map(p => `
                 <div class="perk-label">
-                  <span style="font-weight: 700; color: #7c3aed; font-size: 11px;">[${escapeHtml(p.id)}]</span>
                   <div>
-                    <div class="perk-title">${escapeHtml(p.name)}</div>
+                    <div class="perk-title">[${escapeHtml(p.id)}] ${escapeHtml(p.name)}</div>
                     <div class="perk-desc">${escapeHtml(p.desc)}</div>
                   </div>
                 </div>
@@ -401,12 +407,12 @@ function renderApprovalsView() {
       </div>
 
       <!-- Action Guidance Callout -->
-      <div class="approval-done-banner" style="display: flex;">
+      <div class="approval-done-banner">
         <div>
-          <span>👉 <strong>To Approve:</strong> Return to chat and type <code>approved</code>.</span><br/>
-          <span style="font-weight: 400; color: #047857; font-size: 11px;">To change any option: Reply e.g. <code>D1: B, add P1</code> or free text in chat.</span>
+          <span style="font-weight: 500; color: #111827;">To proceed, reply in chat with: <code>approved</code></span>
+          <div style="font-size: 11px; color: #6b7280; margin-top: 2px;">To customize, reply e.g. <code>D1: B</code> or <code>add P1</code>.</div>
         </div>
-        <button type="button" class="copy-pill-btn" onclick="copyApprovedText()">📋 Copy "approved"</button>
+        <button type="button" class="copy-pill-btn" onclick="copyApprovedText()">Copy "approved"</button>
       </div>
     </div>
   `;

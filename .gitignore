@@ -35,3 +35,7 @@ yarn-error.log*
 # Test artifacts
 .coverage/
 .nyc_output/
+
+src/*
+tests/*
+

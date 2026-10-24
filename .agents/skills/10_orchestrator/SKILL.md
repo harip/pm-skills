@@ -33,7 +33,7 @@ description: State engine. Rewrites docs/PROJECT_STATUS.md and docs/progress-dat
 
 ## Transitions
 - Capabilities marked `none` in Document 00 set their downstream work to `[N/A — CAPABILITY NOT REQUIRED]`.
-- At a stop point: set its status (`[AWAITING MANAGER APPROVAL]`, `[AWAITING USER SETUP]`, or `[AWAITING UAT SIGN-OFF]`), fill `pendingReview` in `progress-data.js` from the Reviewer's decisions, and end the turn per Global Rules §6.
+- At a stop point: set its status (`[AWAITING MANAGER APPROVAL]`, `[AWAITING USER SETUP]`, or `[AWAITING UAT SIGN-OFF]`), fill `pendingReview` in `progress-data.js` using crisp, human-friendly titles, plain English explanations, and realistic options from the Reviewer. At Gate 2 (Mockups), always populate `pendingReview.mockups` with all generated screen mockups so they embed directly into the approvals tab. Never use technical boilerplate or robotic phrases.
 - On `approved`: append the stage, chosen options, perks, and date to `docs/DECISIONS.md`; clear `pendingReview`; advance the pointer.
 - On a change request: route it to the owning lead, then refresh `pendingReview` and stop again.
 
