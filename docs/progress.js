@@ -506,29 +506,30 @@ window.saveDiscoveryQuestionnaire = async function(actionMode) {
     consultantQuestions: discoveryFormState.consultantQuestions
   };
 
-  let savedToServer = false;
-  try {
-    const res = await fetch('http://127.0.0.1:8080/api/save-discovery', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    if (res.ok) {
-      const json = await res.json();
-      discoveryFormState.lastSavedAt = json.savedAt || new Date().toISOString();
-      discoveryFormState.lastAction = actionMode;
-      window.PM_DISCOVERY_SAVED = { saved: true, savedAt: discoveryFormState.lastSavedAt, ...payload };
-      savedToServer = true;
+  discoveryFormState.lastSavedAt = new Date().toISOString();
+  discoveryFormState.lastAction = actionMode;
+  const jsonContent = JSON.stringify({ saved: true, savedAt: discoveryFormState.lastSavedAt, ...payload }, null, 2);
+
+  // 1. Try modern File System Access API (allows saving directly into docs/ folder)
+  let savedViaPicker = false;
+  if (window.showSaveFilePicker) {
+    try {
+      const handle = await window.showSaveFilePicker({
+        suggestedName: '00_DISCOVERY_ANSWERS.json',
+        types: [{ description: 'JSON', accept: { 'application/json': ['.json'] } }]
+      });
+      const writable = await handle.createWritable();
+      await writable.write(jsonContent);
+      await writable.close();
+      savedViaPicker = true;
+    } catch (err) {
+      savedViaPicker = false;
     }
-  } catch (err) {
-    savedToServer = false;
   }
 
-  if (!savedToServer) {
-    discoveryFormState.lastSavedAt = new Date().toISOString();
-    discoveryFormState.lastAction = actionMode;
-    // Fallback download of 00_DISCOVERY_ANSWERS.json if opened via file://
-    const blob = new Blob([JSON.stringify({ saved: true, savedAt: discoveryFormState.lastSavedAt, ...payload }, null, 2)], { type: 'application/json' });
+  // 2. Standard Download Fallback (Safari / unsupported browsers)
+  if (!savedViaPicker) {
+    const blob = new Blob([jsonContent], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = '00_DISCOVERY_ANSWERS.json';

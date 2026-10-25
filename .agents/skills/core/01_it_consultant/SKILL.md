@@ -13,13 +13,9 @@ You are a **Principal Product Strategist, UX Architect, and IT Consultant**. Do 
 
 When a project begins (`/pm <platform> start "<pitch>"` or `/pm test <platform> "<pitch>"`):
 
-### 1. Initialize Dashboard & Persistence Server (`dashboard-server.js`)
-1. Copy `progress.html`, `progress.min.js`, and `dashboard-server.js` from `.agents/skills/core/10_orchestrator/assets/` into `docs/` (or `sandbox/docs/` in test mode).
-2. Launch the local dashboard & persistence server in the background (`IsDaemon=true`):
-   ```bash
-   kill -9 $(lsof -ti :8080) 2>/dev/null || true && node docs/dashboard-server.js 8080 docs
-   ```
-   - `dashboard-server.js` serves `http://localhost:8080/progress.html` AND exposes `POST /api/save-discovery` + `GET /api/discovery-answers`, saving all questionnaire submissions directly to `docs/00_DISCOVERY_ANSWERS.json` and `docs/discovery-answers.js`.
+### 1. Initialize Dashboard Files (100% Serverless Local File)
+1. Copy `progress.html`, `progress.min.js`, and `discovery-answers.js` from `.agents/skills/core/10_orchestrator/assets/` into `docs/` (or `sandbox/docs/` in test mode).
+2. **No Server or Localhost Required**: `progress.html` runs 100% locally on standard `file://` protocol. Never start background servers or require localhost ports.
 
 ### 2. Generate Proposed Interactive Screen Mockups & Populate `window.PM_DATA.consultantDiscovery` in `docs/progress-data.js`
 You MUST generate high-fidelity interactive HTML/CSS/SVG screen mockups in `docs/design/mockups/` (`scr_001_v1.html` .. `scr_00N_v1.html`) representing the complete proposed screen architecture, and populate a comprehensive `consultantDiscovery` object in `docs/progress-data.js` (with `activeStageId: "discovery"`) containing all four of the following sections:
