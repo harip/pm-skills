@@ -8,7 +8,7 @@ window.PM_DATA = {
   completedStageIds: [],
 
   // Phase 1 Interactive IT Consultant Discovery Questionnaire (8–12 thorough questions + AI feature catalog)
-  // Saved answers are written to docs/00_DISCOVERY_ANSWERS.json via dashboard-server.js
+  // Saved answers are written to docs/00_DISCOVERY_ANSWERS.json directly from progress.html
   consultantDiscovery: {
     round: 1,
     platform: "iOS (Expo SDK 58 + Apple RoomPlan / Camera)",

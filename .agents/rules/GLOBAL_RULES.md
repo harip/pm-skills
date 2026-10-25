@@ -53,7 +53,7 @@ Document prefixes are stable IDs, not phase order.
 | 08 | `docs/08_SETUP_REGISTER.md` | Phase 6 / Release |
 | 09 | `docs/09_RELEASE_PLAN.md` | Release |
 | 10 | `docs/10_UAT_CHECKLIST.md` | Phase 8 |
-| — | `docs/PROJECT_STATUS.md`, `docs/DECISIONS.md`, `docs/progress.html`, `docs/progress-data.js`, `docs/dashboard-server.js` | Orchestrator |
+| — | `docs/PROJECT_STATUS.md`, `docs/DECISIONS.md`, `docs/progress.html`, `docs/progress-data.js` | Orchestrator |
 | — | `docs/reviews/0N_ARCH_REVIEW_PHASE_N.md` | Reviewer |
 | — | `UAT_FEEDBACK.md` | Phase 8 (on revisions) |
 
@@ -67,7 +67,7 @@ There are no separate `autopilot` / `balanced` / `supervised` modes. Every proje
 |---|---|---|:-:|
 | **Gate 1 — Discovery Questionnaire & Screen Mockups** | Phase 1 (`01_it_consultant`) | User reviews interactive screen mockups, selects features, answers 8–12 discovery questions in `docs/progress.html`, and saves `docs/00_DISCOVERY_ANSWERS.json`. | ✅ Always |
 | **External Cloud DB Credentials (Conditional)** | Phase 6 Entry (`06_service_engineer`) | Only pauses if the user selected an external cloud DB (e.g., Supabase) in Phase 1 that requires credentials; skipped automatically for local SQLite / IndexedDB / mocks. | Conditional |
-| **Gate 2 — Live Target-Platform UAT** | Phase 8 (`08_uat`) | Workflow **always stops at Phase 8 UAT** after Phase 7 QA & Playwright WebKit runtime verification pass, presenting live Browser + Expo Go links & QR code. | ✅ Always |
+| **Gate 2 — Live Target-Platform UAT** | Phase 8 (`08_uat`) | Workflow **always stops at Phase 8 UAT**. For `platform: ios`, the agent **must unconditionally prompt** the user to connect their physical iPhone via USB, unlock screen, enable Developer Mode, and trust the host Mac, and **halt and wait** for the user to reply `connected` (or `skip`). Then verifies live app and presents UAT checklist. | ✅ Always |
 | **Gate 3 — Production Release Sign-Off** | Phase 9 (`09_deployment`) | Final sign-off to execute production deployment or handoff after UAT approval. | ✅ Always |
 
 - All intermediate phases (Phase 1 Contract/Brief generation after questionnaire submission → Phase 2 Scope → Phase 3 Tech Spec → Phase 4 Schemas → Parallel Phase 5 UI & Phase 6 Services → Phase 7 Automated QA & Playwright WebKit Gate) execute **autonomously without stopping**.

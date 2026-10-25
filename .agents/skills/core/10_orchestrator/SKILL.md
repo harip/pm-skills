@@ -12,7 +12,7 @@ description: State engine. Rewrites docs/PROJECT_STATUS.md and docs/progress-dat
 ## Streamlined Gate Policy (Always Stop at Phase 1 Discovery & Phase 8 UAT)
 1. **Phase 1 Interactive Discovery & Mockups (`01_it_consultant`)**: Always stop so the user can review the interactive screen mockups (`scr_001`..`scr_00N`), toggle AI-suggested features, answer the 8–12 discovery questions in `docs/progress.html`, and click Save (`docs/00_DISCOVERY_ANSWERS.json`).
 2. **Autonomous Execution Pipeline (Phases 2 → 3 → 4 → Parallel [Phase 5 UI || Phase 6 Services] → Phase 7 QA)**: Once `docs/00_DISCOVERY_ANSWERS.json` is submitted (`submitted` / `approved`), advance automatically from Phase 1 Contract/Brief through Phase 7 QA & Playwright WebKit verification without pausing for intermediate approvals.
-3. **Phase 8 Live UAT (`08_uat`) Hard Stop**: The workflow **MUST ALWAYS STOP** at Phase 8 UAT once the application is running and verified (on physical hardware, simulator, or browser). It is **strictly forbidden** to advance to Phase 9 Release or declare the workflow complete during Phase 8. The agent must present the UAT checklist, prompt the user for their real test findings or `approved`, set `NEXT_STEP_POINTER: AWAITING USER — Reply 'approved' to advance to Phase 9 (Release) or reply with test findings`, and halt execution immediately.
+3. **Phase 8 Live UAT (`08_uat`) Hard Stop**: The workflow **MUST ALWAYS STOP** at Phase 8 UAT. When `platform: ios`, the agent MUST unconditionally prompt the user: *"Please connect your physical iPhone to this Mac via USB cable, unlock the screen, ensure Developer Mode is enabled, and tap 'Trust This Computer' if prompted. Once connected, reply 'connected' in chat (or 'skip' to test via browser/simulator)."* and **HALT AND WAIT** for user confirmation before proceeding with native installation. Once the app is running on device or browser, present the UAT checklist, prompt the user for their real test findings or `approved`, set `NEXT_STEP_POINTER: AWAITING USER — Reply 'approved' to advance to Phase 9 (Release) or reply with test findings`, and halt execution immediately. It is **strictly forbidden** to advance to Phase 9 Release or declare the workflow complete during Phase 8.
 4. **Go-Back & Edit Support**: Always preserve `window.PM_DATA.consultantDiscovery` in `docs/progress-data.js` across every turn so the user can return to the **`💼 IT Consultant Questionnaire`** tab in `docs/progress.html` at any time, modify answers, and re-save `docs/00_DISCOVERY_ANSWERS.json`.
 
 ## Dynamic Platform Pointer Routing
@@ -37,7 +37,7 @@ Immediately after Phase 4 Schemas & Scaffolding (`npx tsc --noEmit` exit 0) comp
 ## Every Turn (silent; never dump state into chat)
 1. Rewrite `docs/PROJECT_STATUS.md` (≤65 lines; keep the last 3 session rows).
 2. Rewrite `docs/progress-data.js`, following the schema in `assets/progress-data.sample.js` (always preserving `consultantDiscovery`).
-3. If `docs/progress.html`, `docs/progress.min.js`, `docs/discovery-answers.js`, or `docs/dashboard-server.js` is missing, copy them from `.agents/skills/core/10_orchestrator/assets/` with `cp`.
+3. If `docs/progress.html`, `docs/progress.min.js`, or `docs/discovery-answers.js` is missing, copy them from `.agents/skills/core/10_orchestrator/assets/` with `cp`.
 
 ## `docs/PROJECT_STATUS.md`
 ```markdown

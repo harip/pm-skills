@@ -13,17 +13,22 @@ Starts after aggregate QA passes. **Inputs:** Documents 00, 02, 03, 04, 07. **Ou
 
 When the stakeholder or project targets iOS native execution (e.g. LiDAR, Camera, AR, or standalone app testing without Expo Go), the UAT Coordinator must guide, build, install, and verify the app directly on the connected hardware iPhone:
 
-### Step 1: Device Detection & Hook-In Prompt
-1. Query connected devices via `xcrun devicectl list devices`.
-2. **If no physical device is connected or state is not `available (paired)`**:
-   - Prompt the user immediately:
-     > *"Please connect your physical iPhone to this Mac via USB cable, unlock the screen, and tap 'Trust This Computer' if prompted."*
-   - Re-check `xcrun devicectl list devices` until a paired hardware device is found.
-3. Extract:
-   - Device Name (e.g. `Nanose`)
-   - Hardware Model (e.g. `iPhone 17 Pro Max / iPhone18,2`)
-   - Identifier / UDID (e.g. `00008150-001A25222205401C`)
-   - iOS Version (e.g. `27.0`)
+### Step 1: Mandatory Physical iPhone Hook-In Prompt & Stop Gate
+1. **Unconditional Stakeholder Prompt (Always Ask & Wait)**:
+   Whenever entering Phase 8 UAT on the iOS track, the UAT Coordinator MUST output a dedicated, prominent physical iPhone connection prompt to the stakeholder and **HALT AND WAIT**:
+   > *"📱 **Physical iPhone Connection Required**: Please connect your physical iPhone to this Mac via USB cable, unlock the screen, ensure Developer Mode is enabled (**Settings > Privacy & Security > Developer Mode**), and tap 'Trust This Computer' if prompted.*
+   > 
+   > *Once your iPhone is connected via USB and unlocked, reply **`connected`** in chat to proceed with native device installation (or reply **`skip`** if you prefer testing exclusively via desktop browser or simulator)."*
+2. **Hard Stop Enforcement**: The agent MUST STOP HERE and call no further tools. It is strictly forbidden to bypass this prompt or assume device presence without waiting for the user to reply `connected` or `skip`.
+3. **Hardware Discovery (After User Confirms `connected`)**:
+   - Query connected devices: `xcrun devicectl list devices`.
+   - Verify that a physical hardware device is connected and in state `available (paired)`.
+   - If no physical iPhone is detected or state is not `available (paired)`, re-prompt the user immediately to check the USB cable connection, unlock the screen, and confirm the Trust dialog, and wait.
+   - Extract:
+     - Device Name (e.g. `Nanose`)
+     - Hardware Model (e.g. `iPhone 17 Pro Max / iPhone18,2`)
+     - Identifier / UDID (e.g. `00008150-001A25222205401C`)
+     - iOS Version (e.g. `27.0`)
 
 ### Step 2: Apple Signing Identity Detection
 1. Query available developer certificates: `security find-identity -v -p codesigning`.

@@ -63,7 +63,10 @@ Never ask fewer than **8 detailed questions**. Design **8 to 12 structured quest
 
 ### 4. Reading `docs/00_DISCOVERY_ANSWERS.json` & Iterative Refinement Loop
 When the user replies (`submitted`, `approved`, `refine`, or with chat feedback):
-1. **Read `docs/00_DISCOVERY_ANSWERS.json`** using `read_file` to inspect:
+1. **Locate & Read `docs/00_DISCOVERY_ANSWERS.json`**:
+   - Check `docs/00_DISCOVERY_ANSWERS.json` (or `sandbox/docs/00_DISCOVERY_ANSWERS.json`).
+   - If not in `docs/` (e.g. saved to browser download directory), check `~/Downloads/00_DISCOVERY_ANSWERS.json` and copy it to `docs/00_DISCOVERY_ANSWERS.json`.
+   - Read the answers with `read_file` to inspect:
    - `action` (`"proceed"` vs `"refine"`)
    - `chosenFeaturesList` & `customFeaturesText`
    - `structuredSummary` (all 8–12 question answers + per-question `customNote`s)

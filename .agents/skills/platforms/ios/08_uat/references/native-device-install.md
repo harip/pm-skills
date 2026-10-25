@@ -4,19 +4,20 @@ Use this reference guide during **Phase 8 (UAT)** when installing, running, and 
 
 ---
 
-## 1. Physical Device Hook-in & Discovery
+## 1. Mandatory Physical iPhone Hook-in Prompt & Discovery
 
+### Mandatory User Prompt (Always Prompt First & Wait)
+Whenever entering Phase 8 UAT on iOS, always ask the user explicitly and **HALT AND WAIT**:
+> *"📱 **Physical iPhone Connection Required**: Please connect your physical iPhone to this Mac via USB cable, unlock the screen, ensure Developer Mode is enabled (**Settings > Privacy & Security > Developer Mode**), and tap 'Trust This Computer' if prompted. Once connected, reply **`connected`** in chat to proceed (or **`skip`** to test via browser/simulator)."*
+
+### Hardware Discovery (After User Confirms `connected`)
 Run:
 ```bash
 xcrun devicectl list devices
 ```
 
-### Detection Logic:
-- Parse the output table for physical hardware devices (e.g. `iPhone17,x`, `iPhone18,x`, `iPad...`) with state `available (paired)`.
-- If no physical iPhone is detected or state is `unpaired`:
-  > **Prompt User Action**:
-  > *"Please connect your physical iPhone to this Mac via USB cable, unlock the screen, and tap 'Trust This Computer' if prompted."*
-- Re-run `xcrun devicectl list devices` until the device is listed as `available (paired)`.
+- Parse the output table for physical hardware devices with state `available (paired)`.
+- If no physical iPhone is detected or state is `unpaired`, re-prompt the user to re-seat the USB cable, unlock the screen, and trust the host Mac.
 - Extract:
   - **Device Name** (e.g. `Nanose`)
   - **UDID / Identifier** (e.g. `00008150-001A25222205401C`)
@@ -57,6 +58,30 @@ When workspaces reside on volumes with spaces (e.g. `/Volumes/Samsung 990 1TB/..
    with:
    ```pbxproj
    shellScript = "bash \"$PODS_TARGET_SRCROOT/../scripts/get-app-config-ios.sh\"";
+   ```
+
+3. **Fix `ios-configure-glog.sh` for Xcode Paths with Spaces**:
+   When Xcode resides on a volume with spaces (e.g. `/Volumes/Samsung 990 1TB/...`), `glog` `./configure` breaks because `$CC` splits unquoted paths. Wrap compiler and SDK paths:
+   ```bash
+   ln -sfn "$(xcrun -sdk $PLATFORM_NAME --show-sdk-path)" /tmp/ios_sdk
+   export CC="/tmp/ios_toolchain/cc -arch $CURRENT_ARCH -isysroot /tmp/ios_sdk"
+   export CXX="/tmp/ios_toolchain/cxx -arch $CURRENT_ARCH -isysroot /tmp/ios_sdk"
+   ```
+
+4. **Fix ReactCodegen `Generate Specs` for Workspace Paths with Spaces**:
+   In `node_modules/react-native/scripts/react_native_pods_utils/script_phases.rb` and `Pods.xcodeproj`:
+   Quote `$WITH_ENVIRONMENT` and `$SCRIPT_PHASES_SCRIPT`:
+   ```bash
+   /bin/sh -c "\"$WITH_ENVIRONMENT\" \"$SCRIPT_PHASES_SCRIPT\""
+   ```
+
+5. **Fix `with-environment.sh` Execution for Paths with Spaces**:
+   In `node_modules/react-native/scripts/xcode/with-environment.sh`:
+   Quote argument execution:
+   ```bash
+   if [ -n "$1" ]; then
+     "$@"
+   fi
    ```
 3. **Fix `RoomScanLiDARStudio.xcodeproj` Bundle Script Phase**:
    Ensure backtick expansions with spaces are wrapped in `bash "$(...)"`:
