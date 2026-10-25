@@ -64,27 +64,32 @@ On iOS 27 / Xcode 27+, Apple strictly requires UIKit apps to adopt the `UIScene`
    xcrun devicectl device install app --device <DEVICE_UDID> /tmp/<AppName>DerivedData/Build/Products/Release-iphoneos/<AppName>.app
    ```
 
-### Step 6: Launch & Automated Crash Diagnosis / Healing Loop
-1. Launch the app with console attached:
+### Step 6: Launch & Mandatory Autonomous Crash-Healing Loop
+1. **Launch the App**:
    ```bash
-   xcrun devicectl device process launch --device <DEVICE_UDID> --terminate-existing --console <BUNDLE_ID>
+   xcrun devicectl device process launch --device <DEVICE_UDID> --terminate-existing <BUNDLE_ID>
    ```
-2. **If the app exits prematurely or crashes**:
-   - Query system crash logs from the device:
-     ```bash
-     xcrun devicectl device info files --device <DEVICE_UDID> --domain-type systemCrashLogs --search <AppName>
-     ```
-   - Copy the latest `.ips` crash file to the Mac:
-     ```bash
-     xcrun devicectl device copy from --device <DEVICE_UDID> --domain-type systemCrashLogs --source "<CrashFile>.ips" --destination /tmp/device_crash.ips
-     ```
-   - Parse the crash report to pinpoint the exact failure (e.g., missing privacy permission keys in `Info.plist`, unhandled runtime exceptions, dynamic library loading errors).
-   - Apply the targeted fix, recompile, reinstall, and relaunch.
-   - **Repeat until the app process stays running continuously in the foreground without crashing.**
-
-3. **Verify Active Execution**:
-   - Check process list: `xcrun devicectl device info processes --device <DEVICE_UDID> | grep -i "<AppName>"`.
-   - Confirm console logs show JavaScript engine startup (e.g., Hermes `evaluateJavaScript() with JS bundle`).
+2. **Mandatory Live Process Verification Gate (DO NOT PRESENT TO USER IF NOT RUNNING)**:
+   Wait 3–5 seconds after launch and inspect the live process list:
+   ```bash
+   xcrun devicectl device info processes --device <DEVICE_UDID> | grep -i "<AppName>"
+   ```
+   - **If the process is NOT found or exited immediately**:
+     The agent MUST NOT declare success or present the app to the user yet.
+     The agent MUST execute the automated crash diagnosis loop:
+     1. Search crash logs on device:
+        ```bash
+        xcrun devicectl device info files --device <DEVICE_UDID> --domain-type systemCrashLogs --search <AppName>
+        ```
+     2. Copy and inspect the latest `.ips` file:
+        ```bash
+        xcrun devicectl device copy from --device <DEVICE_UDID> --domain-type systemCrashLogs --source "<LatestCrash>.ips" --destination /tmp/device_crash.ips
+        ```
+     3. Identify the failure reason (e.g. `___UIApplicationEvaluateRuntimeIssueForNoSceneLifecycleAdoption` on iOS 27 requiring `SceneDelegate`, missing `Info.plist` permissions, signing dylib mismatches).
+     4. Apply the targeted code or configuration fix.
+     5. Re-run `xcodebuild`, reinstall via `devicectl device install app`, and relaunch.
+     6. **Loop continuously until `devicectl device info processes` confirms the app is actively running with a live PID in the foreground.**
+3. **Only Once Confirmed Running**: Advance to Step 7 and prompt the stakeholder to verify the running app on their physical screen.
 
 ### Step 7: Stakeholder Guidance
 - Provide clear instructions for first-time profile trust:
