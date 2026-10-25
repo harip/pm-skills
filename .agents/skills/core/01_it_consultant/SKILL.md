@@ -32,22 +32,23 @@ You MUST generate high-fidelity interactive HTML/CSS/SVG screen mockups in `docs
 
 #### B. Proposed Interactive Screen Mockups (`mockups`)
 - Generate standalone, interactive HTML/CSS/SVG mockups in `docs/design/mockups/scr_001_v1.html` .. `scr_00N_v1.html` for every proposed screen in the user journey.
+- **Strict iOS Apple HIG Light Mode & Minimalist Mandate**: When `platform: ios`, every screen mockup MUST strictly adhere to Apple Human Interface Guidelines in **Light Mode only** (`#f5f5f7` canvas, `#ffffff` card/sheet surfaces, `#1c1c1e` text, `#8e8e93` captions, `#007aff` accent, SF Pro typography) with **uncompromising minimalism**: full-bleed edge-to-edge viewports, zero unnecessary nested frames or borders, exactly one dominant primary CTA, clean floating translucent HUD pills, and generous whitespace. Dark mode, dark CAD viewports, or dark gray/black backgrounds (`#000`, `#121212`, `#1a1a1a`) are **strictly prohibited** for iOS.
 - List all mockups in `consultantDiscovery.mockups` (`[{ id, title, path, desc }]`) so `progress.html` embeds and displays them directly inside the **`💼 IT Consultant Questionnaire`** tab with live interactive previews, screen approval checkboxes, and per-screen UI feedback inputs (`"✍️ Layout / UI feedback or changes for scr_00X..."`).
 
 #### C. AI-Suggested Feature & Capability Catalog (`suggestedFeatures`)
 Proactively suggest **8 to 12 concrete, domain-specific features** tailored to the user's idea so the user can check/uncheck them in `progress.html` (plus type custom features):
 - **Core MVP (`category: "Core MVP"`)**: 3–4 foundational features required for a complete product.
 - **High-Impact Enhancements (`category: "High Impact"`)**: 3–4 smart capabilities that dramatically increase product value (e.g., live calculations, templates/presets, multi-floor/category organization, magnetic snapping, history comparison).
-- **UX Delighters & Pro Touches (`category: "UX Delight"`)**: 2–3 polish features (e.g., dual theme Dark CAD / Light Print, unit conversion, haptics, annotations/voice notes).
+- **UX Delighters & Pro Touches (`category: "UX Delight"`)**: 2–3 polish features (e.g., Apple HIG light mode polish, unit conversion, haptics, annotations/voice notes).
 - **Export & Sharing (`category: "Export & Share"`)**: 1–2 output capabilities (e.g., printable summary, JSON/SVG export, share sheet).
 
-#### C. Thorough Multi-Dimensional Questionnaire (`questions`: **Minimum 8–12 Questions**)
+#### D. Thorough Multi-Dimensional Questionnaire (`questions`: **Minimum 8–12 Questions**)
 Never ask fewer than **8 detailed questions**. Design **8 to 12 structured questions** (`type: "single"` or `type: "multi"`, each with 3–4 well-explained options and a `recommended: true` choice) spanning these **9 Consulting Dimensions**:
 1. **Core User Workflow & Entry Experience** (How the user starts, navigates, and completes the primary job-to-be-done).
 2. **Hardware / Sensor / Input Mechanics** (How camera, LiDAR, audio, touch gestures, or file inputs operate, plus fallback modes).
 3. **Automation vs. Manual Precision Control** (What happens automatically via AI/heuristics vs. what the user can fine-tune manually).
 4. **Screen Architecture & Multi-View Navigation** (Which dedicated screens, modals, drawers, and summary dashboards should exist).
-5. **Visual Design System, Theme & Aesthetics** (Dark/Light/Dual themes, density, color palette, CAD/consumer/pro visual language).
+5. **Visual Design System, Theme & Aesthetics** (For iOS: Apple HIG Light Mode palette `#f5f5f7`/`#ffffff`, SF Pro typography, density; for Web/Android: respective system guidelines). Dark mode is disabled for iOS.
 6. **Domain-Specific Accuracy, Measurements & Edge Cases** (Units, snapping tolerances, validation rules, error recovery, non-standard shapes/inputs).
 7. **Data Persistence, Offline Capabilities & History** (Local SQLite/IndexedDB vs. cloud sync, soft-delete/trash recovery, versioning).
 8. **Authentication, Privacy & Multi-User Access** (Zero-login local utility vs. authenticated accounts, role permissions, on-device photo/data privacy).

@@ -18,8 +18,17 @@ Before creating UI components:
 2. Record the approved screen inventory, design tokens, and any user UI feedback notes from `docs/00_DISCOVERY_ANSWERS.json` in `docs/06_DESIGN_REGISTER.md`.
 3. Immediately build the production React Native UI components without stopping for a separate Phase 5 gate.
 
-## 100% Mockup Fidelity & Universal Runtime Rule
+## 100% Mockup Fidelity, Apple HIG Light Mode & Universal Runtime Rule
 Implementation must replicate the approved Phase 1 mockups (`docs/design/mockups/`) with 100% precision:
+- **Strict Apple HIG Light Mode & Minimalist Architecture (Zero Dark Mode)**:
+  - Root container background: `#f5f5f7` (Apple Secondary System Background).
+  - Cards, modals, bottom sheets, viewports: `#ffffff` (Apple System Background).
+  - Borders and dividers: `#e5e5ea`.
+  - Primary text: `#1c1c1e`. Secondary/caption text: `#8e8e93`.
+  - Primary accent: `#007aff` (Apple System Blue).
+  - Status bar: `<StatusBar barStyle="dark-content" />`.
+  - **Minimalist Principles**: Content over chrome (`flex: 1` full-bleed viewports), zero unnecessary nested boxes/borders, exactly one prominent primary CTA, clean translucent HUD pills (`rgba(255,255,255,0.92)`), native iOS segmented controls, and generous whitespace.
+  - **Forbidden**: `#000000`, `#121212`, `#1c1c1e`, or dark charcoal screen backdrops, cluttered badges, and rainbow accents.
 - **All Screens Navigable**: Must implement and wire navigation across **every** screen in the Screen Inventory (`scr_001`, `scr_002`, `scr_003`...), never just a single isolated screen.
 - **Expo Go Universal Graphics Rule**: Avoid unguarded `@shopify/react-native-skia` (`Skia.Path.Make()`) in standard Expo Go projects because `this.CanvasKit` is `undefined` on Web without async WASM loading and JSI bindings can crash in Expo Go (`Cannot read properties of undefined (reading 'PathBuilder')`). Prefer universal React Native vector primitives or `react-native-svg` so 2D graphics render natively in both iPhone Expo Go and Web Browser without runtime crashes.
 - Exact layout hierarchy, typography (SF Pro), color palette, and control placement.
