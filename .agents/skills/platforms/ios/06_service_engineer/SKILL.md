@@ -16,6 +16,7 @@ description: Phase 6 lead for iOS. Builds services, hooks, and local-first SQLit
 ## Architecture & Hooks
 - Hooks: `useResource<T>` → `{ data, isLoading, error, refetch }`; `useMutation<TIn, TOut>` → `{ mutate, isSubmitting, error, reset }`.
 - Performance: Offload heavy geometric/analytical calculations (e.g. Shoelace area, Euclidean perimeter) into worklets or memoized pure functions.
+- **Dynamic Repository & Decoupled Seed Data**: All queries must flow through dynamic repository methods (`getAll()`, `save()`, `delete()`). Provide a decoupled `seedInitialData()` function in `src/db/` so sample records are never hardcoded into screen components, allowing fresh installs to start cleanly in the Zero/Empty state.
 
 ## Mandatory Compile Gate
 Before marking Phase 6 complete:

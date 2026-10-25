@@ -20,3 +20,10 @@ Verify `package.json`, `tsconfig.json`, and `app.json` exist and compile (`npx t
 - Touch targets ≥48×48dp, 8dp grid.
 - Four data states: loading (skeleton), error, empty, content.
 - Native `testID` (snake_case) on interactive controls.
+
+## Strict Dynamic Data Binding & Zero Fake Data Rule
+Mockup HTML files show sample cards solely to demonstrate visual layout. **Production screens must NEVER hardcode static sample arrays**:
+1. **Zero Hardcoded Fake Arrays**: Screen components must NEVER hardcode static mock arrays. All screens must bind dynamically to the database and hooks.
+2. **First-Class Empty State on Fresh Install**: When the database has 0 items, the landing screen MUST conditionally render a clean Empty State with an icon, clear explanation, and primary CTA to create the first record.
+3. **Reactive Data Mutation**: Creating, editing, or deleting records must dynamically update the UI list via the reactive DB layer. Never display static uneditable items.
+4. **Zero Hollow Shells & Mandatory Functional Handlers**: Every interactive control must execute real logic wired to services or hooks. Trivial no-op stubs (`onPress={() => {}}`, `console.log` only) are strictly forbidden; actions must produce real state transitions.

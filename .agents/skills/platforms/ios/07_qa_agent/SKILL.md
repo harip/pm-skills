@@ -19,6 +19,14 @@ description: Phase 7 lead for iOS. Writes and runs automated tests, enforces 100
 - Compare rendered component tree against approved Gate 2 HTML/SVG mockups in `docs/design/mockups/`.
 - Any missing buttons, deviated typography, or shifted layouts fail QA verification.
 
+## End-to-End Action & State Mutation Verification
+- Component and service tests must NOT merely verify static mounting (`toBeDefined()`).
+- Tests must trigger user actions (e.g. `fireEvent.press(button)`) and explicitly assert:
+  1. The handler invokes the underlying service/pipeline.
+  2. A real state change or database mutation occurs.
+  3. The resulting entity is rendered or returned.
+- Hollow UI shells or no-op handlers with no state change fail QA verification immediately.
+
 ## Compile, Unit Test & Headless Runtime Render Execution
 1. Run `npm run typecheck` (`tsc --noEmit`) — must pass with 0 errors.
 2. Run `npm test` (`vitest run`) — coverage table and binary AC results recorded in `tests/07_TEST_MANIFEST.md`.

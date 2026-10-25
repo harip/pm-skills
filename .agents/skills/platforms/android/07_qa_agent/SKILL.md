@@ -17,3 +17,6 @@ description: Phase 7 lead for Android. Writes and runs automated tests, enforces
 
 ## 100% Mockup Fidelity Verification
 Inspect rendered component tree against approved Gate 2 Material 3 mockups in `docs/design/mockups/`.
+
+## End-to-End Action & State Mutation Verification
+- Tests must trigger user actions (`fireEvent.press`) and verify that the underlying service is executed and produces a real state change or database record. Hollow stubs fail QA immediately.

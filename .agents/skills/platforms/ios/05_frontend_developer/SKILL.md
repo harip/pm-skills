@@ -36,6 +36,25 @@ Implementation must replicate the approved Phase 1 mockups (`docs/design/mockups
 - Every component implements 4 data states: loading (skeleton), error (banner + retry), empty, content.
 - Native `testID` (snake_case) and `accessibilityLabel` on all interactive controls.
 
+## Strict Dynamic Data Binding & Zero Fake Data Rule
+Screen mockups in `docs/design/mockups/` use sample cards solely to illustrate visual hierarchy. **Production screens must NEVER hardcode static sample arrays**:
+1. **Zero Hardcoded Fake Arrays in Screens**:
+   - Strictly forbidden: `const ITEMS = [...]`, `const RECORDS = [...]`, or embedding static fake cards in `src/screens/` or `src/app/`.
+   - All lists, cards, and detail views must consume dynamic state from the Service Engineer's hooks and repository (`useItems()`, `itemRepository.getAll()`).
+2. **First-Class Empty State on Fresh Install**:
+   - When the database has 0 items (`items.length === 0`), the landing screen MUST conditionally render a clean, minimalist Apple HIG Empty State:
+     - Centered minimalist icon.
+     - Clear headline: e.g. `No Records Yet` or `No Items Saved`.
+     - 1-line guidance text: e.g. `Create or capture your first record to get started.`
+     - Prominent primary CTA button: e.g. `＋ Create First Record` (opening the capture/creation view).
+     - Optional secondary demo button: `Load Sample Data` (seeds sample items into the real database dynamically).
+3. **Reactive Data Mutation**:
+   - Adding, scanning, updating, or deleting items in the UI must immediately reflect in the dynamic list via reactive state or DB refetch. Never show static uneditable cards.
+4. **Zero Hollow Shells & Mandatory Functional Handlers**:
+   - Every interactive control (buttons, inputs, capture triggers, sliders, toggles) MUST be wired to an active handler that executes real application logic.
+   - Prohibited: `onPress={() => {}}`, `console.log` only, cosmetic timeouts, or dummy alerts that produce no state transition.
+   - When an action is triggered (e.g. capture, submit, calculate, add, delete), it MUST call the underlying service/hook, mutate state or database, and produce a visible, verifiable outcome. If a physical device capability is restricted, the component MUST trigger the functional simulation fallback so the user can complete the workflow end-to-end.
+
 ## Build & Runtime Verification Gate
 1. Run `npx tsc --noEmit` to verify 0 TypeScript errors.
 2. Verify the app mounts without runtime exceptions before handing off to Phase 7 QA.

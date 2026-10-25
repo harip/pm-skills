@@ -10,7 +10,7 @@ description: Phase 3 lead for iOS. Turns scope into docs/04_TECHNICAL_SPEC.md an
 ## iOS Architectural Rules
 - **Stack**: React Native with Latest Expo SDK (matching App Store Expo Go, e.g. SDK 57+), TypeScript Strict (`noImplicitAny: true`). Never pin to obsolete SDK versions.
 - **Graphics & Motion**: Universal React Native Vector Geometry / `react-native-svg` (100% Expo Go & Web compatible without unguarded `CanvasKit` crashes), Apple HIG springs (`12_apple_design`).
-- **Hardware Integration**: Native iOS camera permissions (`NSCameraUsageDescription`), optional Apple RoomPlan LiDAR bridge for iPhone Pro models.
+- **Hardware & Device API Architecture**: Every hardware, camera, or sensor capability must specify both the live native hardware bridge AND an interactive functional simulation pipeline. This ensures that every user trigger (e.g. capture, scan, sample) always processes data and persists a real record, preventing inoperable stub screens.
 - **Persistence**: `expo-sqlite` embedded with Drizzle ORM, `expo-file-system` for sandboxed image files.
 - **Base Entity Fields**: Canonical base fields: `id` (UUID v4), `createdBy`, `createdAt`, `updatedAt`, `deletedAt` (soft delete).
 

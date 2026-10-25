@@ -17,3 +17,6 @@ description: Phase 7 lead for Web. Executes Vitest unit tests, Playwright E2E ch
 
 ## 100% Mockup Fidelity Verification
 Inspect rendered DOM against approved Gate 2 mockups. Any layout deviations or missing states fail QA.
+
+## End-to-End Action & State Mutation Verification
+- Tests must trigger user actions (`fireEvent.click`) and verify that the underlying service is executed and produces a real state change or database record. Hollow stubs fail QA immediately.
