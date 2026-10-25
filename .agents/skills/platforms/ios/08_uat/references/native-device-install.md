@@ -83,7 +83,15 @@ When workspaces reside on volumes with spaces (e.g. `/Volumes/Samsung 990 1TB/..
      "$@"
    fi
    ```
-3. **Fix `RoomScanLiDARStudio.xcodeproj` Bundle Script Phase**:
+6. **Fix `fmt` Consteval C++20 Clang Incompatibility**:
+   In Xcode 16/27 with modern Apple Clang, `fmt` fails compiling `format.cc` with `call to consteval function is not a constant expression`. Disable `FMT_USE_CONSTEVAL` in `Pods/fmt/include/fmt/base.h`:
+   ```cpp
+   #undef FMT_USE_CONSTEVAL
+   #define FMT_USE_CONSTEVAL 0
+   #define FMT_CONSTEVAL
+   #define FMT_CONSTEXPR20
+   ```
+7. **Fix `RoomScanLiDARStudio.xcodeproj` Bundle Script Phase**:
    Ensure backtick expansions with spaces are wrapped in `bash "$(...)"`:
    ```pbxproj
    bash -c "\"$NODE_BINARY\" \"$($NODE_BINARY --print \"require('path').dirname(require.resolve('react-native/package.json')) + '/scripts/react-native-xcode.sh'\")\""
