@@ -89,7 +89,31 @@ On iOS 27 / Xcode 27+, Apple strictly requires UIKit apps to adopt the `UIScene`
      4. Apply the targeted code or configuration fix.
      5. Re-run `xcodebuild`, reinstall via `devicectl device install app`, and relaunch.
      6. **Loop continuously until `devicectl device info processes` confirms the app is actively running with a live PID in the foreground.**
-3. **Only Once Confirmed Running**: Advance to Step 7 and prompt the stakeholder to verify the running app on their physical screen.
+3. **Mandatory Functional Screen Verification Gate (Screenshot & Vision OCR)**:
+   Even if the process is running, the agent MUST visually prove that the app has rendered its UI and has NOT produced a RedBox / fatal error screen:
+   1. Capture a hardware screenshot:
+      ```bash
+      xcrun devicectl device capture screenshot --device <DEVICE_UDID> --destination /tmp/device_screen.png
+      ```
+   2. Run OCR using macOS Vision framework:
+      ```bash
+      swift - << 'EOF'
+      import Vision
+      import AppKit
+      guard let nsImage = NSImage(contentsOf: URL(fileURLWithPath: "/tmp/device_screen.png")),
+            let cgImage = nsImage.cgImage(forProposedRect: nil, context: nil, hints: nil) else { exit(1) }
+      let req = VNRecognizeTextRequest { req, _ in
+          (req.results as? [VNRecognizedTextObservation])?.forEach { print($0.topCandidates(1).first?.string ?? "") }
+      }
+      req.recognitionLevel = .accurate
+      try? VNImageRequestHandler(cgImage: cgImage, options: [:]).perform([req])
+      EOF
+      ```
+   3. **Hard Assertions**:
+      - The screen text MUST contain expected app headers (e.g. `"LiDAR Studio"`, primary UI labels).
+      - The screen text MUST NOT contain RedBox strings (`"Uncaught Error"`, `"Cannot find native module"`, `"RedBox"`, `"Fatal Exception"`).
+   - If any RedBox or fatal error text is detected, the agent MUST diagnose the error, fix the native dependency or code, recompile, reinstall, and re-verify until the physical screen OCR is 100% clean.
+4. **Only Once Process Is Live AND Screen OCR Proves UI Rendered**: Advance to Step 7 and present the verified running app to the stakeholder for final acceptance sign-off.
 
 ### Step 7: Stakeholder Guidance
 - Provide clear instructions for first-time profile trust:
