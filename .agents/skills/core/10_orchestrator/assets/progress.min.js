@@ -65,11 +65,11 @@ const WORKFLOW_STAGES = [
     skill: 'frontend_developer',
     group: 'implementation',
     icon: '💻',
-    title: 'UI/UX & Mockups (Gate 2)',
-    description: 'Visual screen mockups, design register, and Apple HIG / Material / Web components.',
+    title: 'UI Engineering (Parallel)',
+    description: 'Builds production components replicating the approved Phase 1 screen mockups in parallel with Phase 6 Services.',
     artifacts: [
       { name: '06_DESIGN_REGISTER.md', path: '06_DESIGN_REGISTER.md', desc: 'Screen inventory & mockup register' },
-      { name: 'docs/design/mockups/', path: 'design/mockups/', desc: 'Rendered visual mockups' }
+      { name: 'docs/design/mockups/', path: 'design/mockups/', desc: 'Approved Phase 1 visual mockups' }
     ]
   },
   {
@@ -250,10 +250,9 @@ function escapeHtml(value) {
   return String(value || '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
 }
 
-function isGateActive(stageId, mode) {
-  if (mode === 'supervised') return true;
-  if (mode === 'balanced') return ['discovery', 'scope', 'frontend', 'services', 'uat', 'release'].includes(stageId);
-  return ['frontend', 'services', 'uat', 'release'].includes(stageId);
+function isGateActive(stageId) {
+  // Unified streamlined flow: stops at Phase 1 (Discovery & Mockups), Phase 8 (Live UAT), and Phase 9 (Release)
+  return ['discovery', 'uat', 'release'].includes(stageId);
 }
 
 function switchView(view) {
@@ -269,15 +268,10 @@ function switchView(view) {
   else renderApprovalsView();
 }
 
-function switchAutonomyMode(mode) {
-  currentAutonomyMode = mode;
-  document.querySelectorAll('.folder-tab[data-mode]').forEach(btn => {
-    btn.classList.toggle('active', btn.getAttribute('data-mode') === mode);
-  });
+function switchAutonomyMode() {
   const modeBadge = document.getElementById('projectModeBadge');
   if (modeBadge) {
-    const label = mode === 'autopilot' ? '🟢 Autopilot' : mode === 'balanced' ? '🟡 Balanced' : '🔴 Supervised';
-    modeBadge.textContent = 'Autonomy Mode: ' + label;
+    modeBadge.textContent = 'Flow: 1. Discovery & Mockups → 2. Autonomous Build & QA → 3. Live UAT';
   }
   if (currentView === 'vmodel') renderVModelView();
 }
@@ -628,7 +622,7 @@ function renderDiscoveryView() {
           <div style="font-size: 11px; margin-top: 3px; font-weight: 500;">
             ${discoveryFormState.lastAction === 'refine'
               ? 'Now reply "refine" in chat — the IT Consultant will read your saved answers & questions, respond in detail, and update this questionnaire.'
-              : 'Now reply "submitted" (or "approved") in chat — the workflow will read docs/00_DISCOVERY_ANSWERS.json and generate 00_PROJECT_CONTRACT.md & 01_ARCH_BRIEF.md. You can come back to this tab anytime to edit and re-save!'}
+              : 'Now reply "submitted" (or "approved") in chat — the workflow will read docs/00_DISCOVERY_ANSWERS.json, autonomously build & test the entire app (Phases 2–7), and stop at Phase 8 Live UAT!'}
           </div>
         </div>
         <button type="button" class="copy-pill-btn" onclick="navigator.clipboard.writeText('${discoveryFormState.lastAction === 'refine' ? 'refine' : 'submitted'}')">
