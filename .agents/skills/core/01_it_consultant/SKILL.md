@@ -70,9 +70,10 @@ When the user replies (`submitted`, `approved`, `refine`, or with chat feedback)
    - `chosenFeaturesList` & `customFeaturesText`
    - `structuredSummary` (all 8–12 question answers + per-question `customNote`s)
    - `additionalDetails` & `consultantQuestions`
-2. **If `action === "refine"` OR `consultantQuestions` is non-empty**:
-   - Act as a senior consultant: thoroughly answer each of the user's questions in chat AND append them to `consultantDiscovery.advisoryBrief.followUpAnswers` in `docs/progress-data.js`.
-   - Add any new features or follow-up questions to `consultantDiscovery`, increment `round`, and ask the user to review the updated `http://localhost:8080/progress.html` and click **`💾 Save Answers & Proceed to Contract →`** when ready.
+2. **If `action === "refine"` OR any `mockupNotes`, `questionNotes`, `additionalDetails`, or `consultantQuestions` contain user questions (e.g. asking for clarification or how something works) OR mockup modification requests (e.g. removing/adding UI elements)**:
+   - Act as a senior consultant: thoroughly answer each of the user's questions in plain English in chat AND append them to `consultantDiscovery.advisoryBrief.followUpAnswers` in `docs/progress-data.js`.
+   - **Immediately update the HTML mockup files (`docs/design/mockups/scr_00X_v1.html`)** to reflect every UI change or new feature (such as STL export, simplified controls, etc.) requested by the user in `mockupNotes` or `additionalDetails`.
+   - Rewrite any unclear question options in plain, jargon-free language, increment `round`, open `docs/progress.html` so the user can see the updated mockups and answers, and wait for their final confirmation (`submitted` / `approved`) before building code.
 3. **If `action === "proceed"` (or user replies `approved`/`submitted` ready to lock)**:
    - Proceed to **Stage 2** and generate `docs/00_PROJECT_CONTRACT.md` and `docs/01_ARCH_BRIEF.md` incorporating **100% of the saved answers, selected features, custom features, per-question notes, and additional details** from `docs/00_DISCOVERY_ANSWERS.json`.
 4. **Going Back at Any Later Phase**:
