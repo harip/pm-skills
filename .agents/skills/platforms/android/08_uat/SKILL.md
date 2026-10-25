@@ -35,5 +35,29 @@ The AI agent must **execute the live app in a real headless browser and verify r
 5. **Present Verified QR Code & Browser URL**:
    - Only after Playwright proves the live DOM renders the expected static text with `runtimeErrors: []`, generate the QR code (`npx --yes qrcode "exp://<LAN_IP>:8081" -t png -o docs/expo-qr.png`) and present the links.
 
-## Anti-Hallucination Rule
-Never fake Android device runs. Prompt stakeholder to test scenarios in `docs/10_UAT_CHECKLIST.md`.
+## Mandatory UAT Stop Protocol & Hard Gate (STOP EXECUTION HERE)
+
+The AI agent must **NEVER simulate, fabricate, or bypass live stakeholder UAT**. It is **STRICTLY FORBIDDEN** to advance to Phase 9 Release or declare the workflow complete during Phase 8.
+
+### Mandatory Stop Actions:
+1. **Record Scenarios as Pending Stakeholder Run**:
+   - In `docs/10_UAT_CHECKLIST.md`, mark all scenarios as `[AWAITING STAKEHOLDER MANUAL RUN]`.
+2. **Present the Verified Live Target & Scenarios to User**:
+   - Output the running endpoints (Android device/emulator status, Expo Go QR code, or browser preview URL).
+   - Display the key UAT scenarios directly in chat so the stakeholder knows exactly what to test.
+3. **Output the Explicit Stop Gate Prompt**:
+   You MUST end your response with this exact prompt:
+   > ### 🛑 Phase 8 UAT Verification Required
+   > The application is verified running live on your **[Android Device / Emulator / Browser preview]**.
+   > Please perform acceptance testing on your screen according to the scenarios in `docs/10_UAT_CHECKLIST.md`.
+   > 
+   > **How to proceed:**
+   > - Reply with any bug reports or UI/functional feedback (the swarm will automatically fix them, recompile, and re-present for verification).
+   > - Or reply **`approved`** to accept UAT and advance to Phase 9 (Release).
+4. **Update Project Tracking**:
+   - In `docs/PROJECT_STATUS.md`: Set `Phase 8 UAT — platforms/android/08_uat — [AWAITING STAKEHOLDER UAT APPROVAL]`.
+   - Set `NEXT_STEP_POINTER: AWAITING USER — Reply 'approved' to advance to Phase 9 (Release) or reply with test findings.`
+5. **HALT EXECUTION IMMEDIATELY**:
+   - Call NO further tools.
+   - Do NOT execute Phase 9 (`09_deployment`).
+   - Yield control and wait for the user's explicit reply.

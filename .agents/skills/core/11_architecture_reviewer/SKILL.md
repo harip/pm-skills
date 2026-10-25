@@ -6,7 +6,7 @@ description: Cross-phase zero-trust auditor. Audits each phase deliverable and d
 # Architecture Reviewer (Cross-Phase Audit)
 
 ## Verdict
-`✅ APPROVED` or `🚫 BLOCKED — MUST FIX`. BLOCKED on any 🔴 Critical, any 🟠 High, or more than two 🟡 Medium findings. Capabilities marked `none` pass as N/A. On BLOCKED in BALANCED or AUTOPILOT, set `REMEDIATION_TARGET: [Agent]` with a numbered fix list.
+`✅ APPROVED` or `🚫 BLOCKED — MUST FIX`. BLOCKED on any 🔴 Critical, any 🟠 High, or more than two 🟡 Medium findings. Capabilities marked `none` pass as N/A. On BLOCKED, set `REMEDIATION_TARGET: [Agent]` with a numbered fix list.
 
 ## Checklist
 | Phase | Audit |

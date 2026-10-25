@@ -28,25 +28,25 @@ Then open this folder in **Antigravity IDE** (or your editor).
 Launch directly for your target platform in the root workspace:
 
 ```text
-/pm ios start "My iPhone app pitch" [balanced|autopilot|supervised]
-/pm android start "My Android app pitch" [balanced|autopilot|supervised]
-/pm web start "My web SaaS pitch" [balanced|autopilot|supervised]
+/pm ios start "My iPhone app pitch"
+/pm android start "My Android app pitch"
+/pm web start "My web SaaS pitch"
 ```
 
-- **`balanced`** (default): Stops for your sign-off at 4 key milestones (Scope, UI Mockups, UAT, Release).
-- **`autopilot`**: Auto-advances across phases, pausing only for Gate 2 mockups, DB setup, UAT, and Release.
-- **`supervised`**: Pauses for your approval after *every single phase*.
-
-*(You can also change modes at any point later by typing `/pm mode <mode>`)*
+Every project runs with a single streamlined lifecycle:
+- **Gate 1 — Discovery & Mockups (Phase 1)**: Reviews interactive HTML mockups, selects recommended features, and answers deep discovery questions in `docs/progress.html`.
+- **Autonomous Build & QA (Phases 2 → 7)**: Product Owner, Technical Architect, Schemas, Parallel Frontend & Services, and automated QA execute autonomously without pausing for intermediate approvals.
+- **Gate 2 — Live UAT (Phase 8)**: Workflow **always stops** to verify the running application on your physical device, simulator, or browser preview before Release.
+- **Gate 3 — Production Release (Phase 9)**: Final sign-off for App Store, Play Store, or web deployment.
 
 ---
 
-## 🧪 Isolated Test-Drive Mode (`sandbox/`)
+## 🧪 Isolated Test Drive (`sandbox/`)
 
 Want to test drive an idea without committing code to your repo? Add `test`:
 
 ```text
-/pm test <ios|android|web> "Your app pitch" [mode]
+/pm test <ios|android|web> "Your app pitch"
 ```
 - Completely isolated in `sandbox/` (automatically gitignored).
 - Maintains its own project status and dashboard.
@@ -71,14 +71,13 @@ Instead of generic cross-platform approximations, the swarm provides dedicated p
 | Command | What it Does |
 |---|---|
 | `/pm <ios\|android\|web> start "..."` | Start a production project in root workspace for target platform. |
-| `/pm <ios\|android\|web> start "..." <mode>` | Start directly in `autopilot`, `supervised`, or `balanced`. |
 | `/pm test <ios\|android\|web> "..."` | Run an isolated test drive in `sandbox/` (gitignored). |
 | `/pm test clean` | Wipe the `sandbox/` folder. |
-| `/pm mode <mode>` | Change mode at any time (`balanced`, `autopilot`, `supervised`). |
 | `/pm resume` | Resume from where you left off (reads saved state). |
-| `/pm status` | Check current phase, mode, platform, and next step. |
+| `/pm status` | Check current phase, platform, and next step. |
 | `/pm next` | Force execute the next step. |
-| `approved` | Accept the pending gate review and advance to next phase. |
+| `submitted` / `refine` | Save & process Phase 1 Discovery Questionnaire and Mockup answers. |
+| `approved` | Accept the pending UAT or Release review and advance. |
 | `/pm help` | Show all available commands. |
 
 ---

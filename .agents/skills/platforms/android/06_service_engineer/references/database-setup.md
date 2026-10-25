@@ -19,7 +19,7 @@ Run when backend work begins, before implementing provider-dependent integration
 Ask for provider/type and environment, then use current official instructions to collect only missing prerequisites. Preserve existing data; prepare schema changes as migrations and obtain applicable approval before applying them. If the choice changes auth, storage, or sync assumptions, reconcile the technical spec before implementation. Do not silently replace it with Supabase.
 
 ## Waiting and resumption
-Missing choices, authentication, values, or failed checks keep setup open in every autonomy mode. Save the next action and allow independent mock/local work to continue. Resume at the first incomplete prerequisite, without re-asking completed choices. Never mark backend integration verified from the user's Done button alone.
+Missing choices, authentication, values, or failed checks keep setup open. Save the next action and allow independent mock/local work to continue. Resume at the first incomplete prerequisite, without re-asking completed choices. Never mark backend integration verified from the user's Done button alone.
 
 
 ## Explicit skip: continue with mocks

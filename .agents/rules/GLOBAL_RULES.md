@@ -68,3 +68,4 @@ There are no separate `autopilot` / `balanced` / `supervised` modes. Every proje
    - **Current Step**: Exactly what milestone was completed.
    - **What to Review**: Direct links to `docs/progress.html` or the live UAT preview.
    - **Next Action**: State clearly what to reply (`submitted` / `refine` at Gate 1 Discovery; `approved` at Gate 2 UAT and Gate 3 Release).
+3. **Hard Halt Enforcement**: At Gate 1 and Gate 2 UAT, the agent **MUST STOP IMMEDIATELY** and call no further tools. It is strictly forbidden to advance autonomously past these gates without explicit user input (`submitted`/`refine` for Gate 1, or test findings/`approved` for Gate 2).
