@@ -21,8 +21,8 @@ When a project begins (`/pm <platform> start "<pitch>"` or `/pm test <platform> 
    ```
    - `dashboard-server.js` serves `http://localhost:8080/progress.html` AND exposes `POST /api/save-discovery` + `GET /api/discovery-answers`, saving all questionnaire submissions directly to `docs/00_DISCOVERY_ANSWERS.json` and `docs/discovery-answers.js`.
 
-### 2. Populate `window.PM_DATA.consultantDiscovery` in `docs/progress-data.js`
-You MUST populate a comprehensive `consultantDiscovery` object in `docs/progress-data.js` (with `activeStageId: "discovery"`) containing all three of the following sections:
+### 2. Generate Proposed Interactive Screen Mockups & Populate `window.PM_DATA.consultantDiscovery` in `docs/progress-data.js`
+You MUST generate high-fidelity interactive HTML/CSS/SVG screen mockups in `docs/design/mockups/` (`scr_001_v1.html` .. `scr_00N_v1.html`) representing the complete proposed screen architecture, and populate a comprehensive `consultantDiscovery` object in `docs/progress-data.js` (with `activeStageId: "discovery"`) containing all four of the following sections:
 
 #### A. Executive Advisory Brief (`advisoryBrief`)
 - `platformCapabilities`: 3–5 detailed bullets explaining what the target platform (`ios`, `android`, or `web`) can achieve natively, how preview environments work (e.g., Expo Go vs native dev builds for hardware sensors like LiDAR/ARKit/Bluetooth), and smart fallback/hybrid strategies.
@@ -30,7 +30,11 @@ You MUST populate a comprehensive `consultantDiscovery` object in `docs/progress
 - `architecturalGuardrails`: 3–4 bullets covering reliability, offline resilience, rendering compatibility, and security guardrails.
 - `followUpAnswers`: Array of `{ question, answer }` objects answering any questions the user submitted in a previous round.
 
-#### B. AI-Suggested Feature & Capability Catalog (`suggestedFeatures`)
+#### B. Proposed Interactive Screen Mockups (`mockups`)
+- Generate standalone, interactive HTML/CSS/SVG mockups in `docs/design/mockups/scr_001_v1.html` .. `scr_00N_v1.html` for every proposed screen in the user journey.
+- List all mockups in `consultantDiscovery.mockups` (`[{ id, title, path, desc }]`) so `progress.html` embeds and displays them directly inside the **`💼 IT Consultant Questionnaire`** tab with live interactive previews, screen approval checkboxes, and per-screen UI feedback inputs (`"✍️ Layout / UI feedback or changes for scr_00X..."`).
+
+#### C. AI-Suggested Feature & Capability Catalog (`suggestedFeatures`)
 Proactively suggest **8 to 12 concrete, domain-specific features** tailored to the user's idea so the user can check/uncheck them in `progress.html` (plus type custom features):
 - **Core MVP (`category: "Core MVP"`)**: 3–4 foundational features required for a complete product.
 - **High-Impact Enhancements (`category: "High Impact"`)**: 3–4 smart capabilities that dramatically increase product value (e.g., live calculations, templates/presets, multi-floor/category organization, magnetic snapping, history comparison).

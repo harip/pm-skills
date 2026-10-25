@@ -33,6 +33,12 @@ window.PM_DATA = {
       ],
       followUpAnswers: []
     },
+    mockups: [
+      { id: "scr_001", title: "scr_001 — Home Room Catalog", path: "design/mockups/scr_001_v1.html", desc: "Multi-room dashboard with house sq ft totals and room cards." },
+      { id: "scr_002", title: "scr_002 — Live Camera & Auto-LiDAR Room Sweep", path: "design/mockups/scr_002_v1.html", desc: "Guided camera viewfinder with 0%–100% auto-sweep HUD and wall photo pinning." },
+      { id: "scr_003", title: "scr_003 — Dual-Theme 2D Blueprint & Furniture Studio", path: "design/mockups/scr_003_v1.html", desc: "Interactive 2D floorplan with Dark CAD / White Print toggle and furniture planner." },
+      { id: "scr_004", title: "scr_004 — Wall Photo & Opening Detail Inspector", path: "design/mockups/scr_004_v1.html", desc: "Wall detail sheet showing pinned camera photo and detected doors/windows." }
+    ],
     suggestedFeatures: [
       { id: "F1", name: "Auto-Sweep Camera & LiDAR HUD", category: "Core MVP", recommended: true, desc: "Live camera viewfinder with 0%–100% room sweep progress ring and real-time wall targeting." },
       { id: "F2", name: "Wall Photo Pinning & Inspector", category: "Core MVP", recommended: true, desc: "Snap and attach real camera photos to specific walls; tap any wall on the 2D blueprint to view its photo." },

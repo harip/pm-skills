@@ -152,6 +152,8 @@ let currentAutonomyMode = projectState.autonomyMode;
 // Interactive Discovery Form State
 let discoveryFormState = {
   round: (projectState.consultantDiscovery && projectState.consultantDiscovery.round) || 1,
+  selectedMockups: {},
+  mockupNotes: {},
   selectedFeatures: {},
   customFeaturesText: '',
   answers: {},
@@ -166,6 +168,16 @@ let discoveryFormState = {
 function initDiscoveryFormDefaults() {
   const cd = projectState.consultantDiscovery;
   if (!cd) return;
+
+  const mockupsList = cd.mockups || (projectState.pendingReview && projectState.pendingReview.mockups) || [];
+  mockupsList.forEach(m => {
+    if (discoveryFormState.selectedMockups[m.id] === undefined) {
+      discoveryFormState.selectedMockups[m.id] = true;
+    }
+    if (discoveryFormState.mockupNotes[m.id] === undefined) {
+      discoveryFormState.mockupNotes[m.id] = '';
+    }
+  });
 
   (cd.suggestedFeatures || []).forEach(f => {
     if (discoveryFormState.selectedFeatures[f.id] === undefined) {
@@ -216,6 +228,8 @@ function initDiscoveryFormDefaults() {
 
 function applyHydratedDiscovery(data) {
   if (!data) return;
+  if (data.selectedMockups) Object.assign(discoveryFormState.selectedMockups, data.selectedMockups);
+  if (data.mockupNotes) Object.assign(discoveryFormState.mockupNotes, data.mockupNotes);
   if (data.selectedFeatures) Object.assign(discoveryFormState.selectedFeatures, data.selectedFeatures);
   if (typeof data.customFeaturesText === 'string') discoveryFormState.customFeaturesText = data.customFeaturesText;
   if (data.answers) Object.assign(discoveryFormState.answers, data.answers);
@@ -405,6 +419,17 @@ function renderVModelView() {
 }
 
 // Interactive Discovery Questionnaire Handlers
+window.toggleMockupCheck = function(mockupId) {
+  discoveryFormState.selectedMockups[mockupId] = !discoveryFormState.selectedMockups[mockupId];
+  persistLocalDraft();
+  renderDiscoveryView();
+};
+
+window.updateMockupNote = function(mockupId, val) {
+  discoveryFormState.mockupNotes[mockupId] = val;
+  persistLocalDraft();
+};
+
 window.toggleFeatureCheck = function(featureId) {
   discoveryFormState.selectedFeatures[featureId] = !discoveryFormState.selectedFeatures[featureId];
   persistLocalDraft();
@@ -470,11 +495,23 @@ window.saveDiscoveryQuestionnaire = async function(actionMode) {
     .filter(f => discoveryFormState.selectedFeatures[f.id])
     .map(f => ({ id: f.id, name: f.name, category: f.category }));
 
+  const mockupsList = cd.mockups || (projectState.pendingReview && projectState.pendingReview.mockups) || [];
+  const screenMockupSummary = mockupsList.map(m => ({
+    screenId: m.id,
+    title: m.title || m.name,
+    path: m.path,
+    approved: discoveryFormState.selectedMockups[m.id] !== false,
+    uiFeedbackNote: discoveryFormState.mockupNotes[m.id] || ''
+  }));
+
   const payload = {
     projectName: projectState.projectName,
     round: discoveryFormState.round,
     action: actionMode, // 'proceed' | 'refine'
     status: actionMode === 'refine' ? 'NEEDS_FOLLOWUP_CONSULTATION' : 'READY_FOR_CONTRACT',
+    selectedMockups: discoveryFormState.selectedMockups,
+    mockupNotes: discoveryFormState.mockupNotes,
+    screenMockupSummary,
     selectedFeatures: discoveryFormState.selectedFeatures,
     chosenFeaturesList: chosenFeatures,
     customFeaturesText: discoveryFormState.customFeaturesText,
@@ -562,8 +599,10 @@ function renderDiscoveryView() {
 
   const questions = cd.questions || [];
   const features = cd.suggestedFeatures || [];
+  const mockups = cd.mockups || (projectState.pendingReview && projectState.pendingReview.mockups) || [];
   const brief = cd.advisoryBrief || {};
   const selectedFeatureCount = features.filter(f => discoveryFormState.selectedFeatures[f.id]).length;
+  const selectedMockupCount = mockups.filter(m => discoveryFormState.selectedMockups[m.id] !== false).length;
 
   container.innerHTML = `
     <div class="approvals-container">
@@ -640,11 +679,57 @@ function renderDiscoveryView() {
         ` : ''}
       </div>
 
+      <!-- Section 1.5: Interactive Screen Mockups Defined & Displayed in Discovery Questionnaire -->
+      ${mockups.length > 0 ? `
+        <div class="question-card" style="background: #f8fafc; border-color: #cbd5e1;">
+          <div class="question-title-row">
+            <h3 class="question-title">📱 Step 1: Proposed Interactive Screen Mockups (${selectedMockupCount} of ${mockups.length} Screens Approved)</h3>
+            <span class="question-dim-pill">Visual UX &amp; Screen Inventory</span>
+          </div>
+          <p class="question-desc">
+            Interact with the proposed high-fidelity screen mockups below right now. You can test the interactive buttons inside each screen, check/uncheck screens, or enter specific layout/UI changes under any screen:
+          </p>
+          <div class="mockups-scroll-row">
+            ${mockups.map(m => {
+              const isChecked = discoveryFormState.selectedMockups[m.id] !== false;
+              const noteVal = discoveryFormState.mockupNotes[m.id] || '';
+              return `
+                <div class="mockup-frame-card" style="${isChecked ? 'border-color: #2563eb; box-shadow: 0 0 0 1px #2563eb;' : 'opacity: 0.7;'}">
+                  <div class="mockup-card-header">
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                      <input
+                        type="checkbox"
+                        ${isChecked ? 'checked' : ''}
+                        onchange="toggleMockupCheck('${escapeHtml(m.id)}')"
+                        style="width: 16px; height: 16px; accent-color: #2563eb; cursor: pointer;"
+                      />
+                      <span class="mockup-card-title">${escapeHtml(m.title || m.name)}</span>
+                    </label>
+                    <a href="${escapeHtml(m.path)}" target="_blank" style="font-size: 11px; color: #2563eb; text-decoration: none; font-weight: 600;">Open full screen &nearr;</a>
+                  </div>
+                  ${m.desc ? `<div style="font-size: 11px; color: #475569; line-height: 1.4;">${escapeHtml(m.desc)}</div>` : ''}
+                  <div class="mockup-iframe-wrap">
+                    <iframe src="${escapeHtml(m.path)}" class="mockup-iframe" title="${escapeHtml(m.title || m.name)}"></iframe>
+                  </div>
+                  <input
+                    type="text"
+                    class="question-custom-input"
+                    placeholder="✍️ Layout / UI feedback or changes for ${escapeHtml(m.id)} (optional)..."
+                    value="${escapeHtml(noteVal)}"
+                    oninput="updateMockupNote('${escapeHtml(m.id)}', this.value)"
+                  />
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      ` : ''}
+
       <!-- Section 2: AI-Suggested Feature & Capability Catalog -->
       ${features.length > 0 ? `
         <div class="question-card" style="background: #fafafa;">
           <div class="question-title-row">
-            <h3 class="question-title">🚀 Step 1: Select Features to Include (${selectedFeatureCount} of ${features.length} Selected)</h3>
+            <h3 class="question-title">🚀 Step 2: Select Features to Include (${selectedFeatureCount} of ${features.length} Selected)</h3>
             <span class="question-dim-pill">AI Consultant Feature Catalog</span>
           </div>
           <p class="question-desc">Based on your project description and domain best practices, the IT Consultant recommends the following capabilities. Check or uncheck any feature below:</p>
