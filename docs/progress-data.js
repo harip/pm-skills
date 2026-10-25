@@ -3,7 +3,6 @@
 
 window.PM_DATA = {
   projectName: "PM Skills SDLC",
-  autonomyMode: "balanced", // "balanced" | "autopilot" | "supervised"
   activeStageId: "scope",   // "discovery" | "scope" | "architecture" | "schemas" | "frontend" | "services" | "qa" | "uat" | "release"
   completionPercent: 25,
   completedStageIds: ["discovery"],
@@ -77,7 +76,7 @@ window.PM_DATA = {
       ac: [
         "AC-1: Generates docs/06_DESIGN_REGISTER.md and mockups",
         "AC-2: Sets status to [AWAITING MANAGER APPROVAL]",
-        "AC-3: Autonomy pauses at Gate across ALL modes"
+        "AC-3: Autonomy pauses at Gate 1 Discovery and Gate 2 UAT"
       ]
     }
   ],

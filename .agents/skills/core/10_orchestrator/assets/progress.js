@@ -135,7 +135,6 @@ const ALL_ROLES = [...WORKFLOW_STAGES, ...SUPPORT_ROLES];
 const pmData = window.PM_DATA || {};
 let projectState = {
   projectName: pmData.projectName || 'PM Skills SDLC',
-  autonomyMode: pmData.autonomyMode || 'supervised',
   activeStageId: pmData.activeStageId || 'discovery',
   completedStageIds: pmData.completedStageIds || [],
   completionPercent: pmData.completionPercent || 10,
@@ -147,7 +146,6 @@ let projectState = {
 
 let currentView = projectState.activeStageId === 'discovery' && projectState.consultantDiscovery ? 'discovery' : 'vmodel';
 let selectedRoleId = projectState.activeStageId || 'discovery';
-let currentAutonomyMode = projectState.autonomyMode;
 
 // Interactive Discovery Form State
 let discoveryFormState = {
@@ -268,14 +266,6 @@ function switchView(view) {
   else renderApprovalsView();
 }
 
-function switchAutonomyMode() {
-  const modeBadge = document.getElementById('projectModeBadge');
-  if (modeBadge) {
-    modeBadge.textContent = 'Flow: 1. Discovery & Mockups → 2. Autonomous Build & QA → 3. Live UAT';
-  }
-  if (currentView === 'vmodel') renderVModelView();
-}
-
 function selectRole(id) {
   selectedRoleId = id;
   const detailPanel = document.getElementById('roleDetail');
@@ -293,7 +283,7 @@ function renderCard(role) {
   const isActive = projectState.activeStageId === role.id;
   const isCompleted = projectState.completedStageIds.includes(role.id);
   const badge = role.phase || 'R';
-  const hasGate = isGateActive(role.id, currentAutonomyMode);
+  const hasGate = isGateActive(role.id);
 
   return `
     <button type="button" class="role-card ${isActive ? 'active-project-stage' : ''} ${isInspected ? 'inspected' : ''} ${isCompleted ? 'completed-stage' : ''}" data-role-id="${role.id}" onclick="selectRole('${role.id}')">
@@ -983,7 +973,6 @@ function initVisualizer() {
   }
 
   updateDiscoveryBadge();
-  switchAutonomyMode(projectState.autonomyMode);
   switchView(currentView);
 }
 

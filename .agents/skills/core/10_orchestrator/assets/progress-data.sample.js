@@ -3,7 +3,6 @@
 
 window.PM_DATA = {
   projectName: "RoomScan LiDAR Studio (iOS)",
-  autonomyMode: "supervised", // "balanced" | "autopilot" | "supervised"
   activeStageId: "discovery", // "discovery" | "scope" | "architecture" | "schemas" | "frontend" | "services" | "qa" | "uat" | "release"
   completionPercent: 10,
   completedStageIds: [],

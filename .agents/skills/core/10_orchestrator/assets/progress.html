@@ -22,9 +22,6 @@
     
     /* Active Tab merges smoothly into main container */
     .folder-tab.active { background: #ffffff; color: #171717; font-weight: 700; border-color: #e5e5e5; padding-bottom: 11px; }
-    .folder-tab[data-mode="autopilot"].active { color: #166534; }
-    .folder-tab[data-mode="balanced"].active { color: #9a3412; }
-    .folder-tab[data-mode="supervised"].active { color: #991b1b; }
     .folder-tab.active::after { content: ""; position: absolute; bottom: -2px; left: 0; right: 0; height: 3px; background: #ffffff; }
 
     /* Main Folder Container */
@@ -229,7 +226,7 @@
       </div>
 
       <!-- Streamlined Flow Indicator -->
-      <div class="folder-tabs-bar" id="autonomyTabsBar">
+      <div class="folder-tabs-bar" id="flowIndicatorBar">
         <span class="folder-tab active" style="cursor: default; color: #1d4ed8;">⚡ Streamlined Flow (Stops at Discovery &amp; UAT)</span>
       </div>
     </div>

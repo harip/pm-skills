@@ -1,5 +1,5 @@
-// Minimalist V-Model & Phase Review Visualizer for PM Skills SDLC
-// Reads live project state from window.PM_DATA (loaded via docs/progress-data.js)
+// Interactive V-Model, IT Consultant Discovery Questionnaire & Gate Review Studio
+// Reads live project state from window.PM_DATA (docs/progress-data.js) and saved discovery answers (docs/00_DISCOVERY_ANSWERS.json)
 
 const WORKFLOW_STAGES = [
   {
@@ -9,9 +9,10 @@ const WORKFLOW_STAGES = [
     skill: 'it_consultant',
     group: 'specification',
     icon: '💼',
-    title: 'Discovery & Contract',
-    description: 'Capability contract, assumptions, and permission matrix before architecture decisions.',
+    title: 'Discovery, Ideation & Contract',
+    description: 'Deep interactive IT Consultant questionnaire, AI feature recommendations, UX ideation, and capability contract.',
     artifacts: [
+      { name: '00_DISCOVERY_ANSWERS.json', path: '00_DISCOVERY_ANSWERS.json', desc: 'Saved interactive questionnaire answers' },
       { name: '00_PROJECT_CONTRACT.md', path: '00_PROJECT_CONTRACT.md', desc: 'Capability & platform contract' },
       { name: '01_ARCH_BRIEF.md', path: '01_ARCH_BRIEF.md', desc: 'High-level architecture brief' }
     ]
@@ -52,9 +53,9 @@ const WORKFLOW_STAGES = [
     group: 'specification',
     icon: '📄',
     title: 'Schemas & Data Contracts',
-    description: 'Draft-07 JSON schemas, Zod runtime contracts, and mock fixtures in src/assets/schemas/.',
+    description: 'Draft-07 JSON schemas, TypeScript runtime contracts, and mock fixtures in src/assets/schemas/.',
     artifacts: [
-      { name: 'src/assets/schemas/', path: '../src/assets/schemas/', desc: 'Zod schemas & JSON data contracts' }
+      { name: 'src/assets/schemas/', path: '../src/assets/schemas/', desc: 'Schemas & mock fixtures' }
     ]
   },
   {
@@ -64,11 +65,11 @@ const WORKFLOW_STAGES = [
     skill: 'frontend_developer',
     group: 'implementation',
     icon: '💻',
-    title: 'UI/UX & Mockups (Gate 2)',
-    description: 'Visual screen mockups, design register, and Apple HIG 80ms spring components.',
+    title: 'UI Engineering (Parallel)',
+    description: 'Builds production components replicating the approved Phase 1 screen mockups in parallel with Phase 6 Services.',
     artifacts: [
       { name: '06_DESIGN_REGISTER.md', path: '06_DESIGN_REGISTER.md', desc: 'Screen inventory & mockup register' },
-      { name: 'docs/design/mockups/', path: 'design/mockups/', desc: 'Rendered visual mockups' }
+      { name: 'docs/design/mockups/', path: 'design/mockups/', desc: 'Approved Phase 1 visual mockups' }
     ]
   },
   {
@@ -79,7 +80,7 @@ const WORKFLOW_STAGES = [
     group: 'implementation',
     icon: '⚙️',
     title: 'Database Setup & Services',
-    description: 'Local-first DB adapter, hooks, atomic sync outbox, and security guard implementations.',
+    description: 'Local-first DB adapter, hooks, domain services, and security guard implementations.',
     artifacts: [
       { name: '08_SETUP_REGISTER.md', path: '08_SETUP_REGISTER.md', desc: 'Database & infra config register' }
     ]
@@ -91,8 +92,8 @@ const WORKFLOW_STAGES = [
     skill: 'qa_agent',
     group: 'validation',
     icon: '🧪',
-    title: 'QA & Test Manifest',
-    description: 'Automated test suite (≥80% coverage), IDOR/tenant isolation tests, and actual render snapshots.',
+    title: 'QA & Playwright Runtime Gate',
+    description: 'Automated test suite (≥80% coverage), Playwright WebKit headless render verification, and 100% mockup fidelity.',
     artifacts: [
       { name: '07_TEST_MANIFEST.md', path: '../tests/07_TEST_MANIFEST.md', desc: 'Automated test suite & evidence log' }
     ]
@@ -105,14 +106,14 @@ const WORKFLOW_STAGES = [
     group: 'validation',
     icon: '⚡',
     title: 'Target-Platform UAT (Gate 3)',
-    description: 'Stakeholder acceptance testing in web sandbox, native preview, or staging.',
+    description: 'Stakeholder acceptance testing in live browser and native Expo Go preview.',
     artifacts: [
       { name: '10_UAT_CHECKLIST.md', path: '10_UAT_CHECKLIST.md', desc: 'Target UAT checklist & sign-off' }
     ]
   },
   {
     id: 'release',
-    phase: null,
+    phase: 9,
     role: 'Deployment Lead',
     skill: 'deployment',
     group: 'validation',
@@ -120,7 +121,7 @@ const WORKFLOW_STAGES = [
     title: 'Production Release (Gate 4)',
     description: 'Cloud deployment to Vercel/EAS, or verified user-managed handoff.',
     artifacts: [
-      { name: '09_RELEASE_PLAN.md', path: '09_RELEASE_PLAN.md', desc: 'Production release plan & verification' }
+      { name: '09_DEPLOYMENT_MANIFEST.md', path: '09_DEPLOYMENT_MANIFEST.md', desc: 'Production release manifest' }
     ]
   }
 ];
@@ -131,57 +132,138 @@ const SUPPORT_ROLES = [
 
 const ALL_ROLES = [...WORKFLOW_STAGES, ...SUPPORT_ROLES];
 
-let currentView = 'vmodel'; // 'vmodel' | 'approvals'
-let selectedRoleId = 'scope';
-let currentAutonomyMode = 'balanced';
-
-// Ingest live state from window.PM_DATA
 const pmData = window.PM_DATA || {};
 let projectState = {
   projectName: pmData.projectName || 'PM Skills SDLC',
-  autonomyMode: pmData.autonomyMode || 'balanced',
-  activeStageId: pmData.activeStageId || 'scope',
+  activeStageId: pmData.activeStageId || 'discovery',
   completedStageIds: pmData.completedStageIds || [],
-  completionPercent: pmData.completionPercent || 0,
+  completionPercent: pmData.completionPercent || 10,
+  consultantDiscovery: pmData.consultantDiscovery || null,
   pendingReview: pmData.pendingReview || null,
   userStories: pmData.userStories || [],
   qaSummary: pmData.qaSummary || null
 };
 
-selectedRoleId = projectState.activeStageId;
-currentAutonomyMode = projectState.autonomyMode;
+let currentView = projectState.activeStageId === 'discovery' && projectState.consultantDiscovery ? 'discovery' : 'vmodel';
+let selectedRoleId = projectState.activeStageId || 'discovery';
+
+// Interactive Discovery Form State
+let discoveryFormState = {
+  round: (projectState.consultantDiscovery && projectState.consultantDiscovery.round) || 1,
+  selectedMockups: {},
+  mockupNotes: {},
+  selectedFeatures: {},
+  customFeaturesText: '',
+  answers: {},
+  questionNotes: {},
+  additionalDetails: '',
+  consultantQuestions: '',
+  lastSavedAt: null,
+  lastAction: null
+};
+
+// Initialize defaults from consultantDiscovery
+function initDiscoveryFormDefaults() {
+  const cd = projectState.consultantDiscovery;
+  if (!cd) return;
+
+  const mockupsList = cd.mockups || (projectState.pendingReview && projectState.pendingReview.mockups) || [];
+  mockupsList.forEach(m => {
+    if (discoveryFormState.selectedMockups[m.id] === undefined) {
+      discoveryFormState.selectedMockups[m.id] = true;
+    }
+    if (discoveryFormState.mockupNotes[m.id] === undefined) {
+      discoveryFormState.mockupNotes[m.id] = '';
+    }
+  });
+
+  (cd.suggestedFeatures || []).forEach(f => {
+    if (discoveryFormState.selectedFeatures[f.id] === undefined) {
+      discoveryFormState.selectedFeatures[f.id] = f.recommended !== false;
+    }
+  });
+
+  (cd.questions || []).forEach(q => {
+    if (discoveryFormState.answers[q.id] === undefined) {
+      if (q.type === 'multi') {
+        const recOpts = (q.options || []).filter(o => o.recommended).map(o => o.code);
+        discoveryFormState.answers[q.id] = recOpts.length > 0 ? recOpts : [(q.options && q.options[0] && q.options[0].code) || 'A'];
+      } else {
+        const recOpt = (q.options || []).find(o => o.recommended) || (q.options && q.options[0]);
+        discoveryFormState.answers[q.id] = recOpt ? recOpt.code : 'A';
+      }
+    }
+    if (discoveryFormState.questionNotes[q.id] === undefined) {
+      discoveryFormState.questionNotes[q.id] = '';
+    }
+  });
+
+  // Hydrate from window.PM_DISCOVERY_SAVED or localStorage if available
+  const savedGlobal = window.PM_DISCOVERY_SAVED || (cd && cd.savedAnswers) || null;
+  if (savedGlobal && savedGlobal.saved) {
+    applyHydratedDiscovery(savedGlobal);
+  } else {
+    try {
+      const localRaw = localStorage.getItem('PM_DISCOVERY_DRAFT_' + projectState.projectName);
+      if (localRaw) {
+        applyHydratedDiscovery(JSON.parse(localRaw));
+      }
+    } catch (e) {}
+  }
+
+  // Also fetch latest from local file-save helper (works from both file:// and http://)
+  fetch('http://127.0.0.1:8080/api/discovery-answers')
+    .then(r => (r.ok ? r.json() : null))
+    .then(data => {
+      if (data && data.saved) {
+        applyHydratedDiscovery(data);
+        updateDiscoveryBadge();
+        if (currentView === 'discovery') renderDiscoveryView();
+      }
+    })
+    .catch(() => {});
+}
+
+function applyHydratedDiscovery(data) {
+  if (!data) return;
+  if (data.selectedMockups) Object.assign(discoveryFormState.selectedMockups, data.selectedMockups);
+  if (data.mockupNotes) Object.assign(discoveryFormState.mockupNotes, data.mockupNotes);
+  if (data.selectedFeatures) Object.assign(discoveryFormState.selectedFeatures, data.selectedFeatures);
+  if (typeof data.customFeaturesText === 'string') discoveryFormState.customFeaturesText = data.customFeaturesText;
+  if (data.answers) Object.assign(discoveryFormState.answers, data.answers);
+  if (data.questionNotes) Object.assign(discoveryFormState.questionNotes, data.questionNotes);
+  if (typeof data.additionalDetails === 'string') discoveryFormState.additionalDetails = data.additionalDetails;
+  if (typeof data.consultantQuestions === 'string') discoveryFormState.consultantQuestions = data.consultantQuestions;
+  if (data.savedAt) discoveryFormState.lastSavedAt = data.savedAt;
+  if (data.action) discoveryFormState.lastAction = data.action;
+}
+
+function persistLocalDraft() {
+  try {
+    localStorage.setItem('PM_DISCOVERY_DRAFT_' + projectState.projectName, JSON.stringify(discoveryFormState));
+  } catch (e) {}
+}
 
 function escapeHtml(value) {
   return String(value || '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
 }
 
-function isGateActive(stageId, mode) {
-  if (mode === 'supervised') return true;
-  if (mode === 'balanced') return ['scope', 'frontend', 'services', 'uat', 'release'].includes(stageId);
-  return ['frontend', 'services', 'uat', 'release'].includes(stageId);
+function isGateActive(stageId) {
+  // Unified streamlined flow: stops at Phase 1 (Discovery & Mockups), Phase 8 (Live UAT), and Phase 9 (Release)
+  return ['discovery', 'uat', 'release'].includes(stageId);
 }
 
 function switchView(view) {
   currentView = view;
   const vTab = document.getElementById('viewTabVmodel');
+  const dTab = document.getElementById('viewTabDiscovery');
   const aTab = document.getElementById('viewTabApprovals');
   if (vTab) vTab.classList.toggle('active', view === 'vmodel');
+  if (dTab) dTab.classList.toggle('active', view === 'discovery');
   if (aTab) aTab.classList.toggle('active', view === 'approvals');
   if (view === 'vmodel') renderVModelView();
+  else if (view === 'discovery') renderDiscoveryView();
   else renderApprovalsView();
-}
-
-function switchAutonomyMode(mode) {
-  currentAutonomyMode = mode;
-  document.querySelectorAll('.folder-tab[data-mode]').forEach(btn => {
-    btn.classList.toggle('active', btn.getAttribute('data-mode') === mode);
-  });
-  const modeBadge = document.getElementById('projectModeBadge');
-  if (modeBadge) {
-    const label = mode === 'autopilot' ? '🟢 Autopilot' : mode === 'balanced' ? '🟡 Balanced' : '🔴 Supervised';
-    modeBadge.textContent = 'Autonomy Mode: ' + label;
-  }
-  if (currentView === 'vmodel') renderVModelView();
 }
 
 function selectRole(id) {
@@ -201,7 +283,7 @@ function renderCard(role) {
   const isActive = projectState.activeStageId === role.id;
   const isCompleted = projectState.completedStageIds.includes(role.id);
   const badge = role.phase || 'R';
-  const hasGate = isGateActive(role.id, currentAutonomyMode);
+  const hasGate = isGateActive(role.id);
 
   return `
     <button type="button" class="role-card ${isActive ? 'active-project-stage' : ''} ${isInspected ? 'inspected' : ''} ${isCompleted ? 'completed-stage' : ''}" data-role-id="${role.id}" onclick="selectRole('${role.id}')">
@@ -224,9 +306,21 @@ function renderDetailPanelContent(selected) {
   const isActive = projectState.activeStageId === selected.id;
   const isStartedOrDone = isCompleted || isActive;
 
-  let storiesHtml = '';
-  if (selected.id === 'scope' && projectState.userStories.length > 0) {
-    storiesHtml = `
+  let extraSectionHtml = '';
+  if (selected.id === 'discovery') {
+    extraSectionHtml = `
+      <div style="margin-top: 14px; padding: 14px; border-radius: 10px; background: #eff6ff; border: 1px solid #bfdbfe;">
+        <div style="font-size: 12px; font-weight: 700; color: #1e40af; margin-bottom: 6px;">💼 Interactive IT Consultant Questionnaire</div>
+        <p style="margin: 0 0 10px; font-size: 11px; color: #334155; line-height: 1.5;">
+          Review platform feasibility, toggle AI-recommended features, answer the deep discovery questionnaire, add custom notes, or go back and edit your answers at any time.
+        </p>
+        <button type="button" onclick="switchView('discovery')" style="border: none; background: #2563eb; color: #ffffff; font-size: 12px; font-weight: 700; padding: 8px 14px; border-radius: 8px; cursor: pointer;">
+          Open / Edit Discovery Questionnaire &rarr;
+        </button>
+      </div>
+    `;
+  } else if (selected.id === 'scope' && projectState.userStories.length > 0) {
+    extraSectionHtml = `
       <div style="margin-top: 14px;">
         <div class="section-label">User Stories (${projectState.userStories.length})</div>
         <div class="stories-scroll-box">
@@ -269,7 +363,7 @@ function renderDetailPanelContent(selected) {
         </div>
       </div>
     ` : ''}
-    ${storiesHtml}
+    ${extraSectionHtml}
   `;
 }
 
@@ -303,6 +397,456 @@ function renderVModelView() {
       </div>
       <div class="v-right-pane">
         <section id="roleDetail" class="detail-panel">${renderDetailPanelContent(selected)}</section>
+      </div>
+    </div>
+  `;
+}
+
+// Interactive Discovery Questionnaire Handlers
+window.toggleMockupCheck = function(mockupId) {
+  discoveryFormState.selectedMockups[mockupId] = !discoveryFormState.selectedMockups[mockupId];
+  persistLocalDraft();
+  renderDiscoveryView();
+};
+
+window.updateMockupNote = function(mockupId, val) {
+  discoveryFormState.mockupNotes[mockupId] = val;
+  persistLocalDraft();
+};
+
+window.toggleFeatureCheck = function(featureId) {
+  discoveryFormState.selectedFeatures[featureId] = !discoveryFormState.selectedFeatures[featureId];
+  persistLocalDraft();
+  renderDiscoveryView();
+};
+
+window.selectSingleAnswer = function(questionId, optionCode) {
+  discoveryFormState.answers[questionId] = optionCode;
+  persistLocalDraft();
+  renderDiscoveryView();
+};
+
+window.toggleMultiAnswer = function(questionId, optionCode) {
+  const cur = Array.isArray(discoveryFormState.answers[questionId])
+    ? [...discoveryFormState.answers[questionId]]
+    : [];
+  const idx = cur.indexOf(optionCode);
+  if (idx >= 0) cur.splice(idx, 1);
+  else cur.push(optionCode);
+  discoveryFormState.answers[questionId] = cur;
+  persistLocalDraft();
+  renderDiscoveryView();
+};
+
+window.updateQuestionNote = function(questionId, val) {
+  discoveryFormState.questionNotes[questionId] = val;
+  persistLocalDraft();
+};
+
+window.updateCustomFeaturesText = function(val) {
+  discoveryFormState.customFeaturesText = val;
+  persistLocalDraft();
+};
+
+window.updateAdditionalDetails = function(val) {
+  discoveryFormState.additionalDetails = val;
+  persistLocalDraft();
+};
+
+window.updateConsultantQuestions = function(val) {
+  discoveryFormState.consultantQuestions = val;
+  persistLocalDraft();
+};
+
+window.saveDiscoveryQuestionnaire = async function(actionMode) {
+  const cd = projectState.consultantDiscovery || {};
+  const structuredSummary = (cd.questions || []).map(q => {
+    const ans = discoveryFormState.answers[q.id];
+    const selectedOpts = (q.options || []).filter(o =>
+      Array.isArray(ans) ? ans.includes(o.code) : ans === o.code
+    );
+    return {
+      questionId: q.id,
+      dimension: q.dimension || 'General',
+      question: q.title,
+      selectedCodes: ans,
+      selectedLabels: selectedOpts.map(o => o.name),
+      customNote: discoveryFormState.questionNotes[q.id] || ''
+    };
+  });
+
+  const chosenFeatures = (cd.suggestedFeatures || [])
+    .filter(f => discoveryFormState.selectedFeatures[f.id])
+    .map(f => ({ id: f.id, name: f.name, category: f.category }));
+
+  const mockupsList = cd.mockups || (projectState.pendingReview && projectState.pendingReview.mockups) || [];
+  const screenMockupSummary = mockupsList.map(m => ({
+    screenId: m.id,
+    title: m.title || m.name,
+    path: m.path,
+    approved: discoveryFormState.selectedMockups[m.id] !== false,
+    uiFeedbackNote: discoveryFormState.mockupNotes[m.id] || ''
+  }));
+
+  const payload = {
+    projectName: projectState.projectName,
+    round: discoveryFormState.round,
+    action: actionMode, // 'proceed' | 'refine'
+    status: actionMode === 'refine' ? 'NEEDS_FOLLOWUP_CONSULTATION' : 'READY_FOR_CONTRACT',
+    selectedMockups: discoveryFormState.selectedMockups,
+    mockupNotes: discoveryFormState.mockupNotes,
+    screenMockupSummary,
+    selectedFeatures: discoveryFormState.selectedFeatures,
+    chosenFeaturesList: chosenFeatures,
+    customFeaturesText: discoveryFormState.customFeaturesText,
+    answers: discoveryFormState.answers,
+    questionNotes: discoveryFormState.questionNotes,
+    structuredSummary,
+    additionalDetails: discoveryFormState.additionalDetails,
+    consultantQuestions: discoveryFormState.consultantQuestions
+  };
+
+  let savedToServer = false;
+  try {
+    const res = await fetch('http://127.0.0.1:8080/api/save-discovery', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (res.ok) {
+      const json = await res.json();
+      discoveryFormState.lastSavedAt = json.savedAt || new Date().toISOString();
+      discoveryFormState.lastAction = actionMode;
+      window.PM_DISCOVERY_SAVED = { saved: true, savedAt: discoveryFormState.lastSavedAt, ...payload };
+      savedToServer = true;
+    }
+  } catch (err) {
+    savedToServer = false;
+  }
+
+  if (!savedToServer) {
+    discoveryFormState.lastSavedAt = new Date().toISOString();
+    discoveryFormState.lastAction = actionMode;
+    // Fallback download of 00_DISCOVERY_ANSWERS.json if opened via file://
+    const blob = new Blob([JSON.stringify({ saved: true, savedAt: discoveryFormState.lastSavedAt, ...payload }, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = '00_DISCOVERY_ANSWERS.json';
+    a.click();
+  }
+
+  persistLocalDraft();
+  updateDiscoveryBadge();
+  renderDiscoveryView();
+
+  const replyWord = actionMode === 'refine' ? 'refine' : 'submitted';
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(replyWord).catch(() => {});
+  }
+  const toast = document.getElementById('discoverySaveToast');
+  if (toast) {
+    toast.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+};
+
+function updateDiscoveryBadge() {
+  const badge = document.getElementById('discoveryStatusBadge');
+  if (!badge) return;
+  if (discoveryFormState.lastSavedAt) {
+    badge.textContent = discoveryFormState.lastAction === 'refine' ? '💬 Follow-Up Saved' : '✓ Saved';
+    badge.style.background = discoveryFormState.lastAction === 'refine' ? '#2563eb' : '#16a34a';
+  } else {
+    const qCount = (projectState.consultantDiscovery && projectState.consultantDiscovery.questions && projectState.consultantDiscovery.questions.length) || 0;
+    badge.textContent = qCount > 0 ? qCount + ' Questions' : 'Interactive';
+    badge.style.background = '#2563eb';
+  }
+}
+
+function renderDiscoveryView() {
+  const container = document.getElementById('vModelContainer');
+  if (!container) return;
+
+  const cd = projectState.consultantDiscovery;
+  if (!cd) {
+    container.innerHTML = `
+      <div class="approvals-container">
+        <div class="approvals-header">
+          <div>
+            <h2 class="approvals-title">💼 IT Consultant Discovery Questionnaire</h2>
+            <p class="approvals-subtitle">No discovery questionnaire data found in <code>window.PM_DATA.consultantDiscovery</code>.</p>
+          </div>
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  const questions = cd.questions || [];
+  const features = cd.suggestedFeatures || [];
+  const mockups = cd.mockups || (projectState.pendingReview && projectState.pendingReview.mockups) || [];
+  const brief = cd.advisoryBrief || {};
+  const selectedFeatureCount = features.filter(f => discoveryFormState.selectedFeatures[f.id]).length;
+  const selectedMockupCount = mockups.filter(m => discoveryFormState.selectedMockups[m.id] !== false).length;
+
+  container.innerHTML = `
+    <div class="approvals-container">
+      <!-- Top Header -->
+      <div class="approvals-header">
+        <div>
+          <h2 class="approvals-title">💼 ${escapeHtml(cd.title || 'Principal IT Consultant — Deep Discovery & Product Ideation Questionnaire')}</h2>
+          <p class="approvals-subtitle">${escapeHtml(cd.subtitle || 'Review what is possible on your target platform, select the features you want, answer the detailed discovery questions below, or ask the IT Consultant follow-up questions before locking the contract.')}</p>
+        </div>
+        <div class="approval-gate-banner ${discoveryFormState.lastSavedAt ? 'approved' : ''}">
+          <span>${discoveryFormState.lastSavedAt ? '✓ Saved to docs/00_DISCOVERY_ANSWERS.json' : 'Round ' + (cd.round || 1) + ' • ' + questions.length + ' Deep Questions'}</span>
+        </div>
+      </div>
+
+      <!-- Save Toast Feedback Banner -->
+      <div id="discoverySaveToast" class="save-toast-banner ${discoveryFormState.lastSavedAt ? 'visible' : ''} ${discoveryFormState.lastAction === 'refine' ? 'refine' : 'success'}">
+        <div>
+          <div style="font-size: 13px; font-weight: 800;">
+            ${discoveryFormState.lastAction === 'refine'
+              ? '💬 Saved Follow-Up Request & Answers to docs/00_DISCOVERY_ANSWERS.json!'
+              : '✅ Saved All Questionnaire Answers to docs/00_DISCOVERY_ANSWERS.json!'}
+          </div>
+          <div style="font-size: 11px; margin-top: 3px; font-weight: 500;">
+            ${discoveryFormState.lastAction === 'refine'
+              ? 'Now reply "refine" in chat — the IT Consultant will read your saved answers & questions, respond in detail, and update this questionnaire.'
+              : 'Now reply "submitted" (or "approved") in chat — the workflow will read docs/00_DISCOVERY_ANSWERS.json, autonomously build & test the entire app (Phases 2–7), and stop at Phase 8 Live UAT!'}
+          </div>
+        </div>
+        <button type="button" class="copy-pill-btn" onclick="navigator.clipboard.writeText('${discoveryFormState.lastAction === 'refine' ? 'refine' : 'submitted'}')">
+          Copy "${discoveryFormState.lastAction === 'refine' ? 'refine' : 'submitted'}"
+        </button>
+      </div>
+
+      <!-- Consultant Follow-Up Answers (if Round 2+) -->
+      ${brief.followUpAnswers && brief.followUpAnswers.length > 0 ? `
+        <div class="consultant-followup-box">
+          <h3 class="consultant-followup-title">💡 IT Consultant Responses to Your Previous Questions &amp; Refinements</h3>
+          <div style="display: grid; gap: 10px;">
+            ${brief.followUpAnswers.map(fa => `
+              <div style="background: #ffffff; border: 1px solid #dbeafe; border-radius: 8px; padding: 12px;">
+                <div style="font-size: 12px; font-weight: 700; color: #1e3a8a; margin-bottom: 4px;">Q: ${escapeHtml(fa.question)}</div>
+                <div style="font-size: 12px; color: #1e293b; line-height: 1.5;">${escapeHtml(fa.answer)}</div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      ` : ''}
+
+      <!-- Section 1: Consultant Advisory Brief (What is Possible + Recommended UX) -->
+      <div class="consultant-brief-grid">
+        ${brief.platformCapabilities && brief.platformCapabilities.length > 0 ? `
+          <div class="consultant-brief-card">
+            <h3>🔬 What Is Technically Possible (${escapeHtml(cd.platform || 'Platform')} Feasibility)</h3>
+            <ul>
+              ${brief.platformCapabilities.map(item => `<li>${escapeHtml(item)}</li>`).join('')}
+            </ul>
+          </div>
+        ` : ''}
+        ${brief.recommendedUxVision && brief.recommendedUxVision.length > 0 ? `
+          <div class="consultant-brief-card">
+            <h3>✨ Recommended Best-in-Class User Experience</h3>
+            <ul>
+              ${brief.recommendedUxVision.map(item => `<li>${escapeHtml(item)}</li>`).join('')}
+            </ul>
+          </div>
+        ` : ''}
+        ${brief.architecturalGuardrails && brief.architecturalGuardrails.length > 0 ? `
+          <div class="consultant-brief-card">
+            <h3>🛡️ Key Technical &amp; UX Guardrails</h3>
+            <ul>
+              ${brief.architecturalGuardrails.map(item => `<li>${escapeHtml(item)}</li>`).join('')}
+            </ul>
+          </div>
+        ` : ''}
+      </div>
+
+      <!-- Section 1.5: Interactive Screen Mockups Defined & Displayed in Discovery Questionnaire -->
+      ${mockups.length > 0 ? `
+        <div class="question-card" style="background: #f8fafc; border-color: #cbd5e1;">
+          <div class="question-title-row">
+            <h3 class="question-title">📱 Step 1: Proposed Interactive Screen Mockups (${selectedMockupCount} of ${mockups.length} Screens Approved)</h3>
+            <span class="question-dim-pill">Visual UX &amp; Screen Inventory</span>
+          </div>
+          <p class="question-desc">
+            Interact with the proposed high-fidelity screen mockups below right now. You can test the interactive buttons inside each screen, check/uncheck screens, or enter specific layout/UI changes under any screen:
+          </p>
+          <div class="mockups-scroll-row">
+            ${mockups.map(m => {
+              const isChecked = discoveryFormState.selectedMockups[m.id] !== false;
+              const noteVal = discoveryFormState.mockupNotes[m.id] || '';
+              return `
+                <div class="mockup-frame-card" style="${isChecked ? 'border-color: #2563eb; box-shadow: 0 0 0 1px #2563eb;' : 'opacity: 0.7;'}">
+                  <div class="mockup-card-header">
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                      <input
+                        type="checkbox"
+                        ${isChecked ? 'checked' : ''}
+                        onchange="toggleMockupCheck('${escapeHtml(m.id)}')"
+                        style="width: 16px; height: 16px; accent-color: #2563eb; cursor: pointer;"
+                      />
+                      <span class="mockup-card-title">${escapeHtml(m.title || m.name)}</span>
+                    </label>
+                    <a href="${escapeHtml(m.path)}" target="_blank" style="font-size: 11px; color: #2563eb; text-decoration: none; font-weight: 600;">Open full screen &nearr;</a>
+                  </div>
+                  ${m.desc ? `<div style="font-size: 11px; color: #475569; line-height: 1.4;">${escapeHtml(m.desc)}</div>` : ''}
+                  <div class="mockup-iframe-wrap">
+                    <iframe src="${escapeHtml(m.path)}" class="mockup-iframe" title="${escapeHtml(m.title || m.name)}"></iframe>
+                  </div>
+                  <input
+                    type="text"
+                    class="question-custom-input"
+                    placeholder="✍️ Layout / UI feedback or changes for ${escapeHtml(m.id)} (optional)..."
+                    value="${escapeHtml(noteVal)}"
+                    oninput="updateMockupNote('${escapeHtml(m.id)}', this.value)"
+                  />
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      ` : ''}
+
+      <!-- Section 2: AI-Suggested Feature & Capability Catalog -->
+      ${features.length > 0 ? `
+        <div class="question-card" style="background: #fafafa;">
+          <div class="question-title-row">
+            <h3 class="question-title">🚀 Step 2: Select Features to Include (${selectedFeatureCount} of ${features.length} Selected)</h3>
+            <span class="question-dim-pill">AI Consultant Feature Catalog</span>
+          </div>
+          <p class="question-desc">Based on your project description and domain best practices, the IT Consultant recommends the following capabilities. Check or uncheck any feature below:</p>
+          <div class="features-catalog-grid">
+            ${features.map(f => {
+              const isChecked = Boolean(discoveryFormState.selectedFeatures[f.id]);
+              return `
+                <label class="feature-check-card ${isChecked ? 'checked' : ''}">
+                  <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="toggleFeatureCheck('${escapeHtml(f.id)}')" />
+                  <div class="option-text-group">
+                    <div class="option-header-row">
+                      <span class="option-name">${escapeHtml(f.name)}</span>
+                      <span class="feature-cat-pill">${escapeHtml(f.category || 'Feature')}</span>
+                    </div>
+                    <span class="option-explanation">${escapeHtml(f.desc)}</span>
+                  </div>
+                </label>
+              `;
+            }).join('')}
+          </div>
+          <div style="margin-top: 6px;">
+            <input
+              type="text"
+              class="question-custom-input"
+              placeholder="➕ Want additional features not listed above? Type them here (e.g., 3D dollhouse preview, PDF contractor report, voice notes on walls)..."
+              value="${escapeHtml(discoveryFormState.customFeaturesText)}"
+              oninput="updateCustomFeaturesText(this.value)"
+            />
+          </div>
+        </div>
+      ` : ''}
+
+      <!-- Section 3: Thorough Multi-Dimensional Discovery Questions (8-12 Questions) -->
+      <div class="questions-grid">
+        ${questions.map((q, idx) => {
+          const isMulti = q.type === 'multi';
+          const currentAns = discoveryFormState.answers[q.id];
+          const noteVal = discoveryFormState.questionNotes[q.id] || '';
+          return `
+            <div class="question-card" id="qcard_${escapeHtml(q.id)}">
+              <div class="question-title-row">
+                <h4 class="question-title">Q${idx + 1}. ${escapeHtml(q.title)}</h4>
+                <span class="question-dim-pill">${escapeHtml(q.dimension || (isMulti ? 'Multi-Select' : 'Single Choice'))}</span>
+              </div>
+              <p class="question-desc">${escapeHtml(q.desc)}</p>
+              <div class="options-group">
+                ${(q.options || []).map(opt => {
+                  const isSelected = isMulti
+                    ? Array.isArray(currentAns) && currentAns.includes(opt.code)
+                    : currentAns === opt.code;
+                  const handler = isMulti
+                    ? `toggleMultiAnswer('${escapeHtml(q.id)}', '${escapeHtml(opt.code)}')`
+                    : `selectSingleAnswer('${escapeHtml(q.id)}', '${escapeHtml(opt.code)}')`;
+                  return `
+                    <label class="option-label ${isSelected ? 'selected' : ''}">
+                      <input
+                        type="${isMulti ? 'checkbox' : 'radio'}"
+                        name="q_${escapeHtml(q.id)}"
+                        ${isSelected ? 'checked' : ''}
+                        onchange="${handler}"
+                      />
+                      <div class="option-text-group">
+                        <div class="option-header-row">
+                          <span class="option-name">[${escapeHtml(opt.code)}] ${escapeHtml(opt.name)}</span>
+                          ${opt.recommended ? '<span class="recommended-badge">★ Recommended</span>' : ''}
+                        </div>
+                        <span class="option-explanation">${escapeHtml(opt.desc)}</span>
+                      </div>
+                    </label>
+                  `;
+                }).join('')}
+              </div>
+              <div>
+                <input
+                  type="text"
+                  class="question-custom-input"
+                  placeholder="✍️ Add specific details, custom behavior, or nuances for Q${idx + 1} (optional)..."
+                  value="${escapeHtml(noteVal)}"
+                  oninput="updateQuestionNote('${escapeHtml(q.id)}', this.value)"
+                />
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+
+      <!-- Section 4: Open-Ended Elaboration & Questions for the IT Consultant -->
+      <div class="question-card" style="background: #f8fafc; border-color: #cbd5e1;">
+        <div class="question-title-row">
+          <h4 class="question-title">📝 Additional Project Requirements, Edge Cases &amp; Questions for the IT Consultant</h4>
+          <span class="question-dim-pill">Open-Ended Consultation</span>
+        </div>
+        <p class="question-desc">
+          Want to describe specific workflows in your own words, add extra requirements, or ask the IT Consultant what else is possible before locking the contract? Enter them below:
+        </p>
+        <div style="display: grid; gap: 12px;">
+          <div>
+            <div style="font-size: 12px; font-weight: 700; color: #1e293b; margin-bottom: 4px;">1. Additional Requirements, Custom Workflows, or Special Rules (Optional):</div>
+            <textarea
+              class="consultant-textarea"
+              placeholder="Describe any additional details, user flows, edge cases, or design preferences you want included in the project..."
+              oninput="updateAdditionalDetails(this.value)"
+            >${escapeHtml(discoveryFormState.additionalDetails)}</textarea>
+          </div>
+          <div>
+            <div style="font-size: 12px; font-weight: 700; color: #1e293b; margin-bottom: 4px;">2. Questions for the IT Consultant (If you want the Consultant to advise &amp; refine before proceeding):</div>
+            <textarea
+              class="consultant-textarea"
+              placeholder="Ask the IT Consultant anything (e.g., 'Can we also scan ceiling height?', 'How accurate is LiDAR vs camera?', 'What export formats work best for contractors?')..."
+              oninput="updateConsultantQuestions(this.value)"
+            >${escapeHtml(discoveryFormState.consultantQuestions)}</textarea>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sticky Save & Submit Bar -->
+      <div class="consultant-submit-bar">
+        <div>
+          <div style="font-size: 13px; font-weight: 700; color: #0f172a;">
+            Ready to save your Discovery Questionnaire?
+          </div>
+          <div style="font-size: 11px; color: #475569; margin-top: 2px;">
+            Saves directly to <code>docs/00_DISCOVERY_ANSWERS.json</code> so the AI workflow can read all your answers and you can come back to edit anytime.
+          </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+          <button type="button" class="btn-secondary-refine" onclick="saveDiscoveryQuestionnaire('refine')" id="btnSaveAndRefine">
+            💬 Save &amp; Ask Consultant Follow-Up / Refine
+          </button>
+          <button type="button" class="btn-primary-save" onclick="saveDiscoveryQuestionnaire('proceed')" id="btnSaveAndProceed">
+            💾 Save Answers &amp; Proceed to Contract &rarr;
+          </button>
+        </div>
       </div>
     </div>
   `;
@@ -343,11 +887,11 @@ function renderApprovalsView() {
             ${rev.mockups.map(m => `
               <div class="mockup-frame-card">
                 <div class="mockup-card-header">
-                  <span class="mockup-card-title">${escapeHtml(m.name)}</span>
+                  <span class="mockup-card-title">${escapeHtml(m.title || m.name)}</span>
                   <a href="${escapeHtml(m.path)}" target="_blank" style="font-size: 11px; color: #2563eb; text-decoration: none; font-weight: 500;">Open full screen &nearr;</a>
                 </div>
                 <div class="mockup-iframe-wrap">
-                  <iframe src="${escapeHtml(m.path)}" class="mockup-iframe" title="${escapeHtml(m.name)}"></iframe>
+                  <iframe src="${escapeHtml(m.path)}" class="mockup-iframe" title="${escapeHtml(m.title || m.name)}"></iframe>
                 </div>
               </div>
             `).join('')}
@@ -356,7 +900,7 @@ function renderApprovalsView() {
       ` : ''}
 
       <div class="questions-grid">
-        ${(rev.decisions || []).map((d, idx) => `
+        ${(rev.decisions || []).map(d => `
           <div class="question-card">
             <div class="question-title-row">
               <h4 class="question-title">${escapeHtml(d.title)}</h4>
@@ -385,32 +929,13 @@ function renderApprovalsView() {
             </div>
           </div>
         `).join('')}
-
-        ${rev.perks && rev.perks.length > 0 ? `
-          <div class="perks-card">
-            <div class="perks-header">
-              <span>Optional Enhancements</span>
-            </div>
-            <p class="perks-sub">You can optionally include any of these (e.g. reply <code>add P1</code> in chat):</p>
-            <div class="perks-grid">
-              ${rev.perks.map(p => `
-                <div class="perk-label">
-                  <div>
-                    <div class="perk-title">[${escapeHtml(p.id)}] ${escapeHtml(p.name)}</div>
-                    <div class="perk-desc">${escapeHtml(p.desc)}</div>
-                  </div>
-                </div>
-              `).join('')}
-            </div>
-          </div>
-        ` : ''}
       </div>
 
       <!-- Action Guidance Callout -->
       <div class="approval-done-banner">
         <div>
-          <span style="font-weight: 500; color: #111827;">To proceed, reply in chat with: <code>approved</code></span>
-          <div style="font-size: 11px; color: #6b7280; margin-top: 2px;">To customize, reply e.g. <code>D1: B</code> or <code>add P1</code>.</div>
+          <span style="font-weight: 600; color: #111827;">To proceed, reply in chat with: <code>approved</code></span>
+          <div style="font-size: 11px; color: #6b7280; margin-top: 2px;">Need to review or edit your Phase 1 Discovery Questionnaire answers? Click the <strong>💼 IT Consultant Questionnaire</strong> tab above anytime!</div>
         </div>
         <button type="button" class="copy-pill-btn" onclick="copyApprovedText()">Copy "approved"</button>
       </div>
@@ -427,6 +952,8 @@ function copyApprovedText() {
 }
 
 function initVisualizer() {
+  initDiscoveryFormDefaults();
+
   const nameEl = document.getElementById('projectName');
   if (nameEl) nameEl.textContent = projectState.projectName;
   const pctEl = document.getElementById('progressPercent');
@@ -445,8 +972,8 @@ function initVisualizer() {
     }
   }
 
-  switchAutonomyMode(projectState.autonomyMode);
-  renderVModelView();
+  updateDiscoveryBadge();
+  switchView(currentView);
 }
 
 document.addEventListener('DOMContentLoaded', initVisualizer);
