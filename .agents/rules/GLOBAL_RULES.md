@@ -106,3 +106,25 @@ Regardless of the target platform or application domain, the engineering swarm m
    - Data export engines (e.g. STL for 3D printing, CAD/DXF, CSV, PDF) must generate mathematically sound, production-grade files directly from the true captured geometry. For 3D meshes, this requires watertight manifolds (e.g. 12-facet closed prisms per wall with normalized surface vectors) ready for CAD and 3D printing slicers.
 4. **Platform Native Engine Bridges**:
    - When the host operating system provides specialized visualization frameworks (such as Apple RealityKit / AR QuickLook, Metal, or Android Scene Viewer), the frontend must provide direct, one-tap bridges allowing users to inspect the true full-fidelity model in the platform's native engine.
+
+## 9. Foundational Engineering Principles & Anti-Pattern Prevention (Universal Playbook)
+Derived from production mobile & hardware development, these core tenets apply unconditionally to all projects:
+1. **The Single Canonical Topology Pipeline (Closed Manifolds vs. Disconnected Slabs)**:
+   - Raw domain data must be converted into a single unified topological structure (e.g. a closed boundary polygon $P = [V_0, V_1, \dots, V_{N-1}]$, cyclic graph, or double-entry ledger).
+   - The 3D view (watertight solid floor, walls with thickness, caps, depth sorting), the 2D view (connected walls, openings, dimensions), and the export file (.STL, CAD, CSV) MUST all derive from this **exact same mathematical source of truth**.
+   - Strictly forbidden: maintaining diverging, independent approximations between 3D, 2D, and export logic.
+2. **Mandatory Multi-Touch Gestural Fluency (Pinch-to-Zoom & Orbit Table Stakes)**:
+   - Every custom visual viewport (2D blueprint, 3D model, map, or analytical chart) MUST implement multi-touch handling:
+     - **2-Finger Pinch-to-Zoom**: Calculating Euclidean touch distance and scaling smoothly between $0.4\times$ and $4.0\times$.
+     - **1-Finger Drag**: Smooth 360° orbit (3D) or translation pan (2D).
+     - **Accessible Zoom Stepper**: A discreet floating `[ − ] 100% [ + ]` control with tap-to-reset.
+   - Single-finger-only touch handlers on custom viewports are considered incomplete defects.
+3. **The "Single Hero Viewport" Minimalist Rule (Zero Feature Bloat)**:
+   - Resist the temptation to clutter specialized viewports with speculative toolbars, secondary stepper controls, or mockup component trays (e.g. furniture chips).
+   - The primary data artifact must be the **HERO** (`flex: 1` full-bleed viewport).
+   - Chrome must recede: exactly ONE clean floating frosted-glass HUD capsule at the top, exactly ONE dominant primary CTA at the bottom, and secondary actions tucked into an overflow menu (`•••`).
+4. **Hierarchical & Elevation Stratification (Anti-Flattening Principle)**:
+   - Never collapse multi-level physical or logical entities (e.g. Basement vs. Ground Floor vs. Upper Story, or parent/child ledger tiers) into an undifferentiated single plane.
+   - Partition 2D blueprints per level, and vertically stack 3D composite structures along the vertical axis.
+5. **Direct In-App Interactive Fidelity Over External Modals**:
+   - Prioritize delivering direct, responsive, in-app interactive 3D and 2D fidelity rather than kicking the user out to external system viewers unless explicitly requested.
