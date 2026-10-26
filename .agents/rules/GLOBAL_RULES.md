@@ -93,3 +93,16 @@ When a project scope or PRD requires physical device hardware or sensors (e.g. L
    - On physical hardware (`Reality: physical`), the app **MUST engage the real hardware sensor** and capture genuine real-world measurements.
 4. **Automated Dynamic Variance Verification (QA & UAT Gate)**:
    - QA and UAT agents must verify that successive hardware captures produce **unique, dynamic, real-world data**. If multiple consecutive scans produce identical dimensions, the app is flagged as an invalid mock and rejected.
+
+## 8. Precision Engineering, Domain Depth & Zero-Superficiality Standard
+Regardless of the target platform or application domain, the engineering swarm must design, architect, and implement at **deep production precision** rather than superficial cosmetic shells:
+1. **True-to-Data Visual Projections & Zero Placeholder Geometries**:
+   - Screen views (3D, 2D, charts, or maps) must project and render the **actual measured domain entities** (e.g. individual measured wall segments $(x_1, z_1) \to (x_2, z_2)$, true thicknesses, door cuts, window markings, and detected objects), **NEVER** generic rectangular cuboids or static placeholder shapes.
+2. **Multi-Story, Altitude & Hierarchical Segregation**:
+   - Systems must be altitude- and elevation-aware. Real-world vertical levels (e.g. Basement vs. Ground Floor vs. Second Floor, or nested multi-tenant tiers) must **NEVER** be flattened or combined into an overlapping single plane.
+   - 2D views must provide level-specific filtering/tabs so each floor has its own clean, un-cluttered blueprint.
+   - 3D views must stack levels along the vertical coordinate axis ($Y$ / $Z$) by their detected elevation, producing an authentic multi-story dollhouse / architectural cutaway.
+3. **Watertight Downstream Export Integrity**:
+   - Data export engines (e.g. STL for 3D printing, CAD/DXF, CSV, PDF) must generate mathematically sound, production-grade files directly from the true captured geometry. For 3D meshes, this requires watertight manifolds (e.g. 12-facet closed prisms per wall with normalized surface vectors) ready for CAD and 3D printing slicers.
+4. **Platform Native Engine Bridges**:
+   - When the host operating system provides specialized visualization frameworks (such as Apple RealityKit / AR QuickLook, Metal, or Android Scene Viewer), the frontend must provide direct, one-tap bridges allowing users to inspect the true full-fidelity model in the platform's native engine.

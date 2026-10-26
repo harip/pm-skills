@@ -117,7 +117,12 @@ On iOS 27 / Xcode 27+, Apple strictly requires UIKit apps to adopt the `UIScene`
    - For applications involving hardware sensors (LiDAR, Camera, AR, BLE), the agent MUST verify that the app uses real native frameworks (`RoomPlan.framework`, `ARKit.framework`, `AVFoundation`, etc.) rather than a JavaScript timer simulation.
    - Verify `NSCameraUsageDescription` and necessary sensor keys are declared in `Info.plist`.
    - Verify that scanning different physical targets produces **unique, dynamic, real-world measurements**. If multiple scans yield identical hardcoded dimensions, the UAT Coordinator must reject the build as an unverified mock defect.
-5. **Only Once Process Is Live, Screen OCR Is Clean, AND Hardware Sensor Is Real**: Advance to Step 7 and present the verified running app to the stakeholder for final acceptance sign-off.
+5. **Multi-Story & Geometric Precision Physical Acceptance Gate**:
+   - For applications involving physical mapping, architecture, or spatial structures:
+     - Verify that scanning at different elevations (e.g. basement vs. ground floor) classifies separate levels and does not combine them into a single flat floor plan.
+     - Verify that the 3D solid mesh view and 2D floor plan render the actual captured wall lines $(x_1, z_1) \to (x_2, z_2)$, wall thicknesses, and door/window openings, rather than a generic box.
+     - Verify that exported files (.STL / .USDZ) reflect true geometry and can be opened in native viewers (Apple AR QuickLook / CAD tools).
+6. **Only Once Process Is Live, Screen OCR Is Clean, Hardware Sensor Is Real, AND Geometric Precision Is Confirmed**: Advance to Step 7 and present the verified running app to the stakeholder for final acceptance sign-off.
 
 ### Step 7: Stakeholder Guidance
 - Provide clear instructions for first-time profile trust:

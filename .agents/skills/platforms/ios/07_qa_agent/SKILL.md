@@ -37,3 +37,8 @@ description: Phase 7 lead for iOS. Writes and runs automated tests, enforces 100
      - Verify `await page.innerText('body')` is non-empty, contains zero RedBox/ErrorOverlay stack traces, and renders the expected static text for every screen in the inventory.
 4. **Sensor Dynamic Variance & Non-Mocking Assertion**:
    - For applications requiring hardware sensors (LiDAR, Camera, AR, BLE), automated tests must verify that capture operations generate dynamic, non-identical data. If multiple captures or scans return identical hardcoded dimensions, coordinates, or point counts, QA must fail the build as a fake mock violation.
+5. **Spatial Geometry & Multi-Story Assertion Suite**:
+   - For applications with spatial measurements, physical mapping, or multi-level environments:
+     - **Real Geometry Assertions**: Verify visual components render individual measured wall segments $(x_1, z_1) \to (x_2, z_2)$ and openings, rather than a generic bounding box.
+     - **Multi-Story Elevation Assertions**: Verify that entities at distinct altitudes (e.g. Basement at $Y < -1.2\text{m}$ vs Ground Floor at $Y \approx 0$) are partitioned into separate level groups, rendered on dedicated 2D floor plans, and vertically stacked in 3D views without overlapping.
+     - **Watertight Export Assertions**: Verify that exported STL strings contain valid `facet normal` vectors, complete `outer loop` vertex sets, and closed surface topology.

@@ -46,10 +46,19 @@ Never ask fewer than **8 detailed questions**. Design **8 to 12 structured quest
 3. **Automation vs. Manual Precision Control** (What happens automatically via AI/heuristics vs. what the user can fine-tune manually).
 4. **Screen Architecture & Multi-View Navigation** (Which dedicated screens, modals, drawers, and summary dashboards should exist).
 5. **Visual Design System, Theme & Aesthetics** (For iOS: Apple HIG Light Mode palette `#f5f5f7`/`#ffffff`, SF Pro typography, density; for Web/Android: respective system guidelines). Dark mode is disabled for iOS.
-6. **Domain-Specific Accuracy, Measurements & Edge Cases** (Units, snapping tolerances, validation rules, error recovery, non-standard shapes/inputs).
+6. **Physical / Real-World Precision & Multi-Story Architecture** (True coordinates, units, measurement tolerances, vertical altitude/elevation awareness, separate floor levels such as Basement vs. Ground Floor vs. Upper Levels, wall thickness, door/window openings, and non-standard layouts).
 7. **Data Persistence, Offline Capabilities & History** (Local SQLite/IndexedDB vs. cloud sync, soft-delete/trash recovery, versioning).
 8. **Authentication, Privacy & Multi-User Access** (Zero-login local utility vs. authenticated accounts, role permissions, on-device photo/data privacy).
-9. **Export, Reporting, Annotations & Downstream Use** (How results are inspected, annotated, shared, or exported).
+9. **Downstream Interoperability & Watertight Export Fidelity** (Exact file formats such as watertight STL for 3D printing, CAD/DXF, PDF architectural blueprints, CSV data, ensuring clean downstream compatibility).
+
+#### E. Real-World Physical Precision & Downstream Operational Modeling (Mandatory Intake Rule)
+As Principal Consultant, you must proactively prevent superficial software design by interrogating the physical depth of the user's idea:
+1. **Physical & Environmental Domain Modeling**:
+   - Never treat physical spaces, equipment, or assets as flat 2D cards. Inquire about coordinate axes ($X, Y, Z$), elevation/altitude differences (e.g. multi-story buildings, basements), real-world scale, and structural boundaries.
+   - At least 2 of your 8–12 questions MUST explore physical dimensionality, multi-level/multi-floor hierarchy, and precision tolerances.
+2. **Downstream Interoperability & Export Integrity**:
+   - Uncover what external tools the user will open their exported data in (e.g. 3D printer slicers like Bambu Studio / Cura, AutoCAD, Revit, Excel).
+   - Ensure the architecture specifies watertight manifolds, accurate vertex generation, and real dimensional fidelity rather than cosmetic mockups.
 
 > **Note**: Every question card in `progress.html` automatically renders an inline text box (`"✍️ Add specific details, custom behavior, or nuances for Q#..."`), and the bottom of the page provides two large textareas for **Additional Project Requirements** and **Questions for the IT Consultant**, plus two save buttons:
 > - **`💬 Save & Ask Consultant Follow-Up / Refine`** (`action: "refine"`)

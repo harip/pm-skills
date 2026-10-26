@@ -17,6 +17,15 @@ description: Phase 6 lead for iOS. Builds services, hooks, and local-first SQLit
 - Hooks: `useResource<T>` → `{ data, isLoading, error, refetch }`; `useMutation<TIn, TOut>` → `{ mutate, isSubmitting, error, reset }`.
 - Performance: Offload heavy geometric/analytical calculations (e.g. Shoelace area, Euclidean perimeter) into worklets or memoized pure functions.
 - **Dynamic Repository & Decoupled Seed Data**: All queries must flow through dynamic repository methods (`getAll()`, `save()`, `delete()`). Provide a decoupled `seedInitialData()` function in `src/db/` so sample records are never hardcoded into screen components, allowing fresh installs to start cleanly in the Zero/Empty state.
+- **Spatial Geometry, Multi-Story Partitioning & Watertight Export Engines**:
+  - **Full-Fidelity Persistence**: Schemas and repositories must persist complete geometric payloads (`mesh_json`, wall arrays $(x_1, z_1) \to (x_2, z_2)$, thickness, elevation, and floor levels).
+  - **Multi-Story Partitioning Engine**:
+    - Group and partition rooms/entities by elevation/level (`floor_level: 'Basement' | 'Ground Floor' | 'Second Floor'`).
+    - Spatial alignment algorithms must stitch within level boundaries, never flattening multi-story rooms onto a single flat plane.
+    - Calculate vertical elevation offsets ($Y$ / $Z$) for multi-level composite 3D models.
+  - **Watertight STL & CAD Export Generation**:
+    - Implement mathematical mesh generators calculating facet surface normal vectors and 12-facet watertight prisms per wall.
+    - Composite STL generators must preserve vertical altitude offsets so 3D printing slicers render multi-story structures correctly.
 
 ## Mandatory Compile Gate
 Before marking Phase 6 complete:

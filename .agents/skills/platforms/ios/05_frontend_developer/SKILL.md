@@ -55,6 +55,18 @@ Screen mockups in `docs/design/mockups/` use sample cards solely to illustrate v
    - Prohibited: `onPress={() => {}}`, `console.log` only, cosmetic timeouts, or dummy alerts that produce no state transition.
    - When an action is triggered (e.g. capture, submit, calculate, add, delete), it MUST call the underlying service/hook, mutate state or database, and produce a visible, verifiable outcome.
    - **Native Hardware vs. Simulation Rule**: On physical hardware with native sensors (e.g. LiDAR, Camera, Bluetooth), the UI MUST invoke the real native platform module (`RoomPlanCaptureModule`, `AVFoundation`, etc.). Fake timer simulations or hardcoded mock dimensions are strictly prohibited on physical hardware and are permitted ONLY on web/simulator previews where the physical hardware sensor physically does not exist.
+5. **High-Precision Visual Projections & Multi-Story Architecture**:
+   - **True Entity Projections (Zero Generic Box Placeholders)**:
+     - 3D View: Project each measured wall segment using its real coordinates $(x_1, z_1) \to (x_2, z_2)$, height, thickness, solid faces, top wall caps, door cutouts, and window frames. Never project a uniform generic cuboid when structured mesh data exists.
+     - 2D Blueprint View: Draw the measured perimeter $(x_1, z_1) \to (x_2, z_2)$ with architectural double-lines, dimension annotations along each wall, door swing arcs, and window markings.
+   - **Multi-Story & Level-Aware Views**:
+     - Provide a Floor Level filter bar (`[ All Floors | Ground Floor | Basement | Second Floor ]`).
+     - In 2D mode, NEVER merge rooms from different vertical levels onto a single plane; each level must have its own dedicated blueprint.
+     - In 3D composite mode, offset basement rooms vertically below the ground plane and upper levels above, creating a true multi-story dollhouse / architectural cutaway.
+   - **Responsive 360° Multi-Axis Touch Orbit**:
+     - Implement fluid touch interaction (`PanResponder` with ~0.007 rad/px sensitivity and pitch clamping) so users can orbit 3D structures in full space.
+   - **Native AR / QuickLook RealityKit Integration**:
+     - Provide a direct one-tap button to launch Apple AR QuickLook (`QLPreviewController`) for photorealistic native RealityKit 3D inspection.
 
 ## Build & Runtime Verification Gate
 1. Run `npx tsc --noEmit` to verify 0 TypeScript errors.

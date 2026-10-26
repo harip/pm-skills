@@ -14,6 +14,11 @@ description: Phase 3 lead for iOS. Turns scope into docs/04_TECHNICAL_SPEC.md an
   - Every hardware, camera, or sensor capability MUST specify the real native platform framework (e.g. `RoomPlan.framework` and `ARKit.framework` for LiDAR/3D scanning; `AVFoundation` for camera; `CoreBluetooth` for BLE) and a real native Swift bridge (`RCTBridgeModule` / `RCTViewManager`).
   - Mandatory Info.plist keys MUST be declared (e.g. `NSCameraUsageDescription`, `NSMotionUsageDescription`).
   - Functional simulation fallbacks are restricted ONLY to desktop browser and simulator previews; physical hardware devices MUST execute against the real native sensor pipeline. Mocking sensors on physical hardware is strictly prohibited.
+- **Spatial Modeling & Multi-Story Architecture**:
+  - Schemas must store full geometric fidelity: wall coordinates $(x_1, z_1) \to (x_2, z_2)$, heights, thicknesses, door/window cutout arrays, and detected objects.
+  - Multi-Story / Altitude Classification: Explicitly model vertical elevation (`elevation_ft`, `elevation_meters`, `floor_level: 'Basement' | 'Ground Floor' | 'Second Floor'`).
+  - Native Preview Bridge: Architect a bridge for native inspection (e.g. Apple AR QuickLook / `QLPreviewController` for USDZ models).
+  - Watertight Export Engine: Architect mathematical algorithms generating clean, 12-facet watertight prisms per wall for STL 3D-printing and CAD export.
 - **Persistence**: `expo-sqlite` embedded with Drizzle ORM, `expo-file-system` for sandboxed image files.
 - **Base Entity Fields**: Canonical base fields: `id` (UUID v4), `createdBy`, `createdAt`, `updatedAt`, `deletedAt` (soft delete).
 

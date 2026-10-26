@@ -27,3 +27,7 @@ Mockup HTML files show sample cards solely to demonstrate visual layout. **Produ
 2. **First-Class Empty State on Fresh Install**: When the database has 0 items, the landing screen MUST conditionally render a clean Empty State with an icon, clear explanation, and primary CTA to create the first record.
 3. **Reactive Data Mutation**: Creating, editing, or deleting records must dynamically update the UI list via the reactive DB layer. Never display static uneditable items.
 4. **Zero Hollow Shells & Mandatory Functional Handlers**: Every interactive control must execute real logic wired to services or hooks. Trivial no-op stubs (`onClick={() => {}}`, `console.log` only) are strictly forbidden; actions must produce real state transitions.
+5. **High-Precision Visual Projections & Multi-Story Architecture**:
+   - Render true measured wall segments $(x_1, z_1) \to (x_2, z_2)$, wall thicknesses, door openings, and window markings, never generic box placeholders.
+   - Level-Specific UX: Separate 2D floor plans per level (Basement vs Ground Floor); in 3D views, vertically stack levels along the elevation axis for authentic multi-story dollhouse rendering.
+   - Responsive Interaction: Fluid 360° orbit interaction via mouse drag or touch handlers.
