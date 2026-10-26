@@ -53,7 +53,8 @@ Screen mockups in `docs/design/mockups/` use sample cards solely to illustrate v
 4. **Zero Hollow Shells & Mandatory Functional Handlers**:
    - Every interactive control (buttons, inputs, capture triggers, sliders, toggles) MUST be wired to an active handler that executes real application logic.
    - Prohibited: `onPress={() => {}}`, `console.log` only, cosmetic timeouts, or dummy alerts that produce no state transition.
-   - When an action is triggered (e.g. capture, submit, calculate, add, delete), it MUST call the underlying service/hook, mutate state or database, and produce a visible, verifiable outcome. If a physical device capability is restricted, the component MUST trigger the functional simulation fallback so the user can complete the workflow end-to-end.
+   - When an action is triggered (e.g. capture, submit, calculate, add, delete), it MUST call the underlying service/hook, mutate state or database, and produce a visible, verifiable outcome.
+   - **Native Hardware vs. Simulation Rule**: On physical hardware with native sensors (e.g. LiDAR, Camera, Bluetooth), the UI MUST invoke the real native platform module (`RoomPlanCaptureModule`, `AVFoundation`, etc.). Fake timer simulations or hardcoded mock dimensions are strictly prohibited on physical hardware and are permitted ONLY on web/simulator previews where the physical hardware sensor physically does not exist.
 
 ## Build & Runtime Verification Gate
 1. Run `npx tsc --noEmit` to verify 0 TypeScript errors.

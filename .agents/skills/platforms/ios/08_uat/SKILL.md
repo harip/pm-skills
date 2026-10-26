@@ -113,7 +113,11 @@ On iOS 27 / Xcode 27+, Apple strictly requires UIKit apps to adopt the `UIScene`
       - The screen text MUST contain expected app headers (e.g. `"LiDAR Studio"`, primary UI labels).
       - The screen text MUST NOT contain RedBox strings (`"Uncaught Error"`, `"Cannot find native module"`, `"RedBox"`, `"Fatal Exception"`).
    - If any RedBox or fatal error text is detected, the agent MUST diagnose the error, fix the native dependency or code, recompile, reinstall, and re-verify until the physical screen OCR is 100% clean.
-4. **Only Once Process Is Live AND Screen OCR Proves UI Rendered**: Advance to Step 7 and present the verified running app to the stakeholder for final acceptance sign-off.
+4. **Mandatory Hardware Sensor Verification Gate (No-Mock Rule on Physical Hardware)**:
+   - For applications involving hardware sensors (LiDAR, Camera, AR, BLE), the agent MUST verify that the app uses real native frameworks (`RoomPlan.framework`, `ARKit.framework`, `AVFoundation`, etc.) rather than a JavaScript timer simulation.
+   - Verify `NSCameraUsageDescription` and necessary sensor keys are declared in `Info.plist`.
+   - Verify that scanning different physical targets produces **unique, dynamic, real-world measurements**. If multiple scans yield identical hardcoded dimensions, the UAT Coordinator must reject the build as an unverified mock defect.
+5. **Only Once Process Is Live, Screen OCR Is Clean, AND Hardware Sensor Is Real**: Advance to Step 7 and present the verified running app to the stakeholder for final acceptance sign-off.
 
 ### Step 7: Stakeholder Guidance
 - Provide clear instructions for first-time profile trust:

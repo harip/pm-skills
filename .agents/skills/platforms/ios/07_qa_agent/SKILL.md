@@ -35,3 +35,5 @@ description: Phase 7 lead for iOS. Writes and runs automated tests, enforces 100
    - Before QA can pass, launch the Expo dev server and run a real headless browser (`playwright` `webkit`) against `http://localhost:8081`:
      - Verify `pageerror` and `console.error` are completely empty (`[]`).
      - Verify `await page.innerText('body')` is non-empty, contains zero RedBox/ErrorOverlay stack traces, and renders the expected static text for every screen in the inventory.
+4. **Sensor Dynamic Variance & Non-Mocking Assertion**:
+   - For applications requiring hardware sensors (LiDAR, Camera, AR, BLE), automated tests must verify that capture operations generate dynamic, non-identical data. If multiple captures or scans return identical hardcoded dimensions, coordinates, or point counts, QA must fail the build as a fake mock violation.

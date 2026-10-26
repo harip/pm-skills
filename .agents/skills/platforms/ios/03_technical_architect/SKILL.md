@@ -10,7 +10,10 @@ description: Phase 3 lead for iOS. Turns scope into docs/04_TECHNICAL_SPEC.md an
 ## iOS Architectural Rules
 - **Stack**: React Native with Latest Expo SDK (matching App Store Expo Go, e.g. SDK 57+), TypeScript Strict (`noImplicitAny: true`). Never pin to obsolete SDK versions.
 - **Graphics & Motion**: Universal React Native Vector Geometry / `react-native-svg` (100% Expo Go & Web compatible without unguarded `CanvasKit` crashes), Apple HIG springs (`12_apple_design`).
-- **Hardware & Device API Architecture**: Every hardware, camera, or sensor capability must specify both the live native hardware bridge AND an interactive functional simulation pipeline. This ensures that every user trigger (e.g. capture, scan, sample) always processes data and persists a real record, preventing inoperable stub screens.
+- **Hardware & Device API Architecture (Zero-Fake-Hardware Policy)**:
+  - Every hardware, camera, or sensor capability MUST specify the real native platform framework (e.g. `RoomPlan.framework` and `ARKit.framework` for LiDAR/3D scanning; `AVFoundation` for camera; `CoreBluetooth` for BLE) and a real native Swift bridge (`RCTBridgeModule` / `RCTViewManager`).
+  - Mandatory Info.plist keys MUST be declared (e.g. `NSCameraUsageDescription`, `NSMotionUsageDescription`).
+  - Functional simulation fallbacks are restricted ONLY to desktop browser and simulator previews; physical hardware devices MUST execute against the real native sensor pipeline. Mocking sensors on physical hardware is strictly prohibited.
 - **Persistence**: `expo-sqlite` embedded with Drizzle ORM, `expo-file-system` for sandboxed image files.
 - **Base Entity Fields**: Canonical base fields: `id` (UUID v4), `createdBy`, `createdAt`, `updatedAt`, `deletedAt` (soft delete).
 

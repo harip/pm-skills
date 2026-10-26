@@ -80,3 +80,16 @@ There are no separate `autopilot` / `balanced` / `supervised` modes. Every proje
    - **What to Review**: Direct links to `docs/progress.html` or the live UAT preview.
    - **Next Action**: State clearly what to reply (`submitted` / `refine` at Gate 1 Discovery; `approved` at Gate 2 UAT and Gate 3 Release).
 3. **Hard Halt Enforcement**: At Gate 1 and Gate 2 UAT, the agent **MUST STOP IMMEDIATELY** and call no further tools. It is strictly forbidden to advance autonomously past these gates without explicit user input (`submitted`/`refine` for Gate 1, or test findings/`approved` for Gate 2).
+
+## 7. Zero Fake-Hardware Simulation Policy (Native Sensor Integrity)
+When a project scope or PRD requires physical device hardware or sensors (e.g. LiDAR, Camera, AR, Bluetooth LE, CoreLocation, NFC, Biometrics, HealthKit, Audio/Mic):
+1. **Strict Prohibition of Fake Simulations on Hardware**: The engineering swarm is **STRICTLY FORBIDDEN** from replacing real hardware sensors with JavaScript mock loops (`setInterval`, static hardcoded dimensions, or fake point scatter) when executing on a physical device.
+2. **Mandatory Native Framework Integration**:
+   - **iOS LiDAR / 3D Scanning**: MUST link Apple's native `RoomPlan.framework` / `ARKit.framework` and implement a native Swift bridge (`RoomCaptureSession` / `RoomCaptureView`) with `NSCameraUsageDescription` in `Info.plist`.
+   - **Camera / Media**: MUST link `AVFoundation` / `expo-camera`.
+   - **Bluetooth**: MUST link `CoreBluetooth` / native BLE manager.
+3. **Hardware vs. Simulation Boundary**:
+   - Functional mock simulations are permitted **ONLY** as fallbacks in headless browsers or simulator environments where physical sensors physically do not exist.
+   - On physical hardware (`Reality: physical`), the app **MUST engage the real hardware sensor** and capture genuine real-world measurements.
+4. **Automated Dynamic Variance Verification (QA & UAT Gate)**:
+   - QA and UAT agents must verify that successive hardware captures produce **unique, dynamic, real-world data**. If multiple consecutive scans produce identical dimensions, the app is flagged as an invalid mock and rejected.
