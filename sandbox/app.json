@@ -1,0 +1,28 @@
+{
+  "expo": {
+    "name": "LiDAR Room Studio",
+    "slug": "lidar-room-studio-ios",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#f5f5f7"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.lidarstudio.roomscanner",
+      "userInterfaceStyle": "light"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-asset"
+    ]
+  }
+}

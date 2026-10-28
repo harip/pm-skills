@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Screen 004: Multi-Room 3D Stitching Studio (Light Mode)</title>
+  <style>
+    :root {
+      --ios-bg: #f5f5f7;
+      --ios-card: #ffffff;
+      --ios-text: #1c1c1e;
+      --ios-secondary: #8e8e93;
+      --ios-blue: #007aff;
+      --ios-green: #34c759;
+      --ios-indigo: #5856d6;
+      --ios-border: #e5e5ea;
+      --ios-divider: rgba(60, 60, 67, 0.12);
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body {
+      margin: 0;
+      padding: 0;
+      background: var(--ios-bg);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", sans-serif;
+      color: var(--ios-text);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
+    .device-frame {
+      width: 393px;
+      height: 852px;
+      background: var(--ios-bg);
+      border-radius: 54px;
+      box-shadow: 0 25px 60px rgba(0,0,0,0.12), 0 0 0 12px #e5e5ea;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    /* Dynamic Island */
+    .dynamic-island {
+      position: absolute;
+      top: 11px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 125px;
+      height: 35px;
+      background: #000;
+      border-radius: 20px;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 12px;
+      color: #fff;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .island-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ios-green); }
+
+    /* Navigation Bar */
+    .nav-bar {
+      padding: 56px 20px 12px 20px;
+      background: rgba(245, 245, 247, 0.88);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-bottom: 0.5px solid var(--ios-divider);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 10;
+    }
+    .nav-title-group {
+      text-align: center;
+    }
+    .nav-title {
+      font-size: 17px;
+      font-weight: 600;
+      color: var(--ios-text);
+    }
+    .nav-sub {
+      font-size: 11px;
+      color: var(--ios-secondary);
+      font-weight: 500;
+    }
+    .nav-btn {
+      background: none;
+      border: none;
+      font-size: 16px;
+      color: var(--ios-blue);
+      cursor: pointer;
+      font-weight: 500;
+      padding: 4px 6px;
+    }
+
+    /* Active Multi-Room Chip Filter Bar */
+    .filter-bar {
+      padding: 10px 16px;
+      background: #ffffff;
+      border-bottom: 0.5px solid var(--ios-border);
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .filter-bar::-webkit-scrollbar { display: none; }
+    .room-chip {
+      padding: 6px 12px;
+      border-radius: 16px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid var(--ios-border);
+      background: #f5f5f7;
+      color: var(--ios-secondary);
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+    .room-chip.active {
+      background: #e8f2ff;
+      border-color: var(--ios-blue);
+      color: var(--ios-blue);
+    }
+
+    /* Viewport */
+    .stitch-viewport {
+      flex: 1;
+      position: relative;
+      background: linear-gradient(180deg, #f8fafd 0%, #edf1f7 100%);
+      overflow: hidden;
+    }
+    canvas#stitchCanvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    /* Floating Summary HUD */
+    .summary-hud {
+      position: absolute;
+      top: 14px;
+      left: 16px;
+      right: 16px;
+      background: rgba(255, 255, 255, 0.92);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 0.5px solid var(--ios-border);
+      border-radius: 16px;
+      padding: 12px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+    }
+    .summary-stat .val {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--ios-text);
+    }
+    .summary-stat .lbl {
+      font-size: 11px;
+      color: var(--ios-secondary);
+      margin-top: 1px;
+    }
+
+    /* Bottom Action Drawer */
+    .bottom-sheet {
+      background: #ffffff;
+      border-top: 0.5px solid var(--ios-border);
+      padding: 16px 20px 32px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .stitch-alert {
+      background: #f0fdf4;
+      border: 0.5px solid #bbf7d0;
+      border-radius: 12px;
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 12px;
+      color: #166534;
+      font-weight: 500;
+    }
+    .btn-row {
+      display: flex;
+      gap: 10px;
+    }
+    .btn-stitch-export {
+      flex: 1;
+      height: 50px;
+      border-radius: 25px;
+      background: var(--ios-blue);
+      color: #ffffff;
+      font-size: 15px;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      box-shadow: 0 4px 14px rgba(0, 122, 255, 0.3);
+    }
+    .btn-auto-align {
+      height: 50px;
+      padding: 0 16px;
+      border-radius: 25px;
+      background: #f2f2f7;
+      border: 0.5px solid var(--ios-border);
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--ios-text);
+      cursor: pointer;
+    }
+    .home-indicator {
+      width: 134px;
+      height: 5px;
+      background: #000;
+      border-radius: 3px;
+      align-self: center;
+      margin-top: 6px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="device-frame">
+  <div class="dynamic-island">
+    <span>Multi-Room</span>
+    <span class="island-dot"></span>
+  </div>
+
+  <div class="nav-bar">
+    <button class="nav-btn" onclick="window.history.back()">‹ Rooms</button>
+    <div class="nav-title-group">
+      <div class="nav-title">Whole-House 3D Model</div>
+      <div class="nav-sub">Auto-Stitched via Shared Doorways</div>
+    </div>
+    <button class="nav-btn" onclick="realign()">Align</button>
+  </div>
+
+  <div class="filter-bar">
+    <div class="room-chip active" id="chipLiving" onclick="toggleRoom('living')">✓ Living Room (263 sq ft)</div>
+    <div class="room-chip active" id="chipKitchen" onclick="toggleRoom('kitchen')">✓ Kitchen (178 sq ft)</div>
+    <div class="room-chip active" id="chipHall" onclick="toggleRoom('hall')">✓ Hallway (64 sq ft)</div>
+  </div>
+
+  <div class="stitch-viewport">
+    <div class="summary-hud">
+      <div class="summary-stat">
+        <div class="val" id="totalArea">505 sq ft</div>
+        <div class="lbl">Total Footprint</div>
+      </div>
+      <div class="summary-stat">
+        <div class="val" id="activeRooms">3 of 3</div>
+        <div class="lbl">Stitched Rooms</div>
+      </div>
+      <div class="summary-stat">
+        <div class="val">2 Doors</div>
+        <div class="lbl">Alignment Anchors</div>
+      </div>
+    </div>
+
+    <canvas id="stitchCanvas"></canvas>
+  </div>
+
+  <div class="bottom-sheet">
+    <div class="stitch-alert">
+      <span>✨</span>
+      <span>Shared doorway detected between Living Room & Kitchen with 99.4% confidence.</span>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn-stitch-export" onclick="exportWholeHouse()">
+        <span>⬇ Export Full House 3D (.STL)</span>
+      </button>
+      <button class="btn-auto-align" onclick="realign()">🔄 Re-Align</button>
+    </div>
+
+    <div class="home-indicator"></div>
+  </div>
+</div>
+
+<script>
+  const canvas = document.getElementById('stitchCanvas');
+  const ctx = canvas.getContext('2d');
+  let angleX = 0.55;
+  let angleY = -0.75;
+  let isDragging = false;
+  let lastX = 0, lastY = 0;
+
+  const roomVisibility = {
+    living: true,
+    kitchen: true,
+    hall: true
+  };
+
+  function resize() {
+    canvas.width = canvas.parentElement.clientWidth;
+    canvas.height = canvas.parentElement.clientHeight;
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  function toggleRoom(key) {
+    roomVisibility[key] = !roomVisibility[key];
+    const chip = document.getElementById('chip' + key.charAt(0).toUpperCase() + key.slice(1));
+    chip.className = roomVisibility[key] ? 'room-chip active' : 'room-chip';
+    chip.textContent = (roomVisibility[key] ? '✓ ' : '+ ') + chip.textContent.replace(/^([✓+]\s*)/, '');
+    updateTotals();
+  }
+
+  function updateTotals() {
+    let count = 0;
+    let area = 0;
+    if(roomVisibility.living) { count++; area += 263; }
+    if(roomVisibility.kitchen) { count++; area += 178; }
+    if(roomVisibility.hall) { count++; area += 64; }
+    document.getElementById('totalArea').textContent = area + ' sq ft';
+    document.getElementById('activeRooms').textContent = count + ' of 3';
+  }
+
+  function realign() {
+    alert("Running ICP (Iterative Closest Point) mesh alignment... Aligned to ±0.08in precision.");
+  }
+
+  function exportWholeHouse() {
+    const stlHeader = `solid Whole_House_Composite_Model
+facet normal 0 0 1
+  outer loop
+    vertex 0 0 0
+    vertex 10 0 0
+    vertex 10 10 0
+  endloop
+endfacet
+endsolid Whole_House_Composite_Model`;
+
+    const blob = new Blob([stlHeader], { type: 'model/stl' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'whole_house_composite_mesh.stl';
+    a.click();
+    URL.revokeObjectURL(url);
+    alert("Full House 3D Model (.STL) successfully exported!");
+  }
+
+  function project(x, y, z) {
+    const radX = angleX;
+    const radY = angleY;
+    let x1 = x * Math.cos(radY) + z * Math.sin(radY);
+    let z1 = -x * Math.sin(radY) + z * Math.cos(radY);
+    let y2 = y * Math.sin(radX) - z1 * Math.cos(radX);
+    let z2 = y * Math.cos(radX) + z1 * Math.sin(radX);
+
+    const fov = 450;
+    const scale = fov / (fov + z2 + 300);
+    return {
+      x: canvas.width / 2 + x1 * scale,
+      y: canvas.height / 2 + 10 + y2 * scale,
+      scale: scale
+    };
+  }
+
+  function drawRoomBox(ox, oz, w, d, h, strokeCol, fillCol, label) {
+    const p1 = project(ox, 50, oz);
+    const p2 = project(ox + w, 50, oz);
+    const p3 = project(ox + w, 50, oz + d);
+    const p4 = project(ox, 50, oz + d);
+
+    const t1 = project(ox, 50 - h, oz);
+    const t2 = project(ox + w, 50 - h, oz);
+    const t3 = project(ox + w, 50 - h, oz + d);
+    const t4 = project(ox, 50 - h, oz + d);
+
+    // Floor fill
+    ctx.fillStyle = fillCol;
+    ctx.beginPath();
+    ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.lineTo(p3.x, p3.y); ctx.lineTo(p4.x, p4.y);
+    ctx.closePath();
+    ctx.fill();
+
+    // Wireframe edges
+    ctx.strokeStyle = strokeCol;
+    ctx.lineWidth = 1.8;
+    [[p1,p2],[p2,p3],[p3,p4],[p4,p1],[t1,t2],[t2,t3],[t3,t4],[t4,t1],[p1,t1],[p2,t2],[p3,t3],[p4,t4]].forEach(([a, b]) => {
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    });
+
+    // Room Label
+    const center = project(ox + w/2, 50, oz + d/2);
+    ctx.fillStyle = strokeCol;
+    ctx.font = '600 11px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(label, center.x, center.y);
+  }
+
+  function render() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Ground grid
+    ctx.strokeStyle = 'rgba(0,0,0,0.06)';
+    ctx.lineWidth = 1;
+    for(let i = -160; i <= 160; i += 40) {
+      let a = project(i, 50, -160);
+      let b = project(i, 50, 160);
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      let c = project(-160, 50, i);
+      let d = project(160, 50, i);
+      ctx.beginPath(); ctx.moveTo(c.x, c.y); ctx.lineTo(d.x, d.y); ctx.stroke();
+    }
+
+    // Draw Stitched Rooms
+    // Living Room: Blue
+    if(roomVisibility.living) {
+      drawRoomBox(-120, -60, 110, 110, 70, '#007aff', 'rgba(0, 122, 255, 0.08)', 'Living Room');
+    }
+    // Kitchen: Green (Stitched adjacent to Living Room)
+    if(roomVisibility.kitchen) {
+      drawRoomBox(-10, -60, 90, 80, 70, '#34c759', 'rgba(52, 199, 89, 0.08)', 'Kitchen');
+    }
+    // Hallway: Indigo
+    if(roomVisibility.hall) {
+      drawRoomBox(-10, 20, 90, 45, 70, '#5856d6', 'rgba(88, 86, 214, 0.08)', 'Hallway');
+    }
+
+    if(!isDragging) {
+      angleY += 0.002;
+    }
+    requestAnimationFrame(render);
+  }
+
+  canvas.addEventListener('mousedown', e => { isDragging = true; lastX = e.clientX; lastY = e.clientY; });
+  window.addEventListener('mouseup', () => isDragging = false);
+  canvas.addEventListener('mousemove', e => {
+    if(!isDragging) return;
+    angleY += (e.clientX - lastX) * 0.01;
+    angleX += (e.clientY - lastY) * 0.01;
+    lastX = e.clientX; lastY = e.clientY;
+  });
+
+  canvas.addEventListener('touchstart', e => { isDragging = true; lastX = e.touches[0].clientX; lastY = e.touches[0].clientY; });
+  window.addEventListener('touchend', () => isDragging = false);
+  canvas.addEventListener('touchmove', e => {
+    if(!isDragging) return;
+    angleY += (e.touches[0].clientX - lastX) * 0.01;
+    angleX += (e.touches[0].clientY - lastY) * 0.01;
+    lastX = e.touches[0].clientX; lastY = e.touches[0].clientY;
+  });
+
+  requestAnimationFrame(render);
+</script>
+</body>
+</html>

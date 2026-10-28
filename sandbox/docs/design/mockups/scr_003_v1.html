@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Screen 003: 3D Room & 2D Floor Plan Studio (Light Mode)</title>
+  <style>
+    :root {
+      --ios-bg: #f5f5f7;
+      --ios-card: #ffffff;
+      --ios-text: #1c1c1e;
+      --ios-secondary: #8e8e93;
+      --ios-blue: #007aff;
+      --ios-green: #34c759;
+      --ios-border: #e5e5ea;
+      --ios-divider: rgba(60, 60, 67, 0.12);
+      --ios-seg-bg: rgba(118, 118, 128, 0.12);
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body {
+      margin: 0;
+      padding: 0;
+      background: var(--ios-bg);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", sans-serif;
+      color: var(--ios-text);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
+    .device-frame {
+      width: 393px;
+      height: 852px;
+      background: var(--ios-bg);
+      border-radius: 54px;
+      box-shadow: 0 25px 60px rgba(0,0,0,0.12), 0 0 0 12px #e5e5ea;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    /* Dynamic Island */
+    .dynamic-island {
+      position: absolute;
+      top: 11px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 125px;
+      height: 35px;
+      background: #000;
+      border-radius: 20px;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 12px;
+      color: #fff;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .island-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ios-green); }
+
+    /* Navigation Bar */
+    .nav-bar {
+      padding: 56px 20px 12px 20px;
+      background: rgba(245, 245, 247, 0.88);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-bottom: 0.5px solid var(--ios-divider);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 10;
+    }
+    .nav-title-group {
+      text-align: center;
+    }
+    .nav-title {
+      font-size: 17px;
+      font-weight: 600;
+      color: var(--ios-text);
+    }
+    .nav-sub {
+      font-size: 11px;
+      color: var(--ios-secondary);
+      font-weight: 500;
+    }
+    .nav-btn {
+      background: none;
+      border: none;
+      font-size: 16px;
+      color: var(--ios-blue);
+      cursor: pointer;
+      font-weight: 500;
+      padding: 4px 6px;
+    }
+
+    /* Segmented Control Bar */
+    .view-switcher-bar {
+      padding: 12px 20px;
+      background: #ffffff;
+      border-bottom: 0.5px solid var(--ios-border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .segmented-control {
+      background: var(--ios-seg-bg);
+      border-radius: 9px;
+      padding: 2px;
+      display: flex;
+      flex: 1;
+    }
+    .seg-btn {
+      flex: 1;
+      padding: 6px 10px;
+      border-radius: 7px;
+      border: none;
+      background: transparent;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--ios-secondary);
+      cursor: pointer;
+      transition: all 0.2s ease;
+      text-align: center;
+    }
+    .seg-btn.active {
+      background: #ffffff;
+      color: var(--ios-text);
+      box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+    }
+    .unit-pill {
+      background: #f2f2f7;
+      border: 0.5px solid var(--ios-border);
+      border-radius: 8px;
+      padding: 6px 10px;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--ios-blue);
+      cursor: pointer;
+    }
+
+    /* Canvas / Viewport Container */
+    .studio-viewport {
+      flex: 1;
+      position: relative;
+      background: #fafafc;
+      overflow: hidden;
+    }
+    canvas#studioCanvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    /* Floating Inspector Overlay */
+    .inspector-card {
+      position: absolute;
+      top: 14px;
+      left: 16px;
+      right: 16px;
+      background: rgba(255, 255, 255, 0.92);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 0.5px solid var(--ios-border);
+      border-radius: 16px;
+      padding: 12px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+    }
+    .stat-col .num {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--ios-text);
+    }
+    .stat-col .lbl {
+      font-size: 11px;
+      color: var(--ios-secondary);
+      margin-top: 1px;
+    }
+
+    /* Bottom Action Drawer */
+    .action-drawer {
+      background: #ffffff;
+      border-top: 0.5px solid var(--ios-border);
+      padding: 16px 20px 32px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .furniture-tray {
+      display: flex;
+      gap: 10px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+      scrollbar-width: none;
+    }
+    .furniture-tray::-webkit-scrollbar { display: none; }
+    .furniture-chip {
+      background: #f5f5f7;
+      border: 0.5px solid var(--ios-border);
+      border-radius: 12px;
+      padding: 8px 14px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--ios-text);
+      white-space: nowrap;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .furniture-chip:hover {
+      background: #eef2f7;
+      border-color: var(--ios-blue);
+    }
+    .drawer-btns {
+      display: flex;
+      gap: 10px;
+    }
+    .btn-export {
+      flex: 1;
+      height: 48px;
+      border-radius: 24px;
+      background: var(--ios-blue);
+      color: #fff;
+      font-size: 15px;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      box-shadow: 0 4px 12px rgba(0, 122, 255, 0.28);
+    }
+    .btn-share {
+      width: 48px;
+      height: 48px;
+      border-radius: 24px;
+      background: #f2f2f7;
+      border: 0.5px solid var(--ios-border);
+      font-size: 18px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .home-indicator {
+      width: 134px;
+      height: 5px;
+      background: #000;
+      border-radius: 3px;
+      align-self: center;
+      margin-top: 6px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="device-frame">
+  <div class="dynamic-island">
+    <span>Studio</span>
+    <span class="island-dot"></span>
+  </div>
+
+  <div class="nav-bar">
+    <button class="nav-btn" onclick="window.history.back()">‹ Rooms</button>
+    <div class="nav-title-group">
+      <div class="nav-title">Primary Living Room</div>
+      <div class="nav-sub">Mesh #LDR-8924 • High Precision</div>
+    </div>
+    <button class="nav-btn" onclick="alert('Settings: Grid snap ON, Tolerance ±0.1in')">Edit</button>
+  </div>
+
+  <div class="view-switcher-bar">
+    <div class="segmented-control">
+      <button class="seg-btn active" id="btn3D" onclick="setViewMode('3d')">🧊 3D Solid Mesh</button>
+      <button class="seg-btn" id="btn2D" onclick="setViewMode('2d')">📐 2D Floor Plan</button>
+    </div>
+    <button class="unit-pill" id="unitSwitcher" onclick="toggleUnits()">ft / in</button>
+  </div>
+
+  <div class="studio-viewport">
+    <div class="inspector-card">
+      <div class="stat-col">
+        <div class="num" id="dimW">18' 2" × 14' 6"</div>
+        <div class="lbl">Dimensions</div>
+      </div>
+      <div class="stat-col">
+        <div class="num" id="areaNum">263 sq ft</div>
+        <div class="lbl">Floor Area</div>
+      </div>
+      <div class="stat-col">
+        <div class="num">9' 0"</div>
+        <div class="lbl">Ceiling</div>
+      </div>
+    </div>
+
+    <canvas id="studioCanvas"></canvas>
+  </div>
+
+  <div class="action-drawer">
+    <div style="font-size: 12px; font-weight: 600; color: var(--ios-secondary); margin-bottom: 2px;">
+      ADD CAD FURNITURE MOCKUPS
+    </div>
+    <div class="furniture-tray">
+      <div class="furniture-chip" onclick="addFurniture('Sofa (3-Seater)')">🛋 Sofa (3-Seat)</div>
+      <div class="furniture-chip" onclick="addFurniture('Dining Table (6p)')">🪑 Dining Table</div>
+      <div class="furniture-chip" onclick="addFurniture('Coffee Table')">🪵 Coffee Table</div>
+      <div class="furniture-chip" onclick="addFurniture('King Bed')">🛏 King Bed</div>
+      <div class="furniture-chip" onclick="addFurniture('Door / Opening')">🚪 Doorway</div>
+    </div>
+
+    <div class="drawer-btns">
+      <button class="btn-export" onclick="exportSTL()">
+        <span>⬇ Export 3D Mesh (.STL)</span>
+      </button>
+      <button class="btn-share" title="Share Model" onclick="shareMesh()">⎋</button>
+    </div>
+
+    <div class="home-indicator"></div>
+  </div>
+</div>
+
+<script>
+  let mode = '3d'; // '3d' or '2d'
+  let isMetric = false;
+  const canvas = document.getElementById('studioCanvas');
+  const ctx = canvas.getContext('2d');
+  let angleX = 0.5;
+  let angleY = -0.6;
+  let isDragging = false;
+  let lastX = 0, lastY = 0;
+  let addedObjects = [];
+
+  function resize() {
+    canvas.width = canvas.parentElement.clientWidth;
+    canvas.height = canvas.parentElement.clientHeight;
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  function setViewMode(newMode) {
+    mode = newMode;
+    document.getElementById('btn3D').className = mode === '3d' ? 'seg-btn active' : 'seg-btn';
+    document.getElementById('btn2D').className = mode === '2d' ? 'seg-btn active' : 'seg-btn';
+    if(mode === '2d') {
+      angleX = 1.57; // Look directly down
+      angleY = 0;
+    } else {
+      angleX = 0.5;
+      angleY = -0.6;
+    }
+  }
+
+  function toggleUnits() {
+    isMetric = !isMetric;
+    const btn = document.getElementById('unitSwitcher');
+    const dim = document.getElementById('dimW');
+    const area = document.getElementById('areaNum');
+    if(isMetric) {
+      btn.textContent = 'meters (m)';
+      dim.textContent = '5.54m × 4.42m';
+      area.textContent = '24.5 m²';
+    } else {
+      btn.textContent = 'ft / in';
+      dim.textContent = "18' 2\" × 14' 6\"";
+      area.textContent = '263 sq ft';
+    }
+  }
+
+  function addFurniture(name) {
+    addedObjects.push({
+      name: name,
+      x: (Math.random() - 0.5) * 80,
+      z: (Math.random() - 0.5) * 80
+    });
+    alert(`Added ${name} into room center. Drag to reposition.`);
+  }
+
+  function exportSTL() {
+    // Generate valid ASCII STL string
+    const stlData = `solid Primary_Living_Room
+facet normal 0.0 0.0 1.0
+  outer loop
+    vertex 0.0 0.0 0.0
+    vertex 5.54 0.0 0.0
+    vertex 5.54 4.42 0.0
+  endloop
+endfacet
+facet normal 0.0 0.0 1.0
+  outer loop
+    vertex 0.0 0.0 0.0
+    vertex 5.54 4.42 0.0
+    vertex 0.0 4.42 0.0
+  endloop
+endfacet
+endsolid Primary_Living_Room`;
+
+    const blob = new Blob([stlData], { type: 'model/stl' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'primary_living_room_mesh.stl';
+    a.click();
+    URL.revokeObjectURL(url);
+    alert("3D Mesh (.STL) generated and downloaded successfully!");
+  }
+
+  function shareMesh() {
+    alert("Share Sheet opened: AirDrop, Mail, Files, CAD Exporters.");
+  }
+
+  function project3D(x, y, z) {
+    const radX = angleX;
+    const radY = angleY;
+    let x1 = x * Math.cos(radY) + z * Math.sin(radY);
+    let z1 = -x * Math.sin(radY) + z * Math.cos(radY);
+    let y2 = y * Math.sin(radX) - z1 * Math.cos(radX);
+    let z2 = y * Math.cos(radX) + z1 * Math.sin(radX);
+
+    const fov = 400;
+    const scale = fov / (fov + z2 + 250);
+    return {
+      x: canvas.width / 2 + x1 * scale,
+      y: canvas.height / 2 + 20 + y2 * scale,
+      scale: scale
+    };
+  }
+
+  function render() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    if (mode === '2d') {
+      // 2D Floor Plan View
+      const cx = canvas.width / 2;
+      const cy = canvas.height / 2 + 10;
+      const w = 240;
+      const h = 180;
+
+      // Architectural grid
+      ctx.strokeStyle = '#e5e5ea';
+      ctx.lineWidth = 0.5;
+      for(let x = 20; x < canvas.width; x += 30) {
+        ctx.beginPath(); ctx.moveTo(x, 60); ctx.lineTo(x, canvas.height - 20); ctx.stroke();
+      }
+      for(let y = 60; y < canvas.height - 20; y += 30) {
+        ctx.beginPath(); ctx.moveTo(20, y); ctx.lineTo(canvas.width - 20, y); ctx.stroke();
+      }
+
+      // Room outline
+      ctx.fillStyle = '#ffffff';
+      ctx.strokeStyle = '#1c1c1e';
+      ctx.lineWidth = 4;
+      ctx.fillRect(cx - w/2, cy - h/2, w, h);
+      ctx.strokeRect(cx - w/2, cy - h/2, w, h);
+
+      // Dimension lines
+      ctx.strokeStyle = '#007aff';
+      ctx.lineWidth = 1.5;
+      // Top dimension
+      ctx.beginPath();
+      ctx.moveTo(cx - w/2, cy - h/2 - 15);
+      ctx.lineTo(cx + w/2, cy - h/2 - 15);
+      ctx.stroke();
+
+      // Right dimension
+      ctx.beginPath();
+      ctx.moveTo(cx + w/2 + 15, cy - h/2);
+      ctx.lineTo(cx + w/2 + 15, cy + h/2);
+      ctx.stroke();
+
+      // Text
+      ctx.fillStyle = '#007aff';
+      ctx.font = '600 12px -apple-system, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(isMetric ? '5.54 m' : "18' 2\"", cx, cy - h/2 - 20);
+      ctx.fillText(isMetric ? '4.42 m' : "14' 6\"", cx + w/2 + 35, cy);
+
+      // Furniture in 2D
+      addedObjects.forEach(obj => {
+        ctx.fillStyle = '#e5eaf5';
+        ctx.strokeStyle = '#007aff';
+        ctx.lineWidth = 1;
+        ctx.fillRect(cx + obj.x - 20, cy + obj.z - 15, 40, 30);
+        ctx.strokeRect(cx + obj.x - 20, cy + obj.z - 15, 40, 30);
+        ctx.fillStyle = '#1c1c1e';
+        ctx.font = '500 10px -apple-system, sans-serif';
+        ctx.fillText(obj.name.split(' ')[0], cx + obj.x, cy + obj.z + 4);
+      });
+
+    } else {
+      // 3D Solid Mesh View
+      const p1 = project3D(-100, 70, -80);
+      const p2 = project3D(100, 70, -80);
+      const p3 = project3D(100, 70, 80);
+      const p4 = project3D(-100, 70, 80);
+
+      const t1 = project3D(-100, -60, -80);
+      const t2 = project3D(100, -60, -80);
+      const t3 = project3D(100, -60, 80);
+      const t4 = project3D(-100, -60, 80);
+
+      // Floor plane
+      ctx.fillStyle = '#f0f3f8';
+      ctx.beginPath();
+      ctx.moveTo(p1.x, p1.y);
+      ctx.lineTo(p2.x, p2.y);
+      ctx.lineTo(p3.x, p3.y);
+      ctx.lineTo(p4.x, p4.y);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = '#d0d7e5';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      // Back wall
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.moveTo(p1.x, p1.y);
+      ctx.lineTo(p2.x, p2.y);
+      ctx.lineTo(t2.x, t2.y);
+      ctx.lineTo(t1.x, t1.y);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = '#007aff';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // Left wall
+      ctx.fillStyle = '#f8fafd';
+      ctx.beginPath();
+      ctx.moveTo(p1.x, p1.y);
+      ctx.lineTo(p4.x, p4.y);
+      ctx.lineTo(t4.x, t4.y);
+      ctx.lineTo(t1.x, t1.y);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Floor grid lines
+      ctx.strokeStyle = 'rgba(0, 122, 255, 0.15)';
+      ctx.lineWidth = 1;
+      for(let x = -80; x <= 80; x += 40) {
+        let a = project3D(x, 70, -80);
+        let b = project3D(x, 70, 80);
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      }
+
+      // Render added objects
+      addedObjects.forEach(obj => {
+        let b1 = project3D(obj.x - 20, 70, obj.z - 15);
+        let b2 = project3D(obj.x + 20, 70, obj.z - 15);
+        let b3 = project3D(obj.x + 20, 70, obj.z + 15);
+        let b4 = project3D(obj.x - 20, 70, obj.z + 15);
+        ctx.fillStyle = '#007aff22';
+        ctx.strokeStyle = '#007aff';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(b1.x, b1.y); ctx.lineTo(b2.x, b2.y); ctx.lineTo(b3.x, b3.y); ctx.lineTo(b4.x, b4.y);
+        ctx.closePath(); ctx.fill(); ctx.stroke();
+      });
+
+      if(!isDragging) {
+        angleY += 0.002;
+      }
+    }
+
+    requestAnimationFrame(render);
+  }
+
+  canvas.addEventListener('mousedown', e => { isDragging = true; lastX = e.clientX; lastY = e.clientY; });
+  window.addEventListener('mouseup', () => isDragging = false);
+  canvas.addEventListener('mousemove', e => {
+    if(!isDragging || mode === '2d') return;
+    angleY += (e.clientX - lastX) * 0.01;
+    angleX += (e.clientY - lastY) * 0.01;
+    lastX = e.clientX; lastY = e.clientY;
+  });
+
+  canvas.addEventListener('touchstart', e => { isDragging = true; lastX = e.touches[0].clientX; lastY = e.touches[0].clientY; });
+  window.addEventListener('touchend', () => isDragging = false);
+  canvas.addEventListener('touchmove', e => {
+    if(!isDragging || mode === '2d') return;
+    angleY += (e.touches[0].clientX - lastX) * 0.01;
+    angleX += (e.touches[0].clientY - lastY) * 0.01;
+    lastX = e.touches[0].clientX; lastY = e.touches[0].clientY;
+  });
+
+  requestAnimationFrame(render);
+</script>
+</body>
+</html>

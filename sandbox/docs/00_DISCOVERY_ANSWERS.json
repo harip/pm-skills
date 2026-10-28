@@ -1,0 +1,172 @@
+{
+  "saved": true,
+  "savedAt": "2026-10-25T22:30:00.000Z",
+  "projectName": "LiDAR Room & Whole-House 3D Studio (iOS)",
+  "round": 1,
+  "action": "proceed",
+  "status": "READY_FOR_CONTRACT",
+  "selectedMockups": {
+    "scr_001_v1": true,
+    "scr_002_v1": true,
+    "scr_003_v1": true,
+    "scr_004_v1": true
+  },
+  "mockupNotes": {
+    "scr_001_v1": "Approved. Keep empty-state first, strict Apple HIG Light Mode with no dark mode.",
+    "scr_002_v1": "Approved. Realtime LiDAR scanner with working synthetic simulation fallback.",
+    "scr_003_v1": "Approved. 3D solid mesh and 2D floor plan toggle with STL export.",
+    "scr_004_v1": "Approved. Multi-room auto-stitch studio via shared doorways."
+  },
+  "screenMockupSummary": [
+    {
+      "screenId": "scr_001_v1",
+      "title": "Screen 001: Scanned Rooms Catalog & Empty State",
+      "path": "design/mockups/scr_001_v1.html",
+      "approved": true,
+      "uiFeedbackNote": "Strict Apple Light Mode and first-class empty state verified."
+    },
+    {
+      "screenId": "scr_002_v1",
+      "title": "Screen 002: Realtime LiDAR 3D Scanner",
+      "path": "design/mockups/scr_002_v1.html",
+      "approved": true,
+      "uiFeedbackNote": "Universal simulation mode verified."
+    },
+    {
+      "screenId": "scr_003_v1",
+      "title": "Screen 003: 3D Room & 2D Floor Plan Studio",
+      "path": "design/mockups/scr_003_v1.html",
+      "approved": true,
+      "uiFeedbackNote": "3D mesh and 2D blueprint toggle verified."
+    },
+    {
+      "screenId": "scr_004_v1",
+      "title": "Screen 004: Multi-Room 3D Auto-Stitch Studio",
+      "path": "design/mockups/scr_004_v1.html",
+      "approved": true,
+      "uiFeedbackNote": "Multi-room stitching verified."
+    }
+  ],
+  "selectedFeatures": {
+    "feat_realtime_lidar": true,
+    "feat_universal_fallback": true,
+    "feat_realtime_dimensions": true,
+    "feat_2d_floorplan": true,
+    "feat_unit_conversion": true,
+    "feat_cad_furniture": true,
+    "feat_multi_room_stitch": true,
+    "feat_stl_export": true,
+    "feat_first_class_empty": true,
+    "feat_local_persistence": true
+  },
+  "chosenFeaturesList": [
+    { "id": "feat_realtime_lidar", "name": "Realtime LiDAR 3D Mesh Scanning", "category": "Scanner Core" },
+    { "id": "feat_universal_fallback", "name": "Universal Hardware Simulation Fallback", "category": "Scanner Core" },
+    { "id": "feat_realtime_dimensions", "name": "Live Dimension Callouts (W × L × H)", "category": "Measurements" },
+    { "id": "feat_2d_floorplan", "name": "2D Architectural Floor Plan Generation", "category": "Studio" },
+    { "id": "feat_unit_conversion", "name": "Instant Imperial ↔ Metric Unit Toggle", "category": "Studio" },
+    { "id": "feat_cad_furniture", "name": "CAD Furniture Drag & Drop Placement", "category": "Studio" },
+    { "id": "feat_multi_room_stitch", "name": "Whole-House Multi-Room Auto-Stitch", "category": "Composite" },
+    { "id": "feat_stl_export", "name": "Standard 3D CAD Export (.STL / .OBJ)", "category": "Export" },
+    { "id": "feat_first_class_empty", "name": "First-Class Empty State Catalog", "category": "UX / Data" },
+    { "id": "feat_local_persistence", "name": "Offline-First Local Storage", "category": "Data" }
+  ],
+  "customFeaturesText": "",
+  "answers": {
+    "q_mesh_density": "opt_adaptive",
+    "q_default_units": "opt_imperial",
+    "q_hardware_fallback": "opt_sim_banner",
+    "q_stitching_method": "opt_auto_door",
+    "q_export_formats": ["opt_stl", "opt_obj", "opt_dxf"],
+    "q_empty_state": "opt_empty_segmented",
+    "q_furniture_catalog": ["opt_living", "opt_bedroom", "opt_doors"],
+    "q_data_storage": "opt_local_first",
+    "q_haptic_feedback": "opt_haptic_rich",
+    "q_design_theme": "opt_strict_light"
+  },
+  "questionNotes": {},
+  "structuredSummary": [
+    {
+      "questionId": "q_mesh_density",
+      "dimension": "Scanner Engine",
+      "question": "What 3D mesh density and polygon resolution should be targeted?",
+      "selectedCodes": "opt_adaptive",
+      "selectedLabels": ["Adaptive Precision (Recommended)"],
+      "customNote": ""
+    },
+    {
+      "questionId": "q_default_units",
+      "dimension": "Measurements & Units",
+      "question": "What should be the default measurement unit system upon first app launch?",
+      "selectedCodes": "opt_imperial",
+      "selectedLabels": ["Imperial Units (Feet & Inches, sq ft)"],
+      "customNote": ""
+    },
+    {
+      "questionId": "q_hardware_fallback",
+      "dimension": "Device Compatibility",
+      "question": "How should the app behave on devices without Apple LiDAR hardware (e.g. non-Pro iPhones or Simulator)?",
+      "selectedCodes": "opt_sim_banner",
+      "selectedLabels": ["Universal Simulation Fallback (Recommended)"],
+      "customNote": ""
+    },
+    {
+      "questionId": "q_stitching_method",
+      "dimension": "Whole-House Composite",
+      "question": "How should multiple room scans be stitched into a whole-house model?",
+      "selectedCodes": "opt_auto_door",
+      "selectedLabels": ["Shared Doorway Detection (Recommended)"],
+      "customNote": ""
+    },
+    {
+      "questionId": "q_export_formats",
+      "dimension": "File Exports & Sharing",
+      "question": "Which 3D and 2D export file formats should be supported?",
+      "selectedCodes": ["opt_stl", "opt_obj", "opt_dxf"],
+      "selectedLabels": [".STL (3D Mesh)", ".OBJ + .MTL", ".DXF (2D CAD Floor Plan)"],
+      "customNote": ""
+    },
+    {
+      "questionId": "q_empty_state",
+      "dimension": "Data & Onboarding UX",
+      "question": "How should the room catalog screen handle a fresh installation with zero scans?",
+      "selectedCodes": "opt_empty_segmented",
+      "selectedLabels": ["Apple Empty State with Sample Preview Toggle (Recommended)"],
+      "customNote": ""
+    },
+    {
+      "questionId": "q_furniture_catalog",
+      "dimension": "Studio Capabilities",
+      "question": "What CAD furniture and architectural elements should be included in the studio?",
+      "selectedCodes": ["opt_living", "opt_bedroom", "opt_doors"],
+      "selectedLabels": ["Living Room", "Bedroom", "Architectural Openings"],
+      "customNote": ""
+    },
+    {
+      "questionId": "q_data_storage",
+      "dimension": "Architecture & Storage",
+      "question": "Where should scanned room models and measurements be stored?",
+      "selectedCodes": "opt_local_first",
+      "selectedLabels": ["Local On-Device SQLite / File System (Recommended)"],
+      "customNote": ""
+    },
+    {
+      "questionId": "q_haptic_feedback",
+      "dimension": "Apple Native Polish",
+      "question": "What level of Apple Taptic Engine haptic feedback should be integrated?",
+      "selectedCodes": "opt_haptic_rich",
+      "selectedLabels": ["Rich Haptics (Recommended)"],
+      "customNote": ""
+    },
+    {
+      "questionId": "q_design_theme",
+      "dimension": "Visual Design Mandate",
+      "question": "Confirm adherence to Apple HIG Light Mode design standard:",
+      "selectedCodes": "opt_strict_light",
+      "selectedLabels": ["Strict Apple HIG Light Mode (Mandated)"],
+      "customNote": ""
+    }
+  ],
+  "additionalDetails": "Strict Apple HIG Light Mode. Zero dark mode. Empty state on fresh install with zero hardcoded fake records. Universal functional simulation fallback so scanning, meshing, and STL downloads work seamlessly end-to-end.",
+  "consultantQuestions": ""
+}

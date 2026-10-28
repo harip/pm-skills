@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Screen 002: Realtime LiDAR Scanner (Light Mode)</title>
+  <style>
+    :root {
+      --ios-bg: #f5f5f7;
+      --ios-surface: rgba(255, 255, 255, 0.92);
+      --ios-surface-solid: #ffffff;
+      --ios-card: #ffffff;
+      --ios-text: #1c1c1e;
+      --ios-secondary: #8e8e93;
+      --ios-blue: #007aff;
+      --ios-green: #34c759;
+      --ios-orange: #ff9500;
+      --ios-border: #e5e5ea;
+      --ios-divider: rgba(60, 60, 67, 0.12);
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body {
+      margin: 0;
+      padding: 0;
+      background: var(--ios-bg);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", sans-serif;
+      color: var(--ios-text);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
+    .device-frame {
+      width: 393px;
+      height: 852px;
+      background: #fbfbfd;
+      border-radius: 54px;
+      box-shadow: 0 25px 60px rgba(0,0,0,0.12), 0 0 0 12px #e5e5ea;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    /* Dynamic Island */
+    .dynamic-island {
+      position: absolute;
+      top: 11px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 125px;
+      height: 35px;
+      background: #000;
+      border-radius: 20px;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 12px;
+      color: #fff;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .island-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ios-green); }
+
+    /* Scanner Viewport */
+    .scanner-viewport {
+      flex: 1;
+      position: relative;
+      background: linear-gradient(180deg, #eef2f7 0%, #e5eaf2 100%);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    canvas#scannerCanvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+      cursor: grab;
+    }
+
+    /* Top HUD */
+    .top-hud {
+      position: relative;
+      z-index: 10;
+      padding: 58px 20px 12px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .hud-pill {
+      background: var(--ios-surface);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 0.5px solid var(--ios-border);
+      border-radius: 20px;
+      padding: 6px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--ios-text);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    }
+    .pulse-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--ios-blue);
+      animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse {
+      0% { transform: scale(0.9); opacity: 0.8; }
+      50% { transform: scale(1.3); opacity: 1; }
+      100% { transform: scale(0.9); opacity: 0.8; }
+    }
+
+    /* Interactive Measurement Tags */
+    .tag-bubble {
+      position: absolute;
+      background: var(--ios-surface-solid);
+      border: 1px solid var(--ios-border);
+      border-radius: 8px;
+      padding: 4px 8px;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--ios-text);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+      pointer-events: none;
+      transition: transform 0.1s ease-out;
+    }
+
+    /* Bottom Control Sheet */
+    .bottom-sheet {
+      position: relative;
+      z-index: 10;
+      background: var(--ios-surface);
+      backdrop-filter: blur(25px);
+      -webkit-backdrop-filter: blur(25px);
+      border-top: 0.5px solid var(--ios-border);
+      border-radius: 28px 28px 0 0;
+      padding: 16px 20px 36px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      box-shadow: 0 -4px 20px rgba(0,0,0,0.05);
+    }
+    .sheet-handle {
+      width: 36px;
+      height: 4px;
+      border-radius: 2px;
+      background: #c7c7cc;
+      align-self: center;
+    }
+    .metrics-row {
+      display: flex;
+      justify-content: space-around;
+      text-align: center;
+      padding: 4px 0;
+    }
+    .metric-item .val {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--ios-text);
+      font-variant-numeric: tabular-nums;
+    }
+    .metric-item .lbl {
+      font-size: 11px;
+      color: var(--ios-secondary);
+      font-weight: 500;
+      margin-top: 2px;
+    }
+    .controls-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .secondary-btn {
+      width: 48px;
+      height: 48px;
+      border-radius: 24px;
+      background: #eef2f7;
+      border: 0.5px solid var(--ios-border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      cursor: pointer;
+    }
+    .primary-scan-btn {
+      flex: 1;
+      height: 52px;
+      border-radius: 26px;
+      background: var(--ios-blue);
+      color: #fff;
+      font-size: 16px;
+      font-weight: 600;
+      border: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      cursor: pointer;
+      box-shadow: 0 4px 14px rgba(0, 122, 255, 0.35);
+      transition: transform 0.1s, background-color 0.2s;
+    }
+    .primary-scan-btn.recording {
+      background: #ff3b30;
+      box-shadow: 0 4px 14px rgba(255, 59, 48, 0.35);
+    }
+    .home-indicator {
+      width: 134px;
+      height: 5px;
+      background: #000;
+      border-radius: 3px;
+      align-self: center;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="device-frame">
+  <div class="dynamic-island">
+    <span>00:14</span>
+    <span class="island-dot"></span>
+  </div>
+
+  <div class="scanner-viewport">
+    <div class="top-hud">
+      <button class="hud-pill" onclick="window.history.back()" style="border:none; cursor:pointer;">
+        <span>‹ Back</span>
+      </button>
+      <div class="hud-pill">
+        <span class="pulse-dot"></span>
+        <span id="scanStatus">LiDAR Active (60 Hz)</span>
+      </div>
+      <div class="hud-pill">
+        <span>Units: <b>ft</b></span>
+      </div>
+    </div>
+
+    <!-- Live Canvas Viewport for Room Wireframe & Point Cloud -->
+    <canvas id="scannerCanvas"></canvas>
+
+    <!-- Overlay Interactive Measurement Callouts -->
+    <div class="tag-bubble" id="tagWidth" style="top: 260px; left: 140px;">W: 14' 6"</div>
+    <div class="tag-bubble" id="tagLength" style="top: 390px; left: 240px;">L: 18' 2"</div>
+    <div class="tag-bubble" id="tagHeight" style="top: 190px; left: 45px;">H: 9' 0"</div>
+
+    <div class="bottom-sheet">
+      <div class="sheet-handle"></div>
+      <div class="metrics-row">
+        <div class="metric-item">
+          <div class="val" id="pointCount">142,850</div>
+          <div class="lbl">LiDAR Points</div>
+        </div>
+        <div class="metric-item">
+          <div class="val" id="meshAccuracy">±0.12 in</div>
+          <div class="lbl">Accuracy</div>
+        </div>
+        <div class="metric-item">
+          <div class="val" id="areaValue">263 sq ft</div>
+          <div class="lbl">Floor Area</div>
+        </div>
+      </div>
+
+      <div class="controls-row">
+        <button class="secondary-btn" title="Toggle Grid Mode" onclick="toggleMeshMode()">📐</button>
+        <button class="primary-scan-btn recording" id="scanBtn" onclick="toggleScan()">
+          <span>⏹ Finish Scan & Save Mesh</span>
+        </button>
+        <button class="secondary-btn" title="Add Point Marker" onclick="addMarker()">📍</button>
+      </div>
+
+      <div class="home-indicator"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const canvas = document.getElementById('scannerCanvas');
+  const ctx = canvas.getContext('2d');
+  let angleX = 0.35;
+  let angleY = -0.55;
+  let isDragging = false;
+  let lastX = 0;
+  let lastY = 0;
+  let isScanning = true;
+  let points = [];
+  let numPoints = 142850;
+
+  function resizeCanvas() {
+    canvas.width = canvas.parentElement.clientWidth;
+    canvas.height = canvas.parentElement.clientHeight;
+  }
+  window.addEventListener('resize', resizeCanvas);
+  resizeCanvas();
+
+  // Generate synthetic 3D room point cloud
+  for(let i = 0; i < 350; i++) {
+    points.push({
+      x: (Math.random() - 0.5) * 260,
+      y: (Math.random() - 0.5) * 180,
+      z: (Math.random() - 0.5) * 260,
+      col: Math.random() > 0.3 ? '#007aff' : '#34c759'
+    });
+  }
+
+  function project(x, y, z) {
+    const radX = angleX;
+    const radY = angleY;
+    // Rotate Y
+    let x1 = x * Math.cos(radY) + z * Math.sin(radY);
+    let z1 = -x * Math.sin(radY) + z * Math.cos(radY);
+    // Rotate X
+    let y2 = y * Math.cos(radX) - z1 * Math.sin(radX);
+    let z2 = y * Math.sin(radX) + z1 * Math.cos(radX);
+
+    const fov = 350;
+    const scale = fov / (fov + z2 + 200);
+    return {
+      x: canvas.width / 2 + x1 * scale,
+      y: canvas.height / 2 - 40 + y2 * scale,
+      scale: scale
+    };
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Subtle perspective floor grid
+    ctx.strokeStyle = 'rgba(0, 122, 255, 0.15)';
+    ctx.lineWidth = 1;
+    const gridSize = 160;
+    const step = 40;
+    for(let i = -gridSize; i <= gridSize; i += step) {
+      let p1 = project(i, 90, -gridSize);
+      let p2 = project(i, 90, gridSize);
+      ctx.beginPath();
+      ctx.moveTo(p1.x, p1.y);
+      ctx.lineTo(p2.x, p2.y);
+      ctx.stroke();
+
+      let p3 = project(-gridSize, 90, i);
+      let p4 = project(gridSize, 90, i);
+      ctx.beginPath();
+      ctx.moveTo(p3.x, p3.y);
+      ctx.lineTo(p4.x, p4.y);
+      ctx.stroke();
+    }
+
+    // Room bounding box wireframe
+    const box = [
+      project(-110, -80, -110), project(110, -80, -110),
+      project(110, 90, -110), project(-110, 90, -110),
+      project(-110, -80, 110), project(110, -80, 110),
+      project(110, 90, 110), project(-110, 90, 110)
+    ];
+
+    ctx.strokeStyle = '#007aff';
+    ctx.lineWidth = 2;
+    // Base & Top
+    [[0,1],[1,2],[2,3],[3,0],[4,5],[5,6],[6,7],[7,4],[0,4],[1,5],[2,6],[3,7]].forEach(([s, e]) => {
+      ctx.beginPath();
+      ctx.moveTo(box[s].x, box[s].y);
+      ctx.lineTo(box[e].x, box[e].y);
+      ctx.stroke();
+    });
+
+    // Draw point cloud
+    points.forEach(pt => {
+      let p = project(pt.x, pt.y, pt.z);
+      ctx.fillStyle = pt.col;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, Math.max(1.2, 2.5 * p.scale), 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    // Subtle automatic rotation if not dragging
+    if(!isDragging) {
+      angleY += 0.003;
+    }
+
+    if(isScanning) {
+      numPoints += Math.floor(Math.random() * 25);
+      document.getElementById('pointCount').textContent = numPoints.toLocaleString();
+    }
+
+    requestAnimationFrame(draw);
+  }
+
+  // Interactive Dragging
+  canvas.addEventListener('mousedown', e => {
+    isDragging = true;
+    lastX = e.clientX;
+    lastY = e.clientY;
+  });
+  window.addEventListener('mouseup', () => isDragging = false);
+  canvas.addEventListener('mousemove', e => {
+    if(!isDragging) return;
+    const dx = e.clientX - lastX;
+    const dy = e.clientY - lastY;
+    angleY += dx * 0.01;
+    angleX += dy * 0.01;
+    lastX = e.clientX;
+    lastY = e.clientY;
+  });
+
+  // Touch Support
+  canvas.addEventListener('touchstart', e => {
+    isDragging = true;
+    lastX = e.touches[0].clientX;
+    lastY = e.touches[0].clientY;
+  });
+  window.addEventListener('touchend', () => isDragging = false);
+  canvas.addEventListener('touchmove', e => {
+    if(!isDragging) return;
+    const dx = e.touches[0].clientX - lastX;
+    const dy = e.touches[0].clientY - lastY;
+    angleY += dx * 0.01;
+    angleX += dy * 0.01;
+    lastX = e.touches[0].clientX;
+    lastY = e.touches[0].clientY;
+  });
+
+  function toggleScan() {
+    isScanning = !isScanning;
+    const btn = document.getElementById('scanBtn');
+    const status = document.getElementById('scanStatus');
+    if(isScanning) {
+      btn.className = 'primary-scan-btn recording';
+      btn.innerHTML = '<span>⏹ Finish Scan & Save Mesh</span>';
+      status.textContent = 'LiDAR Active (60 Hz)';
+    } else {
+      btn.className = 'primary-scan-btn';
+      btn.innerHTML = '<span>▶ Resume Scanning</span>';
+      status.textContent = 'Scan Paused (Mesh Ready)';
+    }
+  }
+
+  function toggleMeshMode() {
+    alert("Display Mode: Switched to Dense Wireframe Mesh View");
+  }
+
+  function addMarker() {
+    alert("Pin Dropped at crosshairs: (X: 0.0, Y: 0.0, Z: 0.0). Dimension logged.");
+  }
+
+  requestAnimationFrame(draw);
+</script>
+</body>
+</html>
