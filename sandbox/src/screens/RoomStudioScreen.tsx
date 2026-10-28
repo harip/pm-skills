@@ -40,9 +40,9 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
   const [isMetric, setIsMetric] = useState(false);
   const [sectionCut4Ft, setSectionCut4Ft] = useState(true);
 
-  // 360° Drag Orbit State
-  const [angleX, setAngleX] = useState(0.48);
-  const [angleY, setAngleY] = useState(-0.52);
+  // 360° Drag Orbit State (Azimuth & Elevation)
+  const [angleX, setAngleX] = useState(0.52);
+  const [angleY, setAngleY] = useState(-0.35);
 
   // Fluid Pinch-to-Zoom State (0.35x to 4.0x)
   const [zoom, setZoom] = useState(1.0);
@@ -142,8 +142,8 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
             const dx = curX - lastTouchPosRef.current.x;
             const dy = curY - lastTouchPosRef.current.y;
             if (viewMode === '3d') {
-              setAngleY((prev) => prev + dx * 0.012);
-              setAngleX((prev) => Math.max(-1.35, Math.min(1.35, prev + dy * 0.012)));
+              setAngleY((prev) => prev + dx * 0.008);
+              setAngleX((prev) => Math.max(0.15, Math.min(1.45, prev - dy * 0.008)));
             } else {
               setPanOffset((prev) => ({ x: prev.x + dx, y: prev.y + dy }));
             }
@@ -167,8 +167,8 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
 
   const resetView = () => {
     setZoom(1.0);
-    setAngleX(0.48);
-    setAngleY(-0.52);
+    setAngleX(0.52);
+    setAngleY(-0.35);
     setPanOffset({ x: 0, y: 0 });
   };
 
@@ -304,52 +304,13 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
   };
 
   // --- CAD-Grade 3D Solid Model Construction ---
-  const baseScale3D = Math.min(220 / spanX, 220 / spanZ, 16);
+  const baseScale3D = Math.min(300 / spanX, 300 / spanZ, 22);
   const scale3D = baseScale3D * zoom;
-  const floorY3D = 65;
-  const heightPx = (sectionCut4Ft ? 4.0 : (room.height_ft || 8.5)) * scale3D;
-  const wallThickPx = Math.max(3, 0.5 * scale3D);
 
   // Directional Light Vector
   const lightDir = { x: 0.35, y: -0.75, z: 0.55 };
   const lightLen = Math.hypot(lightDir.x, lightDir.y, lightDir.z) || 1;
   const lx = lightDir.x / lightLen, lz = lightDir.z / lightLen;
-
-  // Calculate centered inner & outer offset 3D vertices for wall thickness
-  const centeredPoly = polygon.map((p) => ({
-    x: (p.x - centerPoly.x) * scale3D,
-    z: (p.z - centerPoly.z) * scale3D,
-  }));
-
-  const inner3D: { x: number; z: number }[] = [];
-  const outer3D: { x: number; z: number }[] = [];
-
-  for (let i = 0; i < N; i++) {
-    const prev = centeredPoly[(i - 1 + N) % N];
-    const cur = centeredPoly[i];
-    const next = centeredPoly[(i + 1) % N];
-
-    const d1 = { x: cur.x - prev.x, z: cur.z - prev.z };
-    const d2 = { x: next.x - cur.x, z: next.z - cur.z };
-    const l1 = Math.hypot(d1.x, d1.z) || 1;
-    const l2 = Math.hypot(d2.x, d2.z) || 1;
-
-    const n1 = { x: -d1.z / l1, z: d1.x / l1 };
-    const n2 = { x: -d2.z / l2, z: d2.x / l2 };
-    let nx = (n1.x + n2.x) / 2;
-    let nz = (n1.z + n2.z) / 2;
-    const nLen = Math.hypot(nx, nz) || 1;
-    nx /= nLen;
-    nz /= nLen;
-
-    if (nx * cur.x + nz * cur.z < 0) {
-      nx = -nx;
-      nz = -nz;
-    }
-
-    outer3D.push({ x: cur.x + nx * (wallThickPx / 2), z: cur.z + nz * (wallThickPx / 2) });
-    inner3D.push({ x: cur.x - nx * (wallThickPx / 2), z: cur.z - nz * (wallThickPx / 2) });
-  }
 
   // --- Certified CAD Parametric Solid Model Construction ---
   // Convert polygon to meters for exact aperture projection
@@ -380,16 +341,40 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
   const wallThickM = GeometryService.EXTERIOR_WALL_THICKNESS_M; // 6.50"
 
   // Helper to project a 3D vertex (in meters relative to room origin) onto canvas
+  // Certified CAD Coordinate Alignment (Matching verified STL frame):
+  // X_cad = X_plan (Right = +X, Left = -X)
+  // Y_cad = -Z_plan (Into room = +Y, Toward entrance/camera = -Y)
+  // Z_cad = Y_plan (Up = +Z)
   const toScreen3D = (vxM: number, vyM: number, vzM: number): ProjectedPoint => {
     const xFt = vxM / 0.3048 - centerPoly.x;
     const zFt = vzM / 0.3048 - centerPoly.z;
     const yFt = vyM / 0.3048;
 
-    const px = xFt * scale3D;
-    const pz = zFt * scale3D;
-    const py = floorY3D - yFt * scale3D;
+    const xCad = xFt;
+    const yCad = -zFt;
+    const zCad = yFt;
 
-    return GeometryService.project3D(px, py, pz, angleX, angleY, viewW, viewH);
+    const cosY = Math.cos(angleY);
+    const sinY = Math.sin(angleY);
+    const x1 = xCad * cosY - yCad * sinY;
+    const y1 = xCad * sinY + yCad * cosY;
+
+    const sinP = Math.sin(angleX);
+    const cosP = Math.cos(angleX);
+
+    const depth = y1 * cosP - zCad * sinP;
+    const fovDist = 45.0; // ft perspective distance
+    const persp = fovDist / (fovDist + depth);
+
+    const screenX = viewW / 2 + x1 * scale3D * persp;
+    const screenY = viewH * 0.56 - (y1 * sinP + zCad * cosP) * scale3D * persp;
+
+    return {
+      x: screenX,
+      y: screenY,
+      scale: persp,
+      depth: depth,
+    };
   };
 
   // Collection of all 3D solid facets for depth-sorting
@@ -538,13 +523,11 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
 
   // 5. CAD-Grade 3D Solid Objects (Oriented Bounding Box OBB with 6 Shaded Faces)
   realObjects.forEach((obj, oIdx) => {
-    const cx = ((obj.x ?? 0) - centerPoly.x) * scale3D;
-    const cz = ((obj.z ?? 0) - centerPoly.z) * scale3D;
-    const ow = Math.max(8, (obj.widthFt || 3) * scale3D);
-    const ol = Math.max(8, (obj.lengthFt || 3) * scale3D);
-    const oh = Math.max(6, (obj.heightFt || 2.5) * scale3D);
-    const halfW = ow / 2;
-    const halfL = ol / 2;
+    const objXM = (obj.x ?? 0) * 0.3048;
+    const objZM = (obj.z ?? 0) * 0.3048;
+    const halfWM = ((obj.widthFt || 3) * 0.3048) / 2;
+    const halfLM = ((obj.lengthFt || 3) * 0.3048) / 2;
+    const objHeightM = (obj.heightFt || 2.5) * 0.3048;
 
     // Determine unit direction vectors for orientation
     let ux = 1, uz = 0;
@@ -593,23 +576,23 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
       vz = ux;
     }
 
-    // 4 base corner offsets relative to center
-    const c0 = { x: -halfW * ux - halfL * vx, z: -halfW * uz - halfL * vz };
-    const c1 = { x:  halfW * ux - halfL * vx, z:  halfW * uz - halfL * vz };
-    const c2 = { x:  halfW * ux + halfL * vx, z:  halfW * uz + halfL * vz };
-    const c3 = { x: -halfW * ux + halfL * vx, z: -halfW * uz + halfL * vz };
+    // 4 base corner offsets relative to center in meters
+    const c0 = { x: -halfWM * ux - halfLM * vx, z: -halfWM * uz - halfLM * vz };
+    const c1 = { x:  halfWM * ux - halfLM * vx, z:  halfWM * uz - halfLM * vz };
+    const c2 = { x:  halfWM * ux + halfLM * vx, z:  halfWM * uz + halfLM * vz };
+    const c3 = { x: -halfWM * ux + halfLM * vx, z: -halfWM * uz + halfLM * vz };
 
     // 4 bottom vertices (on floor)
-    const pb0 = GeometryService.project3D(cx + c0.x, floorY3D, cz + c0.z, angleX, angleY, viewW, viewH);
-    const pb1 = GeometryService.project3D(cx + c1.x, floorY3D, cz + c1.z, angleX, angleY, viewW, viewH);
-    const pb2 = GeometryService.project3D(cx + c2.x, floorY3D, cz + c2.z, angleX, angleY, viewW, viewH);
-    const pb3 = GeometryService.project3D(cx + c3.x, floorY3D, cz + c3.z, angleX, angleY, viewW, viewH);
+    const pb0 = toScreen3D(objXM + c0.x, 0, objZM + c0.z);
+    const pb1 = toScreen3D(objXM + c1.x, 0, objZM + c1.z);
+    const pb2 = toScreen3D(objXM + c2.x, 0, objZM + c2.z);
+    const pb3 = toScreen3D(objXM + c3.x, 0, objZM + c3.z);
 
     // 4 top vertices (at top of object)
-    const pt0 = GeometryService.project3D(cx + c0.x, floorY3D - oh, cz + c0.z, angleX, angleY, viewW, viewH);
-    const pt1 = GeometryService.project3D(cx + c1.x, floorY3D - oh, cz + c1.z, angleX, angleY, viewW, viewH);
-    const pt2 = GeometryService.project3D(cx + c2.x, floorY3D - oh, cz + c2.z, angleX, angleY, viewW, viewH);
-    const pt3 = GeometryService.project3D(cx + c3.x, floorY3D - oh, cz + c3.z, angleX, angleY, viewW, viewH);
+    const pt0 = toScreen3D(objXM + c0.x, objHeightM, objZM + c0.z);
+    const pt1 = toScreen3D(objXM + c1.x, objHeightM, objZM + c1.z);
+    const pt2 = toScreen3D(objXM + c2.x, objHeightM, objZM + c2.z);
+    const pt3 = toScreen3D(objXM + c3.x, objHeightM, objZM + c3.z);
 
     // Dynamic directional shading helper
     const getShadedColor = (normX: number, normZ: number, baseR: number, baseG: number, baseB: number) => {
@@ -630,7 +613,7 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
     // 1. Top Face
     faces3D.push({
       points: [pt0, pt1, pt2, pt3],
-      avgDepth: (pt0.depth + pt1.depth + pt2.depth + pt3.depth) / 4 + 2,
+      avgDepth: (pt0.depth + pt1.depth + pt2.depth + pt3.depth) / 4 - 0.05,
       fill: `rgb(${Math.min(255, baseR + 35)}, ${Math.min(255, baseG + 30)}, ${Math.min(255, baseB + 20)})`,
       stroke: strokeCol,
       strokeWidth: 1.2,
@@ -640,7 +623,7 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
     // 2. Side 0 (Back: -vx, -vz)
     faces3D.push({
       points: [pb0, pb1, pt1, pt0],
-      avgDepth: (pb0.depth + pb1.depth + pt1.depth + pt0.depth) / 4 + 2,
+      avgDepth: (pb0.depth + pb1.depth + pt1.depth + pt0.depth) / 4,
       fill: getShadedColor(-vx, -vz, baseR, baseG, baseB),
       stroke: strokeCol,
       strokeWidth: 1.0,
@@ -650,7 +633,7 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
     // 3. Side 1 (Right: +ux, +uz)
     faces3D.push({
       points: [pb1, pb2, pt2, pt1],
-      avgDepth: (pb1.depth + pb2.depth + pt2.depth + pt1.depth) / 4 + 2,
+      avgDepth: (pb1.depth + pb2.depth + pt2.depth + pt1.depth) / 4,
       fill: getShadedColor(ux, uz, baseR, baseG, baseB),
       stroke: strokeCol,
       strokeWidth: 1.0,
@@ -660,7 +643,7 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
     // 4. Side 2 (Front: +vx, +vz)
     faces3D.push({
       points: [pb2, pb3, pt3, pt2],
-      avgDepth: (pb2.depth + pb3.depth + pt3.depth + pt2.depth) / 4 + 2,
+      avgDepth: (pb2.depth + pb3.depth + pt3.depth + pt2.depth) / 4,
       fill: getShadedColor(vx, vz, baseR, baseG, baseB),
       stroke: strokeCol,
       strokeWidth: 1.0,
@@ -670,7 +653,7 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
     // 5. Side 3 (Left: -ux, -uz)
     faces3D.push({
       points: [pb3, pb0, pt0, pt3],
-      avgDepth: (pb3.depth + pb0.depth + pt0.depth + pt3.depth) / 4 + 2,
+      avgDepth: (pb3.depth + pb0.depth + pt0.depth + pt3.depth) / 4,
       fill: getShadedColor(-ux, -uz, baseR, baseG, baseB),
       stroke: strokeCol,
       strokeWidth: 1.0,
@@ -682,8 +665,8 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
   faces3D.sort((a, b) => b.avgDepth - a.avgDepth);
 
   // Ceiling Wireframe Canopy
-  const ceilingProjected = inner3D.map((p) =>
-    GeometryService.project3D(p.x, floorY3D - heightPx, p.z, angleX, angleY, viewW, viewH)
+  const ceilingProjected = polygon.map((p) =>
+    toScreen3D(p.x * 0.3048, effectiveHeightM, p.z * 0.3048)
   );
 
   // --- CAD-Grade 2D Floor Plan Scaled Geometry ---
@@ -1020,9 +1003,9 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
               // 3D Watertight Solid CAD Mesh (Depth Sorted Walls, Doors, Windows, Objects & Canopy)
               <>
                 {/* Ground Reference Grid */}
-                {[-100, 0, 100].map((c, i) => {
-                  const g1 = GeometryService.project3D(c * zoom, floorY3D, -140 * zoom, angleX, angleY, viewW, viewH);
-                  const g2 = GeometryService.project3D(c * zoom, floorY3D, 140 * zoom, angleX, angleY, viewW, viewH);
+                {[-10, 0, 10].map((c, i) => {
+                  const g1 = toScreen3D((centerPoly.x + c) * 0.3048, 0, (centerPoly.z - 12) * 0.3048);
+                  const g2 = toScreen3D((centerPoly.x + c) * 0.3048, 0, (centerPoly.z + 12) * 0.3048);
                   return (
                     <Line
                       key={`grid-3d-${i}`}

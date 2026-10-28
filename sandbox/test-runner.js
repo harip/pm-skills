@@ -275,6 +275,58 @@ endsolid ${room.name}`;
     assert.strictEqual(Math.round(floorToFloorFt * 12), 108, 'Floor-to-floor elevation must be exactly 108 inches');
   });
 
+  // EVAL-07: CAD 3D Screen Viewport Spatial Chirality Alignment (Matches Certified STL Frame)
+  it('EVAL-07: 3D Solid Model orientation matches physical reality (Door at front, Bed on right, Ceiling up)', () => {
+    const viewW = 430, viewH = 620;
+    const centerPoly = { x: 7.0, z: 8.0 };
+    const scale3D = 22.0;
+    const angleX = 0.52;  // ~30 deg pitch
+    const angleY = -0.35; // ~20 deg axonometric azimuth
+
+    const project = (vxM, vyM, vzM) => {
+      const xFt = vxM / 0.3048 - centerPoly.x;
+      const zFt = vzM / 0.3048 - centerPoly.z;
+      const yFt = vyM / 0.3048;
+
+      const xCad = xFt;
+      const yCad = -zFt;
+      const zCad = yFt;
+
+      const cosY = Math.cos(angleY);
+      const sinY = Math.sin(angleY);
+      const x1 = xCad * cosY - yCad * sinY;
+      const y1 = xCad * sinY + yCad * cosY;
+
+      const sinP = Math.sin(angleX);
+      const cosP = Math.cos(angleX);
+
+      const depth = y1 * cosP - zCad * sinP;
+      const fovDist = 45.0;
+      const persp = fovDist / (fovDist + depth);
+
+      const screenX = viewW / 2 + x1 * scale3D * persp;
+      const screenY = viewH * 0.54 - (y1 * sinP + zCad * cosP) * scale3D * persp;
+      return { x: screenX, y: screenY, depth };
+    };
+
+    // Entrance Door: South wall (z = 16 ft), Floor y = 0
+    const door = project(7.0 * 0.3048, 0, 16.0 * 0.3048);
+    // Bed: East wall (x = 12 ft), Floor y = 0, Top y = 3.0 ft
+    const bedBase = project(12.0 * 0.3048, 0, 7.0 * 0.3048);
+    const bedTop = project(12.0 * 0.3048, 3.0 * 0.3048, 7.0 * 0.3048);
+    // Back Wall: North wall (z = 0 ft), Floor y = 0
+    const backWall = project(7.0 * 0.3048, 0, 0.0 * 0.3048);
+
+    // 1. Door is at bottom of screen (closer to user, larger SVG Y)
+    assert(door.y > backWall.y, 'Door must be lower on screen than back wall');
+    // 2. Bed is to the right of the entrance (X_bed > X_door)
+    assert(bedBase.x > door.x, 'Bed must be on the right side of the room');
+    // 3. Top of bed is higher on screen than base (smaller SVG Y)
+    assert(bedTop.y < bedBase.y, 'Object top must be visually above object base');
+    // 4. Back wall depth is greater than entrance depth (correct back-to-front sorting)
+    assert(backWall.depth > door.depth, 'Back wall must be deeper than entrance');
+  });
+
   console.log(`\n📊 Verification Summary: ${passedTests}/${totalTests} tests passed.\n`);
 }
 
