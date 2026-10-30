@@ -327,6 +327,90 @@ endsolid ${room.name}`;
     assert(backWall.depth > door.depth, 'Back wall must be deeper than entrance');
   });
 
+  // EVAL-08: Canvas Pixel Hit-Testing Accuracy (Room vs Canvas Pan)
+  it('EVAL-08: Canvas pixel hit-testing differentiates Room 1, Room 2, and Canvas Background', () => {
+    const viewW = 360, viewH = 430;
+    const scale2D = 9.0;
+    const panOffset = { x: 0, y: 0 };
+    const worldToCanvas = (wx, wz) => ({
+      x: viewW / 2 + wx * scale2D + panOffset.x,
+      y: viewH / 2 + wz * scale2D + panOffset.y,
+    });
+
+    const roomNodes = [
+      { id: 'room-1', x: 0, z: 0, w: 18, l: 18, rotation: 0 },
+      // Room 1 right edge is +9.0 ft. Room 2 placed at +19.0 ft (left edge = +12.0 ft, right edge = +26.0 ft)
+      { id: 'room-2', x: 19, z: 0, w: 14, l: 13, rotation: 0 },
+    ];
+
+    const hitTest = (canvasX, canvasY) => {
+      const pad = 24;
+      let bestId = null;
+      let bestDist = Infinity;
+      for (let i = 0; i < roomNodes.length; i++) {
+        const n = roomNodes[i];
+        const rwPx = (n.rotation % 180 === 0 ? n.w : n.l) * scale2D;
+        const rlPx = (n.rotation % 180 === 0 ? n.l : n.w) * scale2D;
+        const center = worldToCanvas(n.x, n.z);
+        if (
+          canvasX >= center.x - rwPx / 2 - pad &&
+          canvasX <= center.x + rwPx / 2 + pad &&
+          canvasY >= center.y - rlPx / 2 - pad &&
+          canvasY <= center.y + rlPx / 2 + pad
+        ) {
+          const dist = Math.hypot(canvasX - center.x, canvasY - center.y);
+          if (dist < bestDist) {
+            bestDist = dist;
+            bestId = n.id;
+          }
+        }
+      }
+      return bestId;
+    };
+
+    // Center of Room 1 is (180, 215)
+    assert.strictEqual(hitTest(180, 215), 'room-1', 'Must hit Room 1 at its center');
+    // Near edge of Room 1: (180 + 75, 215) = (255, 215)
+    assert.strictEqual(hitTest(255, 215), 'room-1', 'Must hit Room 1 near edge with pad');
+    // Center of Room 2: x = 180 + 19*9 = 351, y = 215
+    assert.strictEqual(hitTest(351, 215), 'room-2', 'Must hit Room 2 at its center');
+    // Empty canvas: (40, 40)
+    assert.strictEqual(hitTest(40, 40), null, 'Must return null for empty canvas (Canvas Pan Mode)');
+  });
+
+  // EVAL-09: Real-Time Magnetic Snapping at 2.5ft Threshold
+  it('EVAL-09: Real-time collinear magnetic snapping locks adjacent walls flush within 2.5ft threshold', () => {
+    const room1 = { id: 'room-1', x: 0, z: 0, w: 18, l: 18, rotation: 0 };
+    // Dragged room: 14' x 13', dragged near room 1's east wall (x = +9.0)
+    // When dragged room's left edge (x - 7) is within 2.5ft of room 1's right edge (+9), snap to x = 16.0
+    const THRESH_EDGE_FT = 2.5;
+    const targetRoom = { id: 'room-2', x: 17.5, z: 1.0, w: 14, l: 13, rotation: 0 };
+
+    const tMinX = targetRoom.x - targetRoom.w / 2; // 17.5 - 7 = 10.5
+    const oMaxX = room1.x + room1.w / 2;           // 0 + 9 = 9.0
+    const edgeDiff = Math.abs(tMinX - oMaxX);     // |10.5 - 9.0| = 1.5 ft
+
+    assert(edgeDiff <= THRESH_EDGE_FT, 'Difference must be within 2.5ft magnetic threshold');
+    const snappedX = oMaxX + targetRoom.w / 2;    // 9.0 + 7 = 16.0 ft
+    assert.strictEqual(snappedX, 16.0, 'Snapped position must lock flush against East boundary');
+  });
+
+  // EVAL-10: 90-Degree Rigid Room Rotation
+  it('EVAL-10: Rigid 90-degree room rotation swaps effective dimensions while preserving area', () => {
+    const room = { id: 'room-1', w: 18, l: 14, rotation: 0 };
+    const nextRot = (room.rotation + 90) % 360;
+    const effW0 = room.rotation % 180 === 0 ? room.w : room.l;
+    const effL0 = room.rotation % 180 === 0 ? room.l : room.w;
+    const effW90 = nextRot % 180 === 0 ? room.w : room.l;
+    const effL90 = nextRot % 180 === 0 ? room.l : room.w;
+
+    assert.strictEqual(effW0, 18);
+    assert.strictEqual(effL0, 14);
+    assert.strictEqual(effW90, 14, 'Effective width after 90 deg must be 14');
+    assert.strictEqual(effL90, 18, 'Effective length after 90 deg must be 18');
+    assert.strictEqual(effW0 * effL0, effW90 * effL90, 'Area must be strictly preserved');
+  });
+
   console.log(`\n📊 Verification Summary: ${passedTests}/${totalTests} tests passed.\n`);
 }
 

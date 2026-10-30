@@ -183,18 +183,16 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
     })();
   }, [initialSelectedRoom]);
 
-  // Handle Viewport measurement
+  // Handle Viewport measurement with hardware-accurate measureInWindow
   const handleViewportLayout = (e: any) => {
     const { width, height } = e.nativeEvent.layout;
     if (width > 0 && height > 0) {
       setCanvasLayout({ width, height });
-      setTimeout(() => {
-        viewportRef.current?.measure((_x, _y, w, h, pageX, pageY) => {
-          if (w > 0 && h > 0) {
-            viewportLayoutRef.current = { pageX, pageY, width: w, height: h };
-          }
-        });
-      }, 50);
+      viewportRef.current?.measureInWindow((x, y, w, h) => {
+        if (w > 0 && h > 0) {
+          viewportLayoutRef.current = { pageX: x, pageY: y, width: w, height: h };
+        }
+      });
     }
   };
 
@@ -280,8 +278,8 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
     const tMinZ = targetNode.z - rl / 2;
     const tMaxZ = targetNode.z + rl / 2;
 
-    const THRESH_CORNER_FT = 1.0;
-    const THRESH_EDGE_FT = 1.2;
+    const THRESH_CORNER_FT = 2.0;
+    const THRESH_EDGE_FT = 2.5;
 
     for (const other of nodesList) {
       if (other.room.id === targetNode.room.id) continue;
@@ -437,10 +435,14 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
           lastPinchDistRef.current = null;
 
           if (viewMode === '2d') {
-            const vp = viewportLayoutRef.current;
-            const canvasX = pageX - (vp.pageX || 16);
-            const canvasY = pageY - (vp.pageY || 110);
-            const worldTouch = canvasToWorld(canvasX, canvasY);
+            const touch = evt.nativeEvent.touches?.[0] || evt.nativeEvent;
+            let canvasX = touch.locationX;
+            let canvasY = touch.locationY;
+            if (canvasX === undefined || canvasX < 0 || canvasX > viewW || canvasY === undefined || canvasY < 0 || canvasY > viewH) {
+              const vp = viewportLayoutRef.current;
+              canvasX = touch.pageX - vp.pageX;
+              canvasY = touch.pageY - vp.pageY;
+            }
 
             // 1. Direct hit-test for corner rotation handle on currently selected room
             if (selectedRoomId) {
@@ -452,7 +454,7 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
                 const handleX = cc.x + rwPx / 2 - 14;
                 const handleY = cc.y - rlPx / 2 + 14;
                 const distToHandle = Math.hypot(canvasX - handleX, canvasY - handleY);
-                if (distToHandle <= 28) {
+                if (distToHandle <= 32) {
                   activeGestureTargetRef.current = { type: 'NONE' };
                   handleRotateSelectedRoom();
                   return;
@@ -460,29 +462,35 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
               }
             }
 
-            // 2. Hit test top-most room polygon
+            // 2. Pixel-accurate hit test across placed rooms (Closest room center wins)
             let hitRoomId: string | null = null;
-            for (let i = placedRoomNodes.length - 1; i >= 0; i--) {
+            let bestCenterDist = Infinity;
+            const pad = 24; // 24px comfortable finger touch slop
+
+            for (let i = 0; i < placedRoomNodes.length; i++) {
               const n = placedRoomNodes[i];
-              const rw = n.rotation % 180 === 0 ? n.w : n.l;
-              const rl = n.rotation % 180 === 0 ? n.l : n.w;
-              const pad = 1.0;
+              const rwPx = (n.rotation % 180 === 0 ? n.w : n.l) * scale2D;
+              const rlPx = (n.rotation % 180 === 0 ? n.l : n.w) * scale2D;
+              const center = worldToCanvas(n.x, n.z);
               if (
-                worldTouch.x >= n.x - rw / 2 - pad &&
-                worldTouch.x <= n.x + rw / 2 + pad &&
-                worldTouch.z >= n.z - rl / 2 - pad &&
-                worldTouch.z <= n.z + rl / 2 + pad
+                canvasX >= center.x - rwPx / 2 - pad &&
+                canvasX <= center.x + rwPx / 2 + pad &&
+                canvasY >= center.y - rlPx / 2 - pad &&
+                canvasY <= center.y + rlPx / 2 + pad
               ) {
-                hitRoomId = n.room.id;
-                break;
+                const dist = Math.hypot(canvasX - center.x, canvasY - center.y);
+                if (dist < bestCenterDist) {
+                  bestCenterDist = dist;
+                  hitRoomId = n.room.id;
+                }
               }
             }
 
             if (hitRoomId) {
-              // Touch is ON A ROOM: Lock into ROOM DRAG MODE
+              // Touch is ON A ROOM: Lock into ROOM DRAG MODE (Light Orange Border #f97316)
               activeGestureTargetRef.current = { type: 'ROOM', roomId: hitRoomId };
               setSelectedRoomId(hitRoomId);
-              setHeldRoomId(hitRoomId); // Triggers Light Orange Border (#f97316)
+              setHeldRoomId(hitRoomId);
               isHeldActiveRef.current = true;
               heldRoomIdRef.current = hitRoomId;
               triggerMediumHaptic();
@@ -605,11 +613,11 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
       return;
     }
 
-    let maxX = -Infinity;
+    let maxRightEdge = 0;
     placedRoomNodes.forEach((n) => {
-      maxX = Math.max(maxX, n.x);
+      const nw = n.rotation % 180 === 0 ? n.w : n.l;
+      maxRightEdge = Math.max(maxRightEdge, n.x + nw / 2);
     });
-    if (maxX === -Infinity) maxX = 0;
 
     const rw = room.width_ft || 16;
     const rl = room.length_ft || 14;
@@ -618,7 +626,7 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
 
     const newNode: RoomNode = {
       room,
-      x: placedRoomNodes.length === 0 ? 0 : maxX + rw + 2,
+      x: placedRoomNodes.length === 0 ? 0 : maxRightEdge + 3.0 + rw / 2,
       z: 0,
       w: rw,
       l: rl,
@@ -631,6 +639,9 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
 
     setPlacedRoomNodes((prev) => [...prev, newNode]);
     setSelectedRoomId(room.id);
+    if (placedRoomNodes.length >= 1) {
+      setZoom((prev) => Math.min(prev, 0.78)); // Comfortable fit for multi-room canvas
+    }
     triggerHaptic();
   };
 
@@ -1115,12 +1126,13 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
         {/* Hero CAD Viewport */}
         <View
           ref={viewportRef}
+          collapsable={false}
           style={styles.viewportArea}
           onLayout={handleViewportLayout}
         >
           {/* Layer 1: Gesture Surface for SVG Canvas */}
           <View style={StyleSheet.absoluteFill} {...panResponder.panHandlers}>
-            <Svg width={viewW} height={viewH} style={styles.cadCanvas}>
+            <Svg width={viewW} height={viewH} pointerEvents="none" style={styles.cadCanvas}>
               {/* Background architectural grid */}
               <Rect x="0" y="0" width={viewW} height={viewH} fill="#ffffff" />
               {[-120, -60, 0, 60, 120].map((step, idx) => (
@@ -1496,7 +1508,7 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
 
           {/* Selected Room Floating Action Dock (Top of canvas) */}
           {selectedNode && (
-            <View style={styles.selectedRoomDock} pointerEvents="box-none">
+            <View style={styles.selectedRoomDock}>
               <View style={styles.selInfo}>
                 <View style={styles.selNameRow}>
                   <Text style={[styles.selDot, heldRoomId === selectedNode.room.id && styles.selDotHeld]}>●</Text>
@@ -1522,7 +1534,7 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
                   style={[styles.actionIconBtn, styles.btnRotate]}
                   onPress={handleRotateSelectedRoom}
                   activeOpacity={0.7}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                 >
                   <Text style={styles.rotateGlyph}>↻</Text>
                 </TouchableOpacity>
@@ -1532,7 +1544,7 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
                   style={[styles.actionIconBtn, styles.btnDelete]}
                   onPress={handleRemoveSelectedRoom}
                   activeOpacity={0.7}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                 >
                   <Text style={styles.deleteGlyph}>✕</Text>
                 </TouchableOpacity>
