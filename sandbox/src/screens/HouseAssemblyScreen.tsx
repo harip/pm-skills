@@ -229,7 +229,11 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
 
   const toggleHouseRotateMode = () => {
     triggerHaptic();
-    setIsHouseRotateMode((prev) => !prev);
+    setIsHouseRotateMode((prev) => {
+      const next = !prev;
+      isHouseRotateModeRef.current = next;
+      return next;
+    });
   };
 
   const canvasLayoutRef = useRef<{ width: number; height: number }>(canvasLayout);
@@ -546,7 +550,12 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
           touchStartPosRef.current = { x: pageX, y: pageY };
           lastPinchDistRef.current = null;
 
-          if (viewMode === '2d') {
+          if (viewModeRef.current === '3d') {
+            activeGestureTargetRef.current = { type: 'NONE' };
+            return;
+          }
+
+          if (viewModeRef.current === '2d') {
             const touch = evt.nativeEvent.touches?.[0] || evt.nativeEvent.changedTouches?.[0] || evt.nativeEvent;
             const vp = viewportLayoutRef.current;
             // Robust coordinate calculation across all iOS devices and layouts:
@@ -647,7 +656,7 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
             const dx = curX - lastTouchPosRef.current.x;
             const dy = curY - lastTouchPosRef.current.y;
 
-            if (viewMode === '3d') {
+            if (viewModeRef.current === '3d') {
               if (isHouseRotateModeRef.current) {
                 // ROTATE 3D HOUSE (ALL DIRECTIONS - Silky Smooth Studio Rotation Formula):
                 setAngleY((prev) => prev + dx * 0.008);
@@ -656,6 +665,8 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
                 // PAN / TRANSLATE VIEW (When Rotate toggle is OFF, finger freely moves the house):
                 setPanOffset((prev) => ({ x: prev.x + dx, y: prev.y + dy }));
               }
+              lastTouchPosRef.current = { x: curX, y: curY };
+              return;
             } else if (activeGestureTargetRef.current.type === 'ROOM' && heldRoomIdRef.current) {
               // DRAG ONLY THE HELD ROOM (All other rooms stay fixed)
               const curScale = scale2DRef.current;
@@ -1954,7 +1965,9 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
                   style={[styles.freeformSegBtn, viewMode === '2d' && styles.freeformSegBtnActive]}
                   onPress={() => {
                     setViewMode('2d');
+                    viewModeRef.current = '2d';
                     setIsHouseRotateMode(false);
+                    isHouseRotateModeRef.current = false;
                   }}
                   activeOpacity={0.8}
                 >
@@ -1964,7 +1977,10 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.freeformSegBtn, viewMode === '3d' && styles.freeformSegBtnActive]}
-                  onPress={() => setViewMode('3d')}
+                  onPress={() => {
+                    setViewMode('3d');
+                    viewModeRef.current = '3d';
+                  }}
                   activeOpacity={0.8}
                 >
                   <Text style={[styles.freeformSegText, viewMode === '3d' && styles.freeformSegTextActive]}>
