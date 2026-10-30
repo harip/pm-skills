@@ -1,0 +1,1215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>House Assembly Studio Overhaul — Minimalist CAD Mockup</title>
+  <style>
+    :root {
+      --ios-bg: #f5f5f7;
+      --ios-card: #ffffff;
+      --ios-text: #1c1c1e;
+      --ios-secondary: #8e8e93;
+      --ios-blue: #007aff;
+      --ios-green: #34c759;
+      --ios-orange: #ff9500;
+      --ios-red: #ff3b30;
+      --ios-border: #e5e5ea;
+      --ios-divider: rgba(60, 60, 67, 0.12);
+    }
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      background: #e5e5ea;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
+      color: var(--ios-text);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    .device-frame {
+      width: 100%;
+      max-width: 393px;
+      height: 852px;
+      background: var(--ios-bg);
+      border-radius: 50px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      box-shadow: 0 25px 60px rgba(0,0,0,0.18), 0 0 0 1px rgba(0,0,0,0.08);
+    }
+    .island {
+      width: 110px;
+      height: 28px;
+      background: #000000;
+      border-radius: 20px;
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 100;
+    }
+    .status-bar {
+      height: 48px;
+      padding: 12px 24px 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--ios-text);
+      z-index: 40;
+    }
+    .nav-bar {
+      padding: 8px 16px 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--ios-bg);
+      border-bottom: 0.5px solid var(--ios-border);
+      z-index: 30;
+    }
+    .nav-btn {
+      background: none;
+      border: none;
+      font-size: 16px;
+      color: var(--ios-blue);
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .nav-title-group {
+      text-align: center;
+    }
+    .nav-title {
+      font-size: 17px;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+    }
+    .nav-sub {
+      font-size: 11px;
+      color: var(--ios-secondary);
+      font-weight: 500;
+      margin-top: 1px;
+    }
+
+    /* 2 Main Tabs: Studio | 3D Dollhouse */
+    .main-tabs-wrap {
+      padding: 8px 16px 10px;
+      background: var(--ios-bg);
+    }
+    .main-tabs {
+      background: #e5e5ea;
+      border-radius: 12px;
+      padding: 3px;
+      display: flex;
+      height: 36px;
+    }
+    .main-tab {
+      flex: 1;
+      border-radius: 9px;
+      border: none;
+      background: transparent;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--ios-secondary);
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    .main-tab.active {
+      background: #ffffff;
+      color: var(--ios-text);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    .tab-badge {
+      font-size: 10px;
+      background: rgba(0, 122, 255, 0.12);
+      color: var(--ios-blue);
+      padding: 2px 6px;
+      border-radius: 10px;
+      font-weight: 700;
+    }
+
+    /* Hero CAD Viewport */
+    .viewport-area {
+      flex: 1;
+      position: relative;
+      background: #ffffff;
+      margin: 0 16px;
+      border-radius: 20px;
+      border: 1px solid var(--ios-border);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.03);
+    }
+    .cad-canvas {
+      width: 100%;
+      height: 100%;
+      user-select: none;
+      touch-action: none;
+    }
+
+    /* Selected Room Action Pill (Top of canvas) */
+    .selected-room-dock {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      right: 10px;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-radius: 14px;
+      padding: 8px 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border: 0.5px solid var(--ios-border);
+      box-shadow: 0 4px 14px rgba(0,0,0,0.06);
+      z-index: 20;
+    }
+    .sel-info {
+      display: flex;
+      flex-direction: column;
+    }
+    .sel-name {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--ios-text);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .sel-dims {
+      font-size: 11px;
+      color: var(--ios-secondary);
+      font-weight: 500;
+    }
+    .sel-actions {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+    .hud-action-icon-btn {
+      width: 30px;
+      height: 30px;
+      border-radius: 15px;
+      border: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .hud-action-icon-btn:active {
+      transform: scale(0.92);
+    }
+    .btn-rotate {
+      background: #f0f4ff;
+      color: var(--ios-blue);
+    }
+    .btn-rotate:hover {
+      background: #e1ebff;
+    }
+    .btn-delete {
+      background: #fff2f2;
+      color: var(--ios-red);
+    }
+    .btn-delete:hover {
+      background: #ffe5e5;
+    }
+
+    /* BOTTOM-LEFT: Minimalist Merge Walls Icon Button */
+    .merge-icon-btn {
+      position: absolute;
+      bottom: 12px;
+      left: 12px;
+      height: 38px;
+      padding: 0 12px;
+      border-radius: 19px;
+      background: rgba(255, 255, 255, 0.96);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1.5px solid var(--ios-green);
+      box-shadow: 0 4px 14px rgba(52, 199, 89, 0.25);
+      display: none;
+      align-items: center;
+      gap: 6px;
+      color: var(--ios-green);
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      z-index: 25;
+      animation: fadeIn 0.2s ease;
+      transition: transform 0.1s ease;
+    }
+    .merge-icon-btn:active {
+      transform: scale(0.95);
+    }
+    .merge-icon-glyph {
+      font-size: 14px;
+      line-height: 1;
+    }
+
+    /* BOTTOM-RIGHT: Ultra-clean 2D 3D Switcher */
+    .view-toggle-bottom {
+      position: absolute;
+      bottom: 12px;
+      right: 12px;
+      background: rgba(255, 255, 255, 0.94);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-radius: 19px;
+      padding: 3px;
+      display: flex;
+      border: 0.5px solid var(--ios-border);
+      box-shadow: 0 4px 14px rgba(0,0,0,0.08);
+      z-index: 25;
+      height: 38px;
+    }
+    .view-toggle-btn {
+      padding: 0 12px;
+      border-radius: 16px;
+      border: none;
+      background: transparent;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--ios-secondary);
+      cursor: pointer;
+      transition: all 0.15s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .view-toggle-btn.active {
+      background: var(--ios-blue);
+      color: #ffffff;
+      box-shadow: 0 2px 6px rgba(0, 122, 255, 0.3);
+    }
+
+    /* Bottom Room Drawer Tray ("Add 1 room by 1 room") */
+    .bottom-drawer {
+      background: var(--ios-bg);
+      padding: 10px 16px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      z-index: 30;
+    }
+    .drawer-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0 4px;
+    }
+    .drawer-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--ios-text);
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+    .drawer-sub {
+      font-size: 11px;
+      color: var(--ios-secondary);
+      font-weight: 500;
+    }
+    .room-tray-scroll {
+      display: flex;
+      gap: 10px;
+      overflow-x: auto;
+      padding: 2px 2px 6px;
+      scrollbar-width: none;
+    }
+    .room-tray-scroll::-webkit-scrollbar {
+      display: none;
+    }
+    .room-tray-card {
+      min-width: 126px;
+      background: var(--ios-card);
+      border-radius: 14px;
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      border: 1px solid var(--ios-border);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.03);
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .room-tray-card.placed {
+      background: #fafafc;
+      opacity: 0.65;
+      border-style: dashed;
+    }
+    .rtc-name {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--ios-text);
+      margin-bottom: 2px;
+    }
+    .rtc-meta {
+      font-size: 11px;
+      color: var(--ios-secondary);
+      margin-bottom: 8px;
+    }
+    .rtc-btn {
+      padding: 5px 8px;
+      border-radius: 8px;
+      font-size: 11px;
+      font-weight: 700;
+      border: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      cursor: pointer;
+    }
+    .rtc-btn.add {
+      background: #e8f2ff;
+      color: var(--ios-blue);
+    }
+    .rtc-btn.added {
+      background: #f0f0f4;
+      color: var(--ios-secondary);
+      cursor: default;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: scale(0.95); }
+      to { opacity: 1; transform: scale(1); }
+    }
+  </style>
+</head>
+<body>
+
+<div class="device-frame">
+  <div class="island"></div>
+
+  <!-- iOS Status Bar -->
+  <div class="status-bar">
+    <span>9:41</span>
+    <span style="display: flex; gap: 6px; align-items: center;">
+      <svg width="16" height="12" viewBox="0 0 16 12" fill="#1c1c1e"><path d="M1 8.5C1 8.5 3 6.5 8 6.5C13 6.5 15 8.5 15 8.5M4 11C4 11 5.5 9.5 8 9.5C10.5 9.5 12 11 12 11M8 12.5H8.01" stroke="#1c1c1e" stroke-width="1.8" stroke-linecap="round"/></svg>
+      <svg width="22" height="11" viewBox="0 0 22 11" fill="none"><rect x="1" y="1" width="18" height="9" rx="3" stroke="#1c1c1e" stroke-width="1.5"/><rect x="2.5" y="2.5" width="12" height="6" rx="1.5" fill="#1c1c1e"/><circle cx="20.5" cy="5.5" r="1" fill="#1c1c1e"/></svg>
+    </span>
+  </div>
+
+  <!-- Top Nav Bar -->
+  <div class="nav-bar">
+    <button class="nav-btn" onclick="alert('Back to Rooms Catalog...')">‹ Rooms</button>
+    <div class="nav-title-group">
+      <div class="nav-title">House Assembly</div>
+      <div class="nav-sub" id="navSummary">2 Rooms Placed • 472 sq ft</div>
+    </div>
+    <button class="nav-btn" style="font-weight: 600;" onclick="alert('Export Whole House 3D (.STL / USDZ)...')">Done</button>
+  </div>
+
+  <!-- Exactly 2 Tabs: Studio (Active) | 3D Dollhouse View -->
+  <div class="main-tabs-wrap">
+    <div class="main-tabs">
+      <button class="main-tab active" id="tabStudio" onclick="switchMainTab('studio')">
+        Studio <span class="tab-badge" id="placedBadge">2 on canvas</span>
+      </button>
+      <button class="main-tab" id="tabDollhouse" onclick="switchMainTab('dollhouse')">
+        3D Dollhouse
+      </button>
+    </div>
+  </div>
+
+  <!-- Hero CAD Viewport -->
+  <div class="viewport-area" id="viewportArea">
+    <!-- Selected Room Floating Toolbar (Docked cleanly at top of canvas) -->
+    <div class="selected-room-dock" id="selectedHud">
+      <div class="sel-info">
+        <div class="sel-name">
+          <span style="color: var(--ios-blue);">●</span>
+          <span id="selRoomName">Kitchen</span>
+        </div>
+        <div class="sel-dims" id="selRoomDims">16' × 12' • 192 sq ft • 0°</div>
+      </div>
+      <div class="sel-actions">
+        <button class="hud-action-icon-btn btn-rotate" onclick="rotateSelectedRoom()" title="Rotate 90°">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+          </svg>
+        </button>
+        <button class="hud-action-icon-btn btn-delete" onclick="removeSelectedRoom()" title="Remove from canvas">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="3 6 5 6 21 6"/>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+            <line x1="10" y1="11" x2="10" y2="17"/>
+            <line x1="14" y1="11" x2="14" y2="17"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Single Unified SVG CAD Engine -->
+    <svg class="cad-canvas" id="cadSvg" viewBox="0 0 360 450">
+      <defs>
+        <pattern id="lightGrid" width="20" height="20" patternUnits="userSpaceOnUse">
+          <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#f0f0f4" stroke-width="0.8"/>
+        </pattern>
+      </defs>
+      <rect width="360" height="450" fill="url(#lightGrid)"/>
+
+      <!-- Dynamic Geometry Layer (Renders 2D or 3D from canonical coordinates) -->
+      <g id="geometryLayer"></g>
+    </svg>
+
+    <!-- BOTTOM-LEFT: Minimalist Merge Walls Icon Button (Indicates snapped walls ready to merge) -->
+    <button class="merge-icon-btn" id="mergeIconBtn" onclick="handleMergeWalls()">
+      <span class="merge-icon-glyph">🔗</span>
+      <span id="mergeBtnText">Merge Walls</span>
+    </button>
+
+    <!-- BOTTOM-RIGHT: Minimalist 2D / 3D Switcher Pill -->
+    <div class="view-toggle-bottom">
+      <button class="view-toggle-btn active" id="btn2D" onclick="setViewMode('2d')">2D</button>
+      <button class="view-toggle-btn" id="btn3D" onclick="setViewMode('3d')">3D</button>
+    </div>
+  </div>
+
+  <!-- Bottom Drawer: "Add 1 room by 1 room" -->
+  <div class="bottom-drawer">
+    <div class="drawer-header">
+      <span class="drawer-title">Captured Rooms</span>
+      <span class="drawer-sub">Tap to place 1 by 1 on canvas</span>
+    </div>
+
+    <div class="room-tray-scroll">
+      <!-- Living Room -->
+      <div class="room-tray-card placed" id="card_r1">
+        <div>
+          <div class="rtc-name">Living Room</div>
+          <div class="rtc-meta">20' × 14' • 280 sq ft</div>
+        </div>
+        <div class="rtc-btn added">✓ On Canvas</div>
+      </div>
+
+      <!-- Kitchen -->
+      <div class="room-tray-card placed" id="card_r2">
+        <div>
+          <div class="rtc-name">Kitchen</div>
+          <div class="rtc-meta">16' × 12' • 192 sq ft</div>
+        </div>
+        <div class="rtc-btn added">✓ On Canvas</div>
+      </div>
+
+      <!-- Primary Bedroom -->
+      <div class="room-tray-card" id="card_r3" onclick="addRoomToCanvas('r3')">
+        <div>
+          <div class="rtc-name">Primary Bed</div>
+          <div class="rtc-meta">15' × 14' • 210 sq ft</div>
+        </div>
+        <button class="rtc-btn add">+ Add to Studio</button>
+      </div>
+
+      <!-- Guest Bedroom -->
+      <div class="room-tray-card" id="card_r4" onclick="addRoomToCanvas('r4')">
+        <div>
+          <div class="rtc-name">Guest Bed</div>
+          <div class="rtc-meta">12' × 11' • 132 sq ft</div>
+        </div>
+        <button class="rtc-btn add">+ Add to Studio</button>
+      </div>
+
+      <!-- Full Bath -->
+      <div class="room-tray-card" id="card_r5" onclick="addRoomToCanvas('r5')">
+        <div>
+          <div class="rtc-name">Full Bath</div>
+          <div class="rtc-meta">9' × 8' • 72 sq ft</div>
+        </div>
+        <button class="rtc-btn add">+ Add to Studio</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  /**
+   * CANONICAL WORLD COORDINATE MODEL (IRC 2024 / CAD Standard)
+   * Single Source of Truth for BOTH 2D and 3D.
+   * Units: Feet.
+   */
+  const ALL_CAPTURED_ROOMS = {
+    r1: { id: 'r1', name: 'Living Room', w: 20, l: 14, h: 9, color: '#007aff' },
+    r2: { id: 'r2', name: 'Kitchen',     w: 16, l: 12, h: 9, color: '#34c759' },
+    r3: { id: 'r3', name: 'Primary Bed', w: 15, l: 14, h: 9, color: '#ff9500' },
+    r4: { id: 'r4', name: 'Guest Bed',   w: 12, l: 11, h: 9, color: '#af52de' },
+    r5: { id: 'r5', name: 'Full Bath',   w: 9,  l: 8,  h: 9, color: '#5856d6' }
+  };
+
+  let placedRooms = [
+    { id: 'r1', x: -8.0, z: 0.0, rotation: 0 },
+    { id: 'r2', x: 10.0, z: 0.0, rotation: 0 }
+  ];
+
+  let selectedRoomId = 'r2';
+  let viewMode = '2d'; // '2d' | '3d'
+  let isMerged = false;
+
+  // Zoom and Pan (Supports Wheel + Touch Pinch)
+  let zoom = 1.0;
+  let panOffset = { x: 0, y: 0 };
+
+  // 3D Orbit Camera Angles
+  let angleX = 0.52;  // Pitch
+  let angleY = -0.58; // Yaw
+  const VIEW_W = 360;
+  const VIEW_H = 450;
+
+  // Touch / Dragging
+  let isDragging = false;
+  let dragRoomId = null;
+  let dragStartPointer = { x: 0, y: 0 };
+  let dragRoomStartPos = { x: 0, z: 0 };
+
+  // Snapping Guide State
+  let activeSnapGuide = null;
+
+  const BASE_SCALE_2D = 9.0; // 9 px per foot
+
+  function getScale2D() {
+    return BASE_SCALE_2D * zoom;
+  }
+
+  function worldToScreen2D(wx, wz) {
+    const s = getScale2D();
+    return {
+      x: VIEW_W / 2 + wx * s + panOffset.x,
+      y: VIEW_H / 2 + wz * s + panOffset.y
+    };
+  }
+
+  /**
+   * Exact 3D Perspective Camera Projection
+   */
+  function project3D(x, y, z) {
+    const radX = angleX;
+    const radY = angleY;
+    const x1 = x * Math.cos(radY) + z * Math.sin(radY);
+    const z1 = -x * Math.sin(radY) + z * Math.cos(radY);
+    const y2 = y * Math.sin(radX) - z1 * Math.cos(radX);
+    const z2 = y * Math.cos(radX) + z1 * Math.sin(radX);
+
+    const fov = 420;
+    const scale = (fov / (fov + z2 + 280)) * zoom;
+    return {
+      x: VIEW_W / 2 + x1 * scale + panOffset.x,
+      y: VIEW_H / 2 + y2 * scale + panOffset.y,
+      depth: z2
+    };
+  }
+
+  /**
+   * 4-Sided Magnetic Snapping Engine
+   */
+  function applyMagneticSnapping(targetNode) {
+    const defT = ALL_CAPTURED_ROOMS[targetNode.id];
+    const rw = targetNode.rotation % 180 === 0 ? defT.w : defT.l;
+    const rl = targetNode.rotation % 180 === 0 ? defT.l : defT.w;
+
+    let bestX = targetNode.x;
+    let bestZ = targetNode.z;
+    let bestGuide = null;
+    let bestScore = 0;
+
+    const tMinX = targetNode.x - rw / 2;
+    const tMaxX = targetNode.x + rw / 2;
+    const tMinZ = targetNode.z - rl / 2;
+    const tMaxZ = targetNode.z + rl / 2;
+
+    const THRESH_CORNER_FT = 1.0;
+    const THRESH_EDGE_FT = 1.2;
+
+    for (const other of placedRooms) {
+      if (other.id === targetNode.id) continue;
+      const defO = ALL_CAPTURED_ROOMS[other.id];
+      const ow = other.rotation % 180 === 0 ? defO.w : defO.l;
+      const ol = other.rotation % 180 === 0 ? defO.l : defO.w;
+
+      const oMinX = other.x - ow / 2;
+      const oMaxX = other.x + ow / 2;
+      const oMinZ = other.z - ol / 2;
+      const oMaxZ = other.z + ol / 2;
+
+      // 1. Corner-to-Corner Flush Snap
+      const cornerPairs = [
+        // Target East flush with Other West
+        { snapX: oMinX - rw / 2, snapZ: oMinZ + rl / 2, diffX: tMaxX - oMinX, diffZ: tMinZ - oMinZ, axis: 'EW', wallX: oMinX },
+        { snapX: oMinX - rw / 2, snapZ: oMaxZ - rl / 2, diffX: tMaxX - oMinX, diffZ: tMaxZ - oMaxZ, axis: 'EW', wallX: oMinX },
+        // Target West flush with Other East
+        { snapX: oMaxX + rw / 2, snapZ: oMinZ + rl / 2, diffX: tMinX - oMaxX, diffZ: tMinZ - oMinZ, axis: 'EW', wallX: oMaxX },
+        { snapX: oMaxX + rw / 2, snapZ: oMaxZ - rl / 2, diffX: tMinX - oMaxX, diffZ: tMaxZ - oMaxZ, axis: 'EW', wallX: oMaxX },
+        // Target South flush with Other North
+        { snapX: oMinX + rw / 2, snapZ: oMinZ - rl / 2, diffX: tMinX - oMinX, diffZ: tMaxZ - oMinZ, axis: 'NS', wallZ: oMinZ },
+        { snapX: oMaxX - rw / 2, snapZ: oMinZ - rl / 2, diffX: tMaxX - oMaxX, diffZ: tMaxZ - oMinZ, axis: 'NS', wallZ: oMinZ },
+        // Target North flush with Other South
+        { snapX: oMinX + rw / 2, snapZ: oMaxZ + rl / 2, diffX: tMinX - oMinX, diffZ: tMinZ - oMaxZ, axis: 'NS', wallZ: oMaxZ },
+        { snapX: oMaxX - rw / 2, snapZ: oMaxZ + rl / 2, diffX: tMaxX - oMaxX, diffZ: tMinZ - oMaxZ, axis: 'NS', wallZ: oMaxZ },
+      ];
+
+      for (const cp of cornerPairs) {
+        const dist = Math.hypot(cp.diffX, cp.diffZ);
+        if (dist <= THRESH_CORNER_FT && bestScore < 50) {
+          bestX = cp.snapX;
+          bestZ = cp.snapZ;
+          bestScore = 50;
+
+          // Compute clean collinear touching seam line (NEVER DIAGONAL)
+          if (cp.axis === 'EW') {
+            const zStart = Math.max(bestZ - rl / 2, oMinZ);
+            const zEnd = Math.min(bestZ + rl / 2, oMaxZ);
+            bestGuide = {
+              x1: cp.wallX,
+              z1: zStart,
+              x2: cp.wallX,
+              z2: zEnd,
+              anchorX: cp.snapX,
+              anchorZ: cp.snapZ,
+              overlapLen: Math.max(0, zEnd - zStart)
+            };
+          } else {
+            const xStart = Math.max(bestX - rw / 2, oMinX);
+            const xEnd = Math.min(bestX + rw / 2, oMaxX);
+            bestGuide = {
+              x1: xStart,
+              z1: cp.wallZ,
+              x2: xEnd,
+              z2: cp.wallZ,
+              anchorX: cp.snapX,
+              anchorZ: cp.snapZ,
+              overlapLen: Math.max(0, xEnd - xStart)
+            };
+          }
+        }
+      }
+
+      // 2. Collinear Wall Edge Snap
+      if (bestScore < 25) {
+        if (Math.abs(tMaxX - oMinX) <= THRESH_EDGE_FT && Math.abs(tMinZ - oMinZ) < rl + ol) {
+          bestX = oMinX - rw / 2;
+          bestScore = 25;
+          bestGuide = {
+            x1: oMinX,
+            z1: Math.min(tMinZ, oMinZ),
+            x2: oMinX,
+            z2: Math.max(tMaxZ, oMaxZ),
+            anchorX: oMinX,
+            anchorZ: (Math.max(tMinZ, oMinZ) + Math.min(tMaxZ, oMaxZ)) / 2,
+            overlapLen: Math.min(tMaxZ, oMaxZ) - Math.max(tMinZ, oMinZ)
+          };
+        } else if (Math.abs(tMinX - oMaxX) <= THRESH_EDGE_FT && Math.abs(tMinZ - oMinZ) < rl + ol) {
+          bestX = oMaxX + rw / 2;
+          bestScore = 25;
+          bestGuide = {
+            x1: oMaxX,
+            z1: Math.min(tMinZ, oMinZ),
+            x2: oMaxX,
+            z2: Math.max(tMaxZ, oMaxZ),
+            anchorX: oMaxX,
+            anchorZ: (Math.max(tMinZ, oMinZ) + Math.min(tMaxZ, oMaxZ)) / 2,
+            overlapLen: Math.min(tMaxZ, oMaxZ) - Math.max(tMinZ, oMinZ)
+          };
+        } else if (Math.abs(tMaxZ - oMinZ) <= THRESH_EDGE_FT && Math.abs(tMinX - oMinX) < rw + ow) {
+          bestZ = oMinZ - rl / 2;
+          bestScore = 25;
+          bestGuide = {
+            x1: Math.min(tMinX, oMinX),
+            z1: oMinZ,
+            x2: Math.max(tMaxX, oMaxX),
+            z2: oMinZ,
+            anchorX: (Math.max(tMinX, oMinX) + Math.min(tMaxX, oMaxX)) / 2,
+            anchorZ: oMinZ,
+            overlapLen: Math.min(tMaxX, oMaxX) - Math.max(tMinX, oMinX)
+          };
+        } else if (Math.abs(tMinZ - oMaxZ) <= THRESH_EDGE_FT && Math.abs(tMinX - oMinX) < rw + ow) {
+          bestZ = oMaxZ + rl / 2;
+          bestScore = 25;
+          bestGuide = {
+            x1: Math.min(tMinX, oMinX),
+            z1: oMaxZ,
+            x2: Math.max(tMaxX, oMaxX),
+            z2: oMaxZ,
+            anchorX: (Math.max(tMinX, oMinX) + Math.min(tMaxX, oMaxX)) / 2,
+            anchorZ: oMaxZ,
+            overlapLen: Math.min(tMaxX, oMaxX) - Math.max(tMinX, oMinX)
+          };
+        }
+      }
+    }
+
+    return { x: bestX, z: bestZ, guide: bestGuide };
+  }
+
+  /**
+   * Unified Canvas Renderer
+   */
+  function renderCanvas() {
+    const layer = document.getElementById('geometryLayer');
+    layer.innerHTML = '';
+
+    // Update Bottom-Left Minimalist Merge Button
+    const mergeBtn = document.getElementById('mergeIconBtn');
+    if (activeSnapGuide && activeSnapGuide.overlapLen > 0 && !isMerged && viewMode === '2d') {
+      mergeBtn.style.display = 'flex';
+      document.getElementById('mergeBtnText').textContent = `Merge Walls (${Math.round(activeSnapGuide.overlapLen)}')`;
+    } else if (!isMerged) {
+      mergeBtn.style.display = 'none';
+    }
+
+    if (viewMode === '2d') {
+      // 2D PLAN VIEW
+      placedRooms.forEach(p => {
+        const def = ALL_CAPTURED_ROOMS[p.id];
+        const rw = p.rotation % 180 === 0 ? def.w : def.l;
+        const rl = p.rotation % 180 === 0 ? def.l : def.w;
+
+        const tl = worldToScreen2D(p.x - rw / 2, p.z - rl / 2);
+        const br = worldToScreen2D(p.x + rw / 2, p.z + rl / 2);
+        const widthPx = br.x - tl.x;
+        const heightPx = br.y - tl.y;
+        const isSelected = p.id === selectedRoomId;
+
+        const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        g.style.cursor = 'move';
+        g.onmousedown = (e) => startDragRoom(e, p.id);
+
+        const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        rect.setAttribute('x', tl.x);
+        rect.setAttribute('y', tl.y);
+        rect.setAttribute('width', widthPx);
+        rect.setAttribute('height', heightPx);
+        rect.setAttribute('rx', '3');
+        rect.setAttribute('fill', '#ffffff');
+        rect.setAttribute('stroke', isSelected ? '#007aff' : '#1c1c1e');
+        rect.setAttribute('stroke-width', isSelected ? '2.5' : '1.8');
+        g.appendChild(rect);
+
+        const t1 = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        t1.setAttribute('x', tl.x + widthPx / 2);
+        t1.setAttribute('y', tl.y + heightPx / 2 - 4);
+        t1.setAttribute('fill', '#1c1c1e');
+        t1.setAttribute('font-size', '12');
+        t1.setAttribute('font-weight', '700');
+        t1.setAttribute('text-anchor', 'middle');
+        t1.textContent = def.name;
+        g.appendChild(t1);
+
+        const t2 = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        t2.setAttribute('x', tl.x + widthPx / 2);
+        t2.setAttribute('y', tl.y + heightPx / 2 + 12);
+        t2.setAttribute('fill', '#8e8e93');
+        t2.setAttribute('font-size', '10');
+        t2.setAttribute('font-weight', '500');
+        t2.setAttribute('text-anchor', 'middle');
+        t2.textContent = `${Math.round(rw)}' × ${Math.round(rl)}'${p.rotation > 0 ? ` (${p.rotation}°)` : ''}`;
+        g.appendChild(t2);
+
+        // Rotation Handle on Selected Room
+        if (isSelected) {
+          const rotHandleG = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+          rotHandleG.style.cursor = 'pointer';
+          rotHandleG.onclick = (e) => {
+            e.stopPropagation();
+            rotateSelectedRoom();
+          };
+
+          const handleCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+          handleCircle.setAttribute('cx', tl.x + widthPx - 8);
+          handleCircle.setAttribute('cy', tl.y + 8);
+          handleCircle.setAttribute('r', '10');
+          handleCircle.setAttribute('fill', '#007aff');
+          rotHandleG.appendChild(handleCircle);
+
+          const rotIcon = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+          rotIcon.setAttribute('x', tl.x + widthPx - 8);
+          rotIcon.setAttribute('y', tl.y + 12);
+          rotIcon.setAttribute('fill', '#ffffff');
+          rotIcon.setAttribute('font-size', '10');
+          rotIcon.setAttribute('font-weight', '700');
+          rotIcon.setAttribute('text-anchor', 'middle');
+          rotIcon.textContent = '↻';
+          rotHandleG.appendChild(rotIcon);
+
+          g.appendChild(rotHandleG);
+        }
+
+        layer.appendChild(g);
+      });
+
+      // Green dashed snap line + anchor bullseye
+      if (activeSnapGuide) {
+        const p1 = worldToScreen2D(activeSnapGuide.x1, activeSnapGuide.z1);
+        const p2 = worldToScreen2D(activeSnapGuide.x2, activeSnapGuide.z2);
+        const anc = worldToScreen2D(activeSnapGuide.anchorX, activeSnapGuide.anchorZ);
+
+        const snapG = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line.setAttribute('x1', p1.x);
+        line.setAttribute('y1', p1.y);
+        line.setAttribute('x2', p2.x);
+        line.setAttribute('y2', p2.y);
+        line.setAttribute('stroke', isMerged ? '#007aff' : '#34c759');
+        line.setAttribute('stroke-width', isMerged ? '3.5' : '2.5');
+        line.setAttribute('stroke-dasharray', isMerged ? 'none' : '6,4');
+        line.setAttribute('stroke-linecap', 'round');
+        snapG.appendChild(line);
+
+        const halo = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        halo.setAttribute('cx', anc.x);
+        halo.setAttribute('cy', anc.y);
+        halo.setAttribute('r', '8');
+        halo.setAttribute('fill', '#34c759');
+        halo.setAttribute('opacity', '0.25');
+        snapG.appendChild(halo);
+
+        const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        dot.setAttribute('cx', anc.x);
+        dot.setAttribute('cy', anc.y);
+        dot.setAttribute('r', '3.5');
+        dot.setAttribute('fill', '#34c759');
+        snapG.appendChild(dot);
+
+        layer.appendChild(snapG);
+      }
+
+    } else {
+      // 3D ISOMETRIC PRISM RENDER
+      const scale3D = 9.0;
+
+      placedRooms.forEach(p => {
+        const def = ALL_CAPTURED_ROOMS[p.id];
+        const rw = p.rotation % 180 === 0 ? def.w : def.l;
+        const rl = p.rotation % 180 === 0 ? def.l : def.w;
+        const rh = 4.0;
+
+        const hw = (rw / 2) * scale3D;
+        const hl = (rl / 2) * scale3D;
+        const cx = p.x * scale3D;
+        const cz = p.z * scale3D;
+        const floorY = 40;
+        const topY = floorY - rh * scale3D;
+
+        const c0 = project3D(cx - hw, floorY, cz - hl);
+        const c1 = project3D(cx + hw, floorY, cz - hl);
+        const c2 = project3D(cx + hw, floorY, cz + hl);
+        const c3 = project3D(cx - hw, floorY, cz + hl);
+
+        const t0 = project3D(cx - hw, topY, cz - hl);
+        const t1 = project3D(cx + hw, topY, cz - hl);
+        const t2 = project3D(cx + hw, topY, cz + hl);
+        const t3 = project3D(cx - hw, topY, cz + hl);
+
+        const g3 = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+
+        const floorPoly = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+        floorPoly.setAttribute('points', `${c0.x},${c0.y} ${c1.x},${c1.y} ${c2.x},${c2.y} ${c3.x},${c3.y}`);
+        floorPoly.setAttribute('fill', '#ffffff');
+        floorPoly.setAttribute('stroke', '#cbd5e1');
+        floorPoly.setAttribute('stroke-width', '1.2');
+        g3.appendChild(floorPoly);
+
+        const sWall = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+        sWall.setAttribute('points', `${c3.x},${c3.y} ${c2.x},${c2.y} ${t2.x},${t2.y} ${t3.x},${t3.y}`);
+        sWall.setAttribute('fill', '#e2e8f0');
+        sWall.setAttribute('stroke', '#94a3b8');
+        sWall.setAttribute('stroke-width', '1');
+        g3.appendChild(sWall);
+
+        const eWall = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+        eWall.setAttribute('points', `${c2.x},${c2.y} ${c1.x},${c1.y} ${t1.x},${t1.y} ${t2.x},${t2.y}`);
+        eWall.setAttribute('fill', '#cbd5e1');
+        eWall.setAttribute('stroke', '#64748b');
+        eWall.setAttribute('stroke-width', '1');
+        g3.appendChild(eWall);
+
+        const pocheCap = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+        pocheCap.setAttribute('points', `${t0.x},${t0.y} ${t1.x},${t1.y} ${t2.x},${t2.y} ${t3.x},${t3.y}`);
+        pocheCap.setAttribute('fill', p.id === selectedRoomId ? '#1c1c1e' : '#2c2c2e');
+        pocheCap.setAttribute('stroke', p.id === selectedRoomId ? '#007aff' : '#1e293b');
+        pocheCap.setAttribute('stroke-width', p.id === selectedRoomId ? '2' : '1');
+        pocheCap.setAttribute('opacity', '0.88');
+        g3.appendChild(pocheCap);
+
+        const midTopX = (t0.x + t1.x + t2.x + t3.x) / 4;
+        const midTopY = (t0.y + t1.y + t2.y + t3.y) / 4;
+        const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        label.setAttribute('x', midTopX);
+        label.setAttribute('y', midTopY + 4);
+        label.setAttribute('fill', '#ffffff');
+        label.setAttribute('font-size', '10');
+        label.setAttribute('font-weight', '700');
+        label.setAttribute('text-anchor', 'middle');
+        label.textContent = def.name;
+        g3.appendChild(label);
+
+        layer.appendChild(g3);
+      });
+
+      // 3D Merged Wall
+      if (activeSnapGuide) {
+        const floorY = 40;
+        const topY = floorY - 4.0 * scale3D;
+        const pA_bottom = project3D(activeSnapGuide.x1 * scale3D, floorY, activeSnapGuide.z1 * scale3D);
+        const pB_bottom = project3D(activeSnapGuide.x2 * scale3D, floorY, activeSnapGuide.z2 * scale3D);
+        const pA_top = project3D(activeSnapGuide.x1 * scale3D, topY, activeSnapGuide.z1 * scale3D);
+        const pB_top = project3D(activeSnapGuide.x2 * scale3D, topY, activeSnapGuide.z2 * scale3D);
+
+        const partPoly = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+        partPoly.setAttribute('points', `${pA_bottom.x},${pA_bottom.y} ${pB_bottom.x},${pB_bottom.y} ${pB_top.x},${pB_top.y} ${pA_top.x},${pA_top.y}`);
+        partPoly.setAttribute('fill', isMerged ? 'rgba(0,122,255,0.4)' : 'rgba(52,199,89,0.4)');
+        partPoly.setAttribute('stroke', isMerged ? '#007aff' : '#34c759');
+        partPoly.setAttribute('stroke-width', '2.5');
+        layer.appendChild(partPoly);
+      }
+    }
+
+    updateSelectedHud();
+  }
+
+  function updateSelectedHud() {
+    const p = placedRooms.find(r => r.id === selectedRoomId);
+    const hud = document.getElementById('selectedHud');
+    if (!p) {
+      hud.style.display = 'none';
+      return;
+    }
+    hud.style.display = 'flex';
+    const def = ALL_CAPTURED_ROOMS[p.id];
+    const rw = p.rotation % 180 === 0 ? def.w : def.l;
+    const rl = p.rotation % 180 === 0 ? def.l : def.w;
+    document.getElementById('selRoomName').textContent = def.name;
+    document.getElementById('selRoomDims').textContent = `${Math.round(rw)}' × ${Math.round(rl)}' • ${rw * rl} sq ft • ${p.rotation}°`;
+  }
+
+  function setViewMode(mode) {
+    viewMode = mode;
+    document.getElementById('btn2D').className = `view-toggle-btn ${mode === '2d' ? 'active' : ''}`;
+    document.getElementById('btn3D').className = `view-toggle-btn ${mode === '3d' ? 'active' : ''}`;
+    renderCanvas();
+  }
+
+  function applyZoom(delta) {
+    zoom = Math.min(2.5, Math.max(0.5, zoom + delta));
+    renderCanvas();
+  }
+
+  // Mouse Wheel Zoom
+  const viewportArea = document.getElementById('viewportArea');
+  viewportArea.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? -0.1 : 0.1;
+    applyZoom(delta);
+  }, { passive: false });
+
+  // Touch Pinch-to-Zoom
+  let initialPinchDist = null;
+  viewportArea.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 2) {
+      initialPinchDist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+    }
+  });
+
+  viewportArea.addEventListener('touchmove', (e) => {
+    if (e.touches.length === 2 && initialPinchDist) {
+      e.preventDefault();
+      const currentDist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      const diff = (currentDist - initialPinchDist) * 0.005;
+      initialPinchDist = currentDist;
+      applyZoom(diff);
+    }
+  }, { passive: false });
+
+  viewportArea.addEventListener('touchend', () => { initialPinchDist = null; });
+
+  // 2D Dragging with full Magnetic Snapping
+  function startDragRoom(e, roomId) {
+    if (viewMode !== '2d') return;
+    isDragging = true;
+    dragRoomId = roomId;
+    selectedRoomId = roomId;
+    dragStartPointer = { x: e.clientX, y: e.clientY };
+    const p = placedRooms.find(r => r.id === roomId);
+    dragRoomStartPos = { x: p.x, z: p.z };
+
+    window.addEventListener('mousemove', onDragMove);
+    window.addEventListener('mouseup', stopDragRoom);
+  }
+
+  function onDragMove(e) {
+    if (!isDragging || !dragRoomId) return;
+    const s = getScale2D();
+    const dxPx = e.clientX - dragStartPointer.x;
+    const dyPx = e.clientY - dragStartPointer.y;
+
+    const p = placedRooms.find(r => r.id === dragRoomId);
+    if (!p) return;
+
+    const rawNode = {
+      id: p.id,
+      x: dragRoomStartPos.x + dxPx / s,
+      z: dragRoomStartPos.z + dyPx / s,
+      rotation: p.rotation
+    };
+
+    const snapped = applyMagneticSnapping(rawNode);
+    p.x = snapped.x;
+    p.z = snapped.z;
+    activeSnapGuide = snapped.guide;
+
+    renderCanvas();
+  }
+
+  function stopDragRoom() {
+    isDragging = false;
+    dragRoomId = null;
+    window.removeEventListener('mousemove', onDragMove);
+    window.removeEventListener('mouseup', stopDragRoom);
+  }
+
+  // 3D Orbiting via Viewport Drag
+  const cadSvg = document.getElementById('cadSvg');
+  let isOrbiting = false;
+  let orbitStart = { x: 0, y: 0 };
+
+  cadSvg.addEventListener('mousedown', (e) => {
+    if (viewMode !== '3d') return;
+    isOrbiting = true;
+    orbitStart = { x: e.clientX, y: e.clientY };
+  });
+
+  window.addEventListener('mousemove', (e) => {
+    if (!isOrbiting || viewMode !== '3d') return;
+    const dx = e.clientX - orbitStart.x;
+    const dy = e.clientY - orbitStart.y;
+    orbitStart = { x: e.clientX, y: e.clientY };
+
+    angleY -= dx * 0.01;
+    angleX += dy * 0.01;
+    renderCanvas();
+  });
+
+  window.addEventListener('mouseup', () => { isOrbiting = false; });
+
+  // Rotate Selected Room
+  function rotateSelectedRoom() {
+    const p = placedRooms.find(r => r.id === selectedRoomId);
+    if (!p) return;
+    p.rotation = (p.rotation + 90) % 360;
+    
+    const snapped = applyMagneticSnapping(p);
+    p.x = snapped.x;
+    p.z = snapped.z;
+    activeSnapGuide = snapped.guide;
+
+    renderCanvas();
+  }
+
+  // Merge Walls Action
+  function handleMergeWalls() {
+    isMerged = true;
+    const btn = document.getElementById('mergeIconBtn');
+    btn.innerHTML = `<span class="merge-icon-glyph">✓</span><span>Merged</span>`;
+    btn.style.borderColor = "#007aff";
+    btn.style.color = "#007aff";
+
+    renderCanvas();
+    setTimeout(() => {
+      btn.style.display = 'none';
+    }, 2000);
+  }
+
+  // Remove Selected Room
+  function removeSelectedRoom() {
+    if (placedRooms.length <= 1) {
+      alert('At least one room must remain in the studio.');
+      return;
+    }
+    const removedId = selectedRoomId;
+    placedRooms = placedRooms.filter(r => r.id !== removedId);
+    selectedRoomId = placedRooms[0].id;
+    activeSnapGuide = null;
+    isMerged = false;
+
+    const card = document.getElementById(`card_${removedId}`);
+    if (card) {
+      card.className = 'room-tray-card';
+      card.querySelector('.rtc-btn').className = 'rtc-btn add';
+      card.querySelector('.rtc-btn').textContent = '+ Add to Studio';
+      card.onclick = () => addRoomToCanvas(removedId);
+    }
+
+    document.getElementById('placedBadge').textContent = `${placedRooms.length} on canvas`;
+    document.getElementById('navSummary').textContent = `${placedRooms.length} Rooms Placed`;
+    renderCanvas();
+  }
+
+  // Add 1 room by 1 room
+  function addRoomToCanvas(roomId) {
+    if (placedRooms.some(r => r.id === roomId)) return;
+    let maxX = -Infinity;
+    placedRooms.forEach(p => { maxX = Math.max(maxX, p.x); });
+
+    placedRooms.push({
+      id: roomId,
+      x: maxX + 18,
+      z: 0,
+      rotation: 0
+    });
+    selectedRoomId = roomId;
+
+    const card = document.getElementById(`card_${roomId}`);
+    if (card) {
+      card.className = 'room-tray-card placed';
+      card.querySelector('.rtc-btn').className = 'rtc-btn added';
+      card.querySelector('.rtc-btn').textContent = '✓ On Canvas';
+      card.onclick = null;
+    }
+
+    document.getElementById('placedBadge').textContent = `${placedRooms.length} on canvas`;
+    document.getElementById('navSummary').textContent = `${placedRooms.length} Rooms Placed`;
+    renderCanvas();
+  }
+
+  function switchMainTab(tab) {
+    if (tab === 'dollhouse') {
+      alert('Tab 2 (3D Dollhouse) will be addressed after finalizing the Studio tab!');
+    }
+  }
+
+  // Initial Snap
+  const r2Initial = placedRooms.find(r => r.id === 'r2');
+  if (r2Initial) {
+    const s = applyMagneticSnapping(r2Initial);
+    r2Initial.x = s.x;
+    r2Initial.z = s.z;
+    activeSnapGuide = s.guide;
+  }
+
+  renderCanvas();
+</script>
+</body>
+</html>

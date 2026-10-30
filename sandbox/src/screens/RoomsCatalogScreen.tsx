@@ -24,7 +24,6 @@ export const RoomsCatalogScreen: React.FC<Props> = ({
   onSelectRoom,
 }) => {
   const [rooms, setRooms] = useState<Room[]>([]);
-  const [selectedSegment, setSelectedSegment] = useState<'my_scans' | 'samples'>('my_scans');
   const [loading, setLoading] = useState(true);
 
   const loadData = async () => {
@@ -74,8 +73,7 @@ export const RoomsCatalogScreen: React.FC<Props> = ({
     );
   };
 
-  const displayedRooms =
-    selectedSegment === 'my_scans' ? rooms : GeometryService.getSampleRooms();
+  const displayedRooms = rooms;
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -96,44 +94,8 @@ export const RoomsCatalogScreen: React.FC<Props> = ({
           </TouchableOpacity>
         </View>
 
-        {/* Native Segmented Control */}
-        <View style={styles.segmentedControlWrap}>
-          <TouchableOpacity
-            style={[
-              styles.segmentBtn,
-              selectedSegment === 'my_scans' && styles.segmentBtnActive,
-            ]}
-            onPress={() => setSelectedSegment('my_scans')}
-          >
-            <Text
-              style={[
-                styles.segmentText,
-                selectedSegment === 'my_scans' && styles.segmentTextActive,
-              ]}
-            >
-              My Scans ({rooms.length})
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.segmentBtn,
-              selectedSegment === 'samples' && styles.segmentBtnActive,
-            ]}
-            onPress={() => setSelectedSegment('samples')}
-          >
-            <Text
-              style={[
-                styles.segmentText,
-                selectedSegment === 'samples' && styles.segmentTextActive,
-              ]}
-            >
-              Sample Preview (2)
-            </Text>
-          </TouchableOpacity>
-        </View>
-
         {/* Sub-header row for My Scans management */}
-        {selectedSegment === 'my_scans' && rooms.length > 0 && (
+        {rooms.length > 0 && (
           <View style={styles.subActionsRow}>
             <Text style={styles.scansCountLabel}>
               {rooms.length} {rooms.length === 1 ? 'room captured' : 'rooms captured'}
@@ -147,7 +109,7 @@ export const RoomsCatalogScreen: React.FC<Props> = ({
         )}
 
         {/* Catalog Body */}
-        {selectedSegment === 'my_scans' && rooms.length === 0 ? (
+        {rooms.length === 0 ? (
           // First-Class Empty State
           <View style={styles.emptyStateContainer}>
             <View style={styles.emptyIconCircle}>
@@ -163,14 +125,6 @@ export const RoomsCatalogScreen: React.FC<Props> = ({
               onPress={onNavigateToScan}
             >
               <Text style={styles.emptyCtaText}>Start Your First Scan</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.previewSamplesLink}
-              onPress={() => setSelectedSegment('samples')}
-            >
-              <Text style={styles.previewSamplesText}>
-                Preview sample architectural rooms →
-              </Text>
             </TouchableOpacity>
           </View>
         ) : (

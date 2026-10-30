@@ -5,12 +5,11 @@ import { StatusBar } from 'expo-status-bar';
 import { Room } from './src/types/room';
 import { RoomsCatalogScreen } from './src/screens/RoomsCatalogScreen';
 import { LidarScannerScreen } from './src/screens/LidarScannerScreen';
-import { RoomStudioScreen } from './src/screens/RoomStudioScreen';
 import { HouseAssemblyScreen } from './src/screens/HouseAssemblyScreen';
 import { GeometryService } from './src/services/geometryService';
 import { Database } from './src/db/database';
 
-type Tab = 'catalog' | 'scanner' | 'studio' | 'stitch';
+type Tab = 'catalog' | 'scanner' | 'studio';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>('studio');
@@ -59,19 +58,14 @@ export default function App() {
           />
         )}
         {activeTab === 'studio' && (
-          <RoomStudioScreen
-            room={selectedRoom}
-            onBack={handleBackToCatalog}
-          />
-        )}
-        {activeTab === 'stitch' && (
           <HouseAssemblyScreen
+            initialSelectedRoom={selectedRoom}
             onBack={handleBackToCatalog}
           />
         )}
       </View>
 
-      {/* Apple HIG Light Mode Bottom Tab Bar */}
+      {/* Apple HIG Light Mode Bottom Tab Bar (3 Clean Options) */}
       <View style={styles.tabBar}>
         <TouchableOpacity
           style={styles.tabItem}
@@ -95,21 +89,17 @@ export default function App() {
 
         <TouchableOpacity
           style={styles.tabItem}
-          onPress={() => setActiveTab('studio')}
+          onPress={async () => {
+            const myRooms = await Database.getRooms();
+            if (myRooms.length > 0) {
+              setSelectedRoom(myRooms[0]);
+            }
+            setActiveTab('studio');
+          }}
         >
           <Text style={[styles.tabIcon, activeTab === 'studio' && styles.tabIconActive]}>🧊</Text>
           <Text style={[styles.tabLabel, activeTab === 'studio' && styles.tabLabelActive]}>
             Studio
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.tabItem}
-          onPress={() => setActiveTab('stitch')}
-        >
-          <Text style={[styles.tabIcon, activeTab === 'stitch' && styles.tabIconActive]}>🏡</Text>
-          <Text style={[styles.tabLabel, activeTab === 'stitch' && styles.tabLabelActive]}>
-            Whole House
           </Text>
         </TouchableOpacity>
       </View>
