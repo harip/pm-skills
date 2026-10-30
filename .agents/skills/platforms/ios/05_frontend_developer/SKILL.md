@@ -31,6 +31,7 @@ Implementation must replicate the approved Phase 1 mockups (`docs/design/mockups
   - **Forbidden**: `#000000`, `#121212`, `#1c1c1e`, or dark charcoal screen backdrops, cluttered badges, and rainbow accents.
 - **All Screens Navigable**: Must implement and wire navigation across **every** screen in the Screen Inventory (`scr_001`, `scr_002`, `scr_003`...), never just a single isolated screen.
 - **Expo Go Universal Graphics Rule**: Avoid unguarded `@shopify/react-native-skia` (`Skia.Path.Make()`) in standard Expo Go projects because `this.CanvasKit` is `undefined` on Web without async WASM loading and JSI bindings can crash in Expo Go (`Cannot read properties of undefined (reading 'PathBuilder')`). Prefer universal React Native vector primitives or `react-native-svg` so 2D graphics render natively in both iPhone Expo Go and Web Browser without runtime crashes.
+- **Concise UI Component Introduction Protocol**: Whenever adding or modifying a UI component or control, concisely state what component is being added, where it is placed, and how it will look (styling, dimensions, icons/labels, and active/inactive states) without generating or dumping full-screen mockups unless explicitly requested by the user.
 - Exact layout hierarchy, typography (SF Pro), color palette, and control placement.
 - Apple HIG spring physics (`12_apple_design`), touch targets ≥44×44pt, 8pt grid.
 - Every component implements 4 data states: loading (skeleton), error (banner + retry), empty, content.

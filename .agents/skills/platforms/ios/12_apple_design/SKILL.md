@@ -38,6 +38,7 @@ Every iOS screen, mockup, and component must embody clean, uncluttered Apple min
 4. **Single-Accent Color Restraint**: Maintain a clean monochromatic grayscale foundation (`#f5f5f7` / `#ffffff` / `#1c1c1e`) punctuated by **a single intentional accent color** (Apple System Blue `#007aff`). Avoid multicolored buttons, rainbow badges, or heavy gradient fills.
 5. **Focused Action Hierarchy**: Exactly one primary CTA per screen (e.g. 50pt rounded pill button with `#007aff` background and white text, positioned for easy thumb reach). Secondary actions use subtle ghost pills or native iOS segmented controls (`[ 🧊 3D | 📐 2D ]`).
 6. **Native iOS Controls & Sheet Modals**: Use native Apple segmented pickers, floating translucent HUD pills (`rgba(255,255,255,0.92)` with `backdrop-filter: blur(20px)`), and bottom sheets with drag grabbers (`Grabber`). Avoid Android-style floating action buttons (FABs), bulky web sidebars, or complex desktop menus on iOS.
+7. **Component Addition Specification**: When adding or updating a UI component, concisely state what is being added and describe how it will look (placement, dimensions, styling, and states); never dump full-screen mockups unless requested by the user.
 
 ---
 

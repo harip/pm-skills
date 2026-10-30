@@ -20,6 +20,13 @@ Single authority for phases, paths, statuses, gates, and the review loop. Skills
   - **Universal Functional Fallback for Device Hardware & Sensors**: Whenever a feature interfaces with device hardware, camera, sensors, location, or third-party APIs, the implementation MUST provide both:
     1. The live hardware/platform API integration.
     2. A fully **interactive functional simulation pipeline** (e.g. synthetic data generator, frame/input emitter, or sample feed) that engages seamlessly if hardware permissions are denied or running in simulator/preview environments, guaranteeing the user can always trigger the full capture-to-persistence workflow end-to-end.
+- **UI Component Addition Communication Mandate (Concise Spec over Full UI Dumps):**
+  - Whenever introducing, adding, or modifying a UI component, control, or screen element:
+  - Never generate or dump an entire full-screen mockup or heavy wireframe artifact unless the user explicitly requests one.
+  - Instead, clearly and concisely describe:
+    1. **What component is being added**: Component name, role, and exact screen placement (e.g., "Top-right floating 42×42px action squircle").
+    2. **How it will look**: Visual styling, icon, label, dimensions, and active/inactive visual states (e.g., "Frosted glass `#ffffff` with 0.5px hairline `#e5e5ea`, SF Pro font, System Blue accent").
+    3. **Behavior**: How user interaction mutates application state and interacts with existing features.
 - **Output (Terse Execution Mode with Phase 1 Interactive Questionnaire & Mockups Exception):**
   - **Phase 1 Intake Exception (`01_it_consultant`)**: During Phase 1 Discovery, Terse Mode is suspended. The IT Consultant generates interactive HTML/CSS/SVG screen mockups (`docs/design/mockups/scr_001_v1.html`..`scr_00N_v1.html`) and populates `window.PM_DATA.consultantDiscovery` in `docs/progress-data.js` with an Executive Advisory Brief, the embedded interactive Screen Mockups, 8–12 AI-recommended domain features (interactive checkboxes), and 8–12 thorough multi-dimensional questions (with per-question custom note inputs and open-ended Consultant Q&A textareas). All user answers and screen mockup notes save directly to `docs/00_DISCOVERY_ANSWERS.json` in `docs/` so the workflow reads them and the user can go back and edit answers at any point.
   - **Phases 2–9 Execution**: Write all artifacts to disk; in chat return strictly file links + ≤3 terse bullets. Zero filler, zero conversational preamble, zero robotic fluff. Focus purely on actionable state. Load only the artifacts the active step needs.

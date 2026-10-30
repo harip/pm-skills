@@ -100,9 +100,6 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
     height: 430,
   });
 
-  // Live Interactive Diagnostic Touch Tracking
-  const [debugInfo, setDebugInfo] = useState<string>('Live Diagnostic: Tap or hold any room');
-  const [debugDot, setDebugDot] = useState<{ x: number; y: number } | null>(null);
 
   // Viewport Zoom, Pan, and 3D Camera Angles
   const [zoom, setZoom] = useState(1.0);
@@ -595,38 +592,8 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
               }
             }
 
-            const hitNode = liveRooms.find((n) => n.room.id === hitRoomId);
-            const hitName = hitNode ? hitNode.room.name.split('(')[0].trim() : 'NONE';
-            const targetType = hitRoomId ? 'ROOM' : 'CANVAS';
-            setDebugInfo(`Touch: (${canvasX.toFixed(0)}, ${canvasY.toFixed(0)}) | Mode: ${targetType} | Hit: ${hitName}`);
-            setDebugDot({ x: canvasX, y: canvasY });
-
-            // Stream touch event to live listener on Mac
-            try {
-              fetch('http://192.168.86.110:8089/touch', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  event: 'TOUCH_DOWN',
-                  canvasX: +canvasX.toFixed(1),
-                  canvasY: +canvasY.toFixed(1),
-                  pageX: touch.pageX,
-                  pageY: touch.pageY,
-                  locationX: touch.locationX,
-                  locationY: touch.locationY,
-                  target: targetType,
-                  hitRoomId,
-                  hitName,
-                  roomsOnCanvas: liveRooms.map((r) => ({
-                    id: r.room.id,
-                    name: r.room.name,
-                    centerCanvas: worldToCanvasLive(r.x, r.z),
-                  })),
-                }),
-              }).catch(() => {});
-            } catch {}
-
             if (hitRoomId) {
+              const hitNode = liveRooms.find((n) => n.room.id === hitRoomId);
               // Touch is ON A ROOM: Lock into ROOM DRAG MODE (Light Orange Border #f97316)
               activeGestureTargetRef.current = { type: 'ROOM', roomId: hitRoomId };
               setSelectedRoomId(hitRoomId);
@@ -687,6 +654,12 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
                     // Continuous Real-Time Magnetic Snapping against all other rooms
                     const snapped = applyMagneticSnapping(rawNode, prev);
                     setActiveSnapGuide(snapped.guide);
+                    if (snapped.guide && snapped.guide.overlapLen > 0) {
+                      const snapKey = `${snapped.guide.x1.toFixed(1)}_${snapped.guide.z1.toFixed(1)}_${snapped.guide.x2.toFixed(1)}_${snapped.guide.z2.toFixed(1)}`;
+                      setMergedPartitions((prevPartitions) =>
+                        prevPartitions.has(snapKey) ? prevPartitions : new Set(prevPartitions).add(snapKey)
+                      );
+                    }
                     return {
                       ...n,
                       x: snapped.x,
@@ -708,6 +681,12 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
         if (activeGestureTargetRef.current.type === 'ROOM' && isHeldActiveRef.current) {
           triggerHaptic();
         }
+        if (activeSnapGuide && activeSnapGuide.overlapLen > 0) {
+          const snapKey = `${activeSnapGuide.x1.toFixed(1)}_${activeSnapGuide.z1.toFixed(1)}_${activeSnapGuide.x2.toFixed(1)}_${activeSnapGuide.z2.toFixed(1)}`;
+          setMergedPartitions((prevPartitions) =>
+            prevPartitions.has(snapKey) ? prevPartitions : new Set(prevPartitions).add(snapKey)
+          );
+        }
         activeGestureTargetRef.current = { type: 'NONE' };
         isHeldActiveRef.current = false;
         heldRoomIdRef.current = null;
@@ -715,14 +694,6 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
         lastTouchPosRef.current = null;
         touchStartPosRef.current = null;
         lastPinchDistRef.current = null;
-        setDebugDot(null);
-        try {
-          fetch('http://192.168.86.110:8089/touch', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ event: 'TOUCH_UP' }),
-          }).catch(() => {});
-        } catch {}
       },
     })
   ).current;
@@ -803,18 +774,6 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
       setZoom((prev) => Math.min(prev, 0.78)); // Comfortable fit for multi-room canvas
     }
     triggerHaptic();
-  };
-
-  // Merge Walls Action
-  const handleMergeWalls = () => {
-    if (!activeSnapGuide) return;
-    const key = `${activeSnapGuide.x1.toFixed(1)}_${activeSnapGuide.z1.toFixed(1)}_${activeSnapGuide.x2.toFixed(1)}_${activeSnapGuide.z2.toFixed(1)}`;
-    setMergedPartitions((prev) => new Set(prev).add(key));
-    triggerHaptic();
-    Alert.alert(
-      'Walls Merged',
-      `Successfully fused shared partition (${Math.round(activeSnapGuide.overlapLen)}' 0"). Double boundary eliminated.`
-    );
   };
 
   // Export Composite STL
@@ -1650,25 +1609,6 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
                 </G>
               )}
 
-              {/* Visual Diagnostic Touch Dot */}
-              {debugDot && (
-                <G>
-                  <Circle
-                    cx={debugDot.x}
-                    cy={debugDot.y}
-                    r={20}
-                    fill="rgba(249, 115, 22, 0.35)"
-                    stroke="#f97316"
-                    strokeWidth={2}
-                  />
-                  <Circle
-                    cx={debugDot.x}
-                    cy={debugDot.y}
-                    r={4}
-                    fill="#f97316"
-                  />
-                </G>
-              )}
             </Svg>
 
             {/* Empty Canvas Notice */}
@@ -1684,11 +1624,6 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
           </View>
 
           {/* Layer 2: Floating UI Overlays (z-index 40, Sibling to Canvas) */}
-
-          {/* Live Diagnostic HUD Bar */}
-          <View style={styles.debugHudPill} pointerEvents="none">
-            <Text style={styles.debugHudText}>{debugInfo}</Text>
-          </View>
 
           {/* Selected Room Floating Action Dock (Top of canvas) */}
           {selectedNode && (
@@ -1908,42 +1843,6 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
               </View>
             </TouchableOpacity>
           </Modal>
-
-          {/* BOTTOM-LEFT: Merge Walls Button */}
-          {activeSnapGuide && activeSnapGuide.overlapLen > 0 && viewMode === '2d' && (
-            <TouchableOpacity
-              style={[
-                styles.mergeIconBtn,
-                mergedPartitions.has(
-                  `${activeSnapGuide.x1.toFixed(1)}_${activeSnapGuide.z1.toFixed(1)}_${activeSnapGuide.x2.toFixed(1)}_${activeSnapGuide.z2.toFixed(1)}`
-                ) && styles.mergeIconBtnFused,
-              ]}
-              onPress={handleMergeWalls}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.mergeGlyph}>
-                {mergedPartitions.has(
-                  `${activeSnapGuide.x1.toFixed(1)}_${activeSnapGuide.z1.toFixed(1)}_${activeSnapGuide.x2.toFixed(1)}_${activeSnapGuide.z2.toFixed(1)}`
-                )
-                  ? '✓'
-                  : '🔗'}
-              </Text>
-              <Text
-                style={[
-                  styles.mergeBtnText,
-                  mergedPartitions.has(
-                    `${activeSnapGuide.x1.toFixed(1)}_${activeSnapGuide.z1.toFixed(1)}_${activeSnapGuide.x2.toFixed(1)}_${activeSnapGuide.z2.toFixed(1)}`
-                  ) && styles.mergeBtnTextFused,
-                ]}
-              >
-                {mergedPartitions.has(
-                  `${activeSnapGuide.x1.toFixed(1)}_${activeSnapGuide.z1.toFixed(1)}_${activeSnapGuide.x2.toFixed(1)}_${activeSnapGuide.z2.toFixed(1)}`
-                )
-                  ? 'Merged'
-                  : `Merge Walls (${Math.round(activeSnapGuide.overlapLen)}')`}
-              </Text>
-            </TouchableOpacity>
-          )}
 
           {/* BOTTOM-RIGHT: Minimalist 2D / 3D Switcher */}
           <View style={styles.viewToggleBottom}>
@@ -2175,24 +2074,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
-  // Live Diagnostic HUD
-  debugHudPill: {
-    position: 'absolute',
-    bottom: 45,
-    alignSelf: 'center',
-    backgroundColor: 'rgba(28, 28, 30, 0.85)',
-    borderRadius: 12,
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    zIndex: 50,
-  },
-  debugHudText: {
-    color: '#ffffff',
-    fontSize: 11,
-    fontWeight: '600',
-    letterSpacing: 0.2,
-  },
-
   // Selected Room Dock (Top of canvas)
   selectedRoomDock: {
     position: 'absolute',
@@ -2420,44 +2301,6 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 16,
     fontWeight: '700',
-  },
-
-  // Bottom-Left Minimalist Merge Button
-  mergeIconBtn: {
-    position: 'absolute',
-    bottom: 12,
-    left: 12,
-    height: 38,
-    paddingHorizontal: 12,
-    borderRadius: 19,
-    backgroundColor: 'rgba(255, 255, 255, 0.96)',
-    borderWidth: 1.5,
-    borderColor: '#34c759',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    shadowColor: '#34c759',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    elevation: 4,
-    zIndex: 40,
-  },
-  mergeIconBtnFused: {
-    borderColor: '#007aff',
-    shadowColor: '#007aff',
-  },
-  mergeGlyph: {
-    fontSize: 13,
-    lineHeight: 14,
-  },
-  mergeBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#34c759',
-  },
-  mergeBtnTextFused: {
-    color: '#007aff',
   },
 
   // Bottom-Right Minimalist 2D / 3D Switcher
