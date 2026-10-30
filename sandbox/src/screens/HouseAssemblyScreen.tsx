@@ -72,6 +72,7 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
   const [allRooms, setAllRooms] = useState<Room[]>([]);
   const [activeTab, setActiveTab] = useState<'studio' | 'dollhouse'>('studio');
   const [viewMode, setViewMode] = useState<'2d' | '3d'>('2d');
+  const [threeDHeightMode, setThreeDHeightMode] = useState<'4ft' | 'ceil'>('4ft');
   const [placedRoomNodes, setPlacedRoomNodes] = useState<RoomNode[]>([]);
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
   const [heldRoomId, setHeldRoomId] = useState<string | null>(null); // Active press-and-hold drag room
@@ -934,7 +935,7 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
       );
 
       const fullCeilingM = (room.height_ft || 8.5) * 0.3048;
-      const effectiveHeightM = Math.min(1.2192, fullCeilingM);
+      const effectiveHeightM = threeDHeightMode === 'ceil' ? fullCeilingM : Math.min(1.2192, fullCeilingM);
       const wallThickM = GeometryService.EXTERIOR_WALL_THICKNESS_M;
 
       for (let i = 0; i < N; i++) {
@@ -1182,7 +1183,7 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
     faces.sort((a, b) => b.avgDepth - a.avgDepth);
 
     return { allFaces3D: faces, allCanopies: canopies };
-  }, [placedRoomNodes, angleX, angleY, zoom, panOffset, selectedRoomId, viewW, viewH, layers.furniture]);
+  }, [placedRoomNodes, angleX, angleY, zoom, panOffset, selectedRoomId, viewW, viewH, layers.furniture, threeDHeightMode]);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -1844,6 +1845,30 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
             </TouchableOpacity>
           </Modal>
 
+          {/* BOTTOM-LEFT: Contextual 3D Height Switcher (Only visible when 3D mode is active) */}
+          {viewMode === '3d' && (
+            <View style={styles.heightToggleBottomLeft}>
+              <TouchableOpacity
+                style={[styles.viewToggleBtn, threeDHeightMode === '4ft' && styles.viewToggleBtnActive]}
+                onPress={() => setThreeDHeightMode('4ft')}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.viewToggleText, threeDHeightMode === '4ft' && styles.viewToggleTextActive]}>
+                  ✂ 4'
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.viewToggleBtn, threeDHeightMode === 'ceil' && styles.viewToggleBtnActive]}
+                onPress={() => setThreeDHeightMode('ceil')}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.viewToggleText, threeDHeightMode === 'ceil' && styles.viewToggleTextActive]}>
+                  🏛 Ceil
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
           {/* BOTTOM-RIGHT: Minimalist 2D / 3D Switcher */}
           <View style={styles.viewToggleBottom}>
             <TouchableOpacity
@@ -2301,6 +2326,26 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 16,
     fontWeight: '700',
+  },
+
+  // Bottom-Left Contextual 3D Height Switcher (Only visible when 3D mode is active)
+  heightToggleBottomLeft: {
+    position: 'absolute',
+    bottom: 12,
+    left: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.94)',
+    borderRadius: 19,
+    padding: 3,
+    flexDirection: 'row',
+    borderWidth: 0.5,
+    borderColor: '#e5e5ea',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 3,
+    zIndex: 40,
+    height: 38,
   },
 
   // Bottom-Right Minimalist 2D / 3D Switcher
