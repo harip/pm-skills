@@ -928,6 +928,7 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
       const realWalls: any[] = parsedMesh?.walls || [];
       const realDoors: any[] = parsedMesh?.doors || [];
       const realWindows: any[] = parsedMesh?.windows || [];
+      const realClosets: any[] = parsedMesh?.closets || [];
       const realObjects: any[] = parsedMesh?.objects || [];
 
       const polygon = GeometryService.buildRoomPolygon(realWalls, node.w, node.l);
@@ -1317,6 +1318,7 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
                     const realWalls: any[] = parsedMesh?.walls || [];
                     const realDoors: any[] = parsedMesh?.doors || [];
                     const realWindows: any[] = parsedMesh?.windows || [];
+                    const realClosets: any[] = parsedMesh?.closets || [];
                     const realObjects: any[] = parsedMesh?.objects || [];
 
                     const polygon = GeometryService.buildRoomPolygon(realWalls, n.w, n.l);
@@ -1445,6 +1447,30 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
                                 <Line x1={w1.x + nx} y1={w1.y + ny} x2={w2.x + nx} y2={w2.y + ny} stroke="#1c1c1e" strokeWidth={1.2} />
                                 <Line x1={w1.x} y1={w1.y} x2={w2.x} y2={w2.y} stroke="#007aff" strokeWidth={1.0} />
                                 <Line x1={w1.x - nx} y1={w1.y - ny} x2={w2.x - nx} y2={w2.y - ny} stroke="#1c1c1e" strokeWidth={1.2} />
+                              </G>
+                            );
+                          })}
+
+                        {/* Layer: Render Closets (Architectural Double Sliding Doors) */}
+                        {layers.doorsWindows &&
+                          realClosets.map((cl, clIdx) => {
+                            const c1 = roomLocalToCanvas(cl.x1 ?? (cl.x - 1.5), cl.z1 ?? (cl.z - 1.5));
+                            const c2 = roomLocalToCanvas(cl.x2 ?? (cl.x + 1.5), cl.z2 ?? (cl.z + 1.5));
+                            const dx = c2.x - c1.x;
+                            const dy = c2.y - c1.y;
+                            const len = Math.hypot(dx, dy) || 1;
+                            const ux = dx / len;
+                            const uy = dy / len;
+                            const nx = -uy * 2.5;
+                            const ny = ux * 2.5;
+                            const mx = (c1.x + c2.x) / 2;
+                            const my = (c1.y + c2.y) / 2;
+
+                            return (
+                              <G key={`closet-2d-${n.room.id}-${clIdx}`}>
+                                <Line x1={c1.x} y1={c1.y} x2={c2.x} y2={c2.y} stroke="#ffffff" strokeWidth={Math.max(6, 8 * zoom)} />
+                                <Line x1={c1.x} y1={c1.y} x2={mx + ux * 2} y2={my + uy * 2} stroke="#1c1c1e" strokeWidth={1.5} />
+                                <Line x1={mx - ux * 2 + nx} y1={my - uy * 2 + ny} x2={c2.x + nx} y2={c2.y + ny} stroke="#1c1c1e" strokeWidth={1.5} />
                               </G>
                             );
                           })}

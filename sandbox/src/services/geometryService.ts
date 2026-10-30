@@ -332,6 +332,18 @@ export const GeometryService = {
 
     // Parse windows
     for (const w of windows) {
+      // Solution A Disambiguation Guard:
+      // If a surface starts at floor level (< 16" / 0.40m) and is full-height (> 6'5" / 1.95m),
+      // it is a closed closet or door panel, NOT an exterior window opening. Suppress window void.
+      const sillFt = w.sillFt !== undefined ? w.sillFt : (w.yBottomFt !== undefined ? w.yBottomFt : undefined);
+      const hFt = w.heightFt;
+      if (sillFt !== undefined && hFt !== undefined && sillFt < 1.33 && hFt > 6.4) {
+        continue;
+      }
+      if (w.isCloset || w.type === 'closet') {
+        continue;
+      }
+
       let cx = 0, cz = 0, wM = 1.2192; // 48" default
       if (w.x1 !== undefined && w.x2 !== undefined) {
         cx = ((w.x1 + w.x2) / 2) * 0.3048;

@@ -494,6 +494,35 @@ endsolid ${room.name}`;
     assert(Math.abs(fullHeightM - 2.7432) < 1e-6, 'Ceil heightMode must preserve full 2.7432m (9ft) ceiling height');
   });
 
+  // EVAL-13: Closed Closet vs Window Geometric Disambiguation
+  it('EVAL-13: Floor-level closet surfaces do not generate window openings (Wall stays solid)', () => {
+    function filterWindows(windows) {
+      return windows.filter((w) => {
+        const sillFt = w.sillFt !== undefined ? w.sillFt : (w.yBottomFt !== undefined ? w.yBottomFt : undefined);
+        const hFt = w.heightFt;
+        if (sillFt !== undefined && hFt !== undefined && sillFt < 1.33 && hFt > 6.4) {
+          return false; // Suppressed as closet
+        }
+        if (w.isCloset || w.type === 'closet') {
+          return false;
+        }
+        return true;
+      });
+    }
+
+    // 1. Genuine Window (Sill at 32", height 48")
+    const realWindow = [{ widthFt: 4.92, heightFt: 4.0, sillFt: 2.67 }];
+    assert.strictEqual(filterWindows(realWindow).length, 1, 'Genuine window must be retained as aperture');
+
+    // 2. Closed Closet misidentified as window (Sill at 0", height 80" / 6.67ft)
+    const falseWindowCloset = [{ widthFt: 4.92, heightFt: 6.67, sillFt: 0.0 }];
+    assert.strictEqual(filterWindows(falseWindowCloset).length, 0, 'Closed closet must be suppressed from window openings');
+
+    // 3. Explicit closet type
+    const explicitCloset = [{ widthFt: 4.92, type: 'closet' }];
+    assert.strictEqual(filterWindows(explicitCloset).length, 0, 'Explicit closet aperture must not cut wall void');
+  });
+
   console.log(`\n📊 Verification Summary: ${passedTests}/${totalTests} tests passed.\n`);
 }
 

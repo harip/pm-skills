@@ -216,23 +216,50 @@ class RoomCaptureViewController: UIViewController, RoomCaptureViewDelegate, Room
             ])
         }
         
+        var closetsData: [[String: Any]] = []
         var windowsData: [[String: Any]] = []
         for (idx, win) in room.windows.enumerated() {
             let pos = win.transform.columns.3
             let dir = win.transform.columns.0
             let halfL = win.dimensions.x / 2.0
-            windowsData.append([
-                "id": "win-\(idx)",
-                "x": Double(round(pos.x * 3.28084 * 100) / 100),
-                "y": Double(round(pos.y * 3.28084 * 100) / 100),
-                "z": Double(round(pos.z * 3.28084 * 100) / 100),
-                "x1": Double(round((pos.x - dir.x * halfL) * 3.28084 * 100) / 100),
-                "z1": Double(round((pos.z - dir.z * halfL) * 3.28084 * 100) / 100),
-                "x2": Double(round((pos.x + dir.x * halfL) * 3.28084 * 100) / 100),
-                "z2": Double(round((pos.z + dir.z * halfL) * 3.28084 * 100) / 100),
-                "widthFt": Double(round(win.dimensions.x * 3.28084 * 10) / 10),
-                "heightFt": Double(round(win.dimensions.y * 3.28084 * 10) / 10),
-            ])
+            let dimY = win.dimensions.y
+            let sillM = pos.y - (dimY / 2.0)
+            let sillFt = Double(round(Double(sillM * 3.28084) * 100) / 100)
+            let heightFt = Double(round(Double(dimY * 3.28084) * 10) / 10)
+            let widthFt = Double(round(Double(win.dimensions.x * 3.28084) * 10) / 10)
+
+            // Solution A: Geometric Disambiguation
+            // A closed closet (or floor-level door panel) starts at floor level (< 16" / 0.40m)
+            // and reaches full door height (> 6'5" / 1.95m). It is NOT an exterior window opening.
+            if sillFt < 1.33 && heightFt > 6.4 {
+                closetsData.append([
+                    "id": "closet-\(idx)",
+                    "x": Double(round(pos.x * 3.28084 * 100) / 100),
+                    "y": Double(round(pos.y * 3.28084 * 100) / 100),
+                    "z": Double(round(pos.z * 3.28084 * 100) / 100),
+                    "x1": Double(round((pos.x - dir.x * halfL) * 3.28084 * 100) / 100),
+                    "z1": Double(round((pos.z - dir.z * halfL) * 3.28084 * 100) / 100),
+                    "x2": Double(round((pos.x + dir.x * halfL) * 3.28084 * 100) / 100),
+                    "z2": Double(round((pos.z + dir.z * halfL) * 3.28084 * 100) / 100),
+                    "widthFt": widthFt,
+                    "heightFt": heightFt,
+                    "sillFt": sillFt,
+                ])
+            } else {
+                windowsData.append([
+                    "id": "win-\(idx)",
+                    "x": Double(round(pos.x * 3.28084 * 100) / 100),
+                    "y": Double(round(pos.y * 3.28084 * 100) / 100),
+                    "z": Double(round(pos.z * 3.28084 * 100) / 100),
+                    "x1": Double(round((pos.x - dir.x * halfL) * 3.28084 * 100) / 100),
+                    "z1": Double(round((pos.z - dir.z * halfL) * 3.28084 * 100) / 100),
+                    "x2": Double(round((pos.x + dir.x * halfL) * 3.28084 * 100) / 100),
+                    "z2": Double(round((pos.z + dir.z * halfL) * 3.28084 * 100) / 100),
+                    "widthFt": widthFt,
+                    "heightFt": heightFt,
+                    "sillFt": sillFt,
+                ])
+            }
         }
         
         var objectsData: [[String: Any]] = []
@@ -286,11 +313,13 @@ class RoomCaptureViewController: UIViewController, RoomCaptureViewDelegate, Room
             "areaSqFt": areaSqFt,
             "wallCount": room.walls.count,
             "doorCount": room.doors.count,
-            "windowCount": room.windows.count,
+            "windowCount": windowsData.count,
+            "closetCount": closetsData.count,
             "objectCount": room.objects.count,
             "walls": wallsData,
             "doors": doorsData,
             "windows": windowsData,
+            "closets": closetsData,
             "objects": objectsData,
             "usdzPath": usdzURL.path,
             "stlPath": stlURL.path,

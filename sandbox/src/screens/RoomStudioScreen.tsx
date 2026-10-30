@@ -39,6 +39,16 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
   const [viewMode, setViewMode] = useState<'3d' | '2d'>('3d');
   const [isMetric, setIsMetric] = useState(false);
   const [sectionCut4Ft, setSectionCut4Ft] = useState(true);
+  const [selectedAperture, setSelectedAperture] = useState<{
+    type: 'window' | 'door' | 'closet';
+    id?: string;
+    index: number;
+    x1: number;
+    z1: number;
+    x2: number;
+    z2: number;
+    widthFt: number;
+  } | null>(null);
 
   // 360° Drag Orbit State (Azimuth & Elevation)
   const [angleX, setAngleX] = useState(0.52);
@@ -72,6 +82,7 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
   const realWalls: any[] = parsedMesh?.walls || [];
   const realDoors: any[] = parsedMesh?.doors || [];
   const realWindows: any[] = parsedMesh?.windows || [];
+  const realClosets: any[] = parsedMesh?.closets || [];
   const realObjects: any[] = parsedMesh?.objects || [];
   const currentFloor = room.floor_level || parsedMesh?.floorLevel || 'Ground Floor';
 
@@ -178,6 +189,71 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
 
   const handleZoomOut = () => {
     setZoom((prev) => Math.max(0.35, +(prev - 0.25).toFixed(2)));
+  };
+
+  const handleConvertAperture = async (targetType: 'window' | 'door' | 'closet' | 'wall') => {
+    if (!selectedAperture) return;
+
+    let mesh = parsedMesh ? JSON.parse(JSON.stringify(parsedMesh)) : {};
+    let doors: any[] = mesh.doors ? [...mesh.doors] : [];
+    let windows: any[] = mesh.windows ? [...mesh.windows] : [];
+    let closets: any[] = mesh.closets ? [...mesh.closets] : [];
+
+    let itemToMove: any = null;
+    if (selectedAperture.type === 'door') {
+      const idx = doors.findIndex((d: any, i: number) => (selectedAperture.id && d.id === selectedAperture.id) || i === selectedAperture.index);
+      if (idx >= 0) itemToMove = doors.splice(idx, 1)[0];
+    } else if (selectedAperture.type === 'window') {
+      const idx = windows.findIndex((w: any, i: number) => (selectedAperture.id && w.id === selectedAperture.id) || i === selectedAperture.index);
+      if (idx >= 0) itemToMove = windows.splice(idx, 1)[0];
+    } else if (selectedAperture.type === 'closet') {
+      const idx = closets.findIndex((c: any, i: number) => (selectedAperture.id && c.id === selectedAperture.id) || i === selectedAperture.index);
+      if (idx >= 0) itemToMove = closets.splice(idx, 1)[0];
+    }
+
+    if (!itemToMove) {
+      itemToMove = {
+        id: selectedAperture.id || `aperture-${Date.now()}`,
+        x1: selectedAperture.x1,
+        z1: selectedAperture.z1,
+        x2: selectedAperture.x2,
+        z2: selectedAperture.z2,
+        widthFt: selectedAperture.widthFt,
+      };
+    }
+
+    if (targetType === 'window') {
+      itemToMove.type = 'window';
+      itemToMove.sillFt = 2.67;
+      windows.push(itemToMove);
+      setSelectedAperture({ ...selectedAperture, type: 'window' });
+    } else if (targetType === 'door') {
+      itemToMove.type = 'door';
+      itemToMove.sillFt = 0;
+      doors.push(itemToMove);
+      setSelectedAperture({ ...selectedAperture, type: 'door' });
+    } else if (targetType === 'closet') {
+      itemToMove.type = 'closet';
+      itemToMove.sillFt = 0;
+      closets.push(itemToMove);
+      setSelectedAperture({ ...selectedAperture, type: 'closet' });
+    } else if (targetType === 'wall') {
+      setSelectedAperture(null);
+    }
+
+    mesh.doors = doors;
+    mesh.windows = windows;
+    mesh.closets = closets;
+
+    const newMeshJson = JSON.stringify(mesh);
+    const updatedRoom: Room = {
+      ...room,
+      mesh_json: newMeshJson,
+      updated_at: new Date().toISOString(),
+    };
+
+    setRoom(updatedRoom);
+    await Database.saveRoom(updatedRoom);
   };
 
   const doExportStl = async (withRoof: boolean, includeFurniture: boolean) => {
@@ -724,18 +800,75 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
           }}
           {...panResponder.panHandlers}
         >
-          {/* Minimal Floating HUD Capsule at Top */}
-          <View style={styles.floatingHudCapsule} pointerEvents="none">
-            <Text style={styles.floatingHudText}>
-              {isMetric
-                ? `${GeometryService.formatMetric(room.length_ft)} × ${GeometryService.formatMetric(room.width_ft)}`
-                : `${GeometryService.formatFeetInches(room.length_ft)} × ${GeometryService.formatFeetInches(room.width_ft)}`}
-              {'  •  '}
-              {isMetric ? GeometryService.formatAreaMetric(room.area_sqft) : GeometryService.formatAreaSqFt(room.area_sqft)}
-              {'  •  '}
-              {currentFloor}
-            </Text>
-          </View>
+          {/* Minimal Floating HUD Capsule at Top (or Contextual Aperture Editor Capsule when opening is tapped) */}
+          {selectedAperture && viewMode === '2d' ? (
+            <View style={styles.floatingApertureCapsuleWrap} pointerEvents="box-none">
+              <View style={styles.floatingApertureCapsule}>
+                <TouchableOpacity
+                  style={[styles.apertureSegBtn, selectedAperture.type === 'window' && styles.apertureSegBtnActive]}
+                  onPress={() => handleConvertAperture('window')}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.apertureSegText, selectedAperture.type === 'window' && styles.apertureSegTextActive]}>
+                    🪟 Window
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.apertureSegBtn, selectedAperture.type === 'door' && styles.apertureSegBtnActive]}
+                  onPress={() => handleConvertAperture('door')}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.apertureSegText, selectedAperture.type === 'door' && styles.apertureSegTextActive]}>
+                    🚪 Door
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.apertureSegBtn, selectedAperture.type === 'closet' && styles.apertureSegBtnActive]}
+                  onPress={() => handleConvertAperture('closet')}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.apertureSegText, selectedAperture.type === 'closet' && styles.apertureSegTextActive]}>
+                    🗄️ Closet
+                  </Text>
+                </TouchableOpacity>
+
+                <View style={styles.apertureDivider} />
+
+                <TouchableOpacity
+                  style={styles.apertureSegBtn}
+                  onPress={() => handleConvertAperture('wall')}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.apertureSegText, { color: '#ff3b30' }]}>
+                    🧱 Wall
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.apertureCloseBtn}
+                  onPress={() => setSelectedAperture(null)}
+                  activeOpacity={0.8}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Text style={styles.apertureCloseText}>✕</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : (
+            <View style={styles.floatingHudCapsule} pointerEvents="none">
+              <Text style={styles.floatingHudText}>
+                {isMetric
+                  ? `${GeometryService.formatMetric(room.length_ft)} × ${GeometryService.formatMetric(room.width_ft)}`
+                  : `${GeometryService.formatFeetInches(room.length_ft)} × ${GeometryService.formatFeetInches(room.width_ft)}`}
+                {'  •  '}
+                {isMetric ? GeometryService.formatAreaMetric(room.area_sqft) : GeometryService.formatAreaSqFt(room.area_sqft)}
+                {'  •  '}
+                {currentFloor}
+              </Text>
+            </View>
+          )}
 
           {/* SVG Multi-Touch Canvas */}
           <Svg style={StyleSheet.absoluteFill}>
@@ -822,6 +955,7 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
                   const dx2 = (d.x2 ?? (d.x + 1.5)) * scale2D + offset2DX;
                   const dy2 = (d.z2 ?? (d.z + 1.5)) * scale2D + offset2DZ;
                   const dLen = Math.hypot(dx2 - dx1, dy2 - dy1) || 24;
+                  const isSel = selectedAperture?.type === 'door' && ((d.id && selectedAperture.id === d.id) || selectedAperture.index === idx);
 
                   return (
                     <G key={`door-2d-${idx}`}>
@@ -829,11 +963,17 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
                       <Path
                         d={`M ${dx1} ${dy1} A ${dLen} ${dLen} 0 0 1 ${dx2} ${dy2}`}
                         fill="none"
-                        stroke="#007aff"
-                        strokeWidth="1.5"
+                        stroke={isSel ? '#f97316' : '#007aff'}
+                        strokeWidth={isSel ? 2.5 : 1.5}
                         strokeDasharray="3,3"
                       />
-                      <Line x1={dx1} y1={dy1} x2={dx1} y2={dy1 - dLen * 0.7} stroke="#007aff" strokeWidth="2.5" />
+                      <Line x1={dx1} y1={dy1} x2={dx1} y2={dy1 - dLen * 0.7} stroke={isSel ? '#f97316' : '#007aff'} strokeWidth={isSel ? 3.5 : 2.5} />
+                      <Line
+                        x1={dx1} y1={dy1} x2={dx2} y2={dy2}
+                        stroke="transparent"
+                        strokeWidth={36}
+                        onPress={() => setSelectedAperture({ type: 'door', id: d.id, index: idx, x1: d.x1 ?? (d.x - 1.5), z1: d.z1 ?? (d.z - 1.5), x2: d.x2 ?? (d.x + 1.5), z2: d.z2 ?? (d.z + 1.5), widthFt: d.widthFt || 3.0 })}
+                      />
                     </G>
                   );
                 })}
@@ -849,16 +989,57 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
                   const wLen = Math.hypot(dx, dy) || 1;
                   const nx = (-dy / wLen) * 3;
                   const ny = (dx / wLen) * 3;
+                  const isSel = selectedAperture?.type === 'window' && ((win.id && selectedAperture.id === win.id) || selectedAperture.index === idx);
 
                   return (
                     <G key={`win-2d-${idx}`}>
                       <Line x1={wx1} y1={wy1} x2={wx2} y2={wy2} stroke="#ffffff" strokeWidth={10 * zoom} />
                       {/* Outer Jamb Line */}
-                      <Line x1={wx1 + nx} y1={wy1 + ny} x2={wx2 + nx} y2={wy2 + ny} stroke="#1c1c1e" strokeWidth="1.5" />
+                      <Line x1={wx1 + nx} y1={wy1 + ny} x2={wx2 + nx} y2={wy2 + ny} stroke={isSel ? '#f97316' : '#1c1c1e'} strokeWidth={isSel ? 2.5 : 1.5} />
                       {/* Glass Centerline */}
-                      <Line x1={wx1} y1={wy1} x2={wx2} y2={wy2} stroke="#007aff" strokeWidth="1.2" />
+                      <Line x1={wx1} y1={wy1} x2={wx2} y2={wy2} stroke={isSel ? '#f97316' : '#007aff'} strokeWidth={isSel ? 2.0 : 1.2} />
                       {/* Inner Jamb Line */}
-                      <Line x1={wx1 - nx} y1={wy1 - ny} x2={wx2 - nx} y2={wy2 - ny} stroke="#1c1c1e" strokeWidth="1.5" />
+                      <Line x1={wx1 - nx} y1={wy1 - ny} x2={wx2 - nx} y2={wy2 - ny} stroke={isSel ? '#f97316' : '#1c1c1e'} strokeWidth={isSel ? 2.5 : 1.5} />
+                      <Line
+                        x1={wx1} y1={wy1} x2={wx2} y2={wy2}
+                        stroke="transparent"
+                        strokeWidth={36}
+                        onPress={() => setSelectedAperture({ type: 'window', id: win.id, index: idx, x1: win.x1 ?? (win.x - 1.5), z1: win.z1 ?? (win.z - 1.5), x2: win.x2 ?? (win.x + 1.5), z2: win.z2 ?? (win.z + 1.5), widthFt: win.widthFt || 4.0 })}
+                      />
+                    </G>
+                  );
+                })}
+
+                {/* Render Closets (Architectural Double Sliding Doors Representation) */}
+                {realClosets.map((cl, idx) => {
+                  const cx1 = (cl.x1 ?? (cl.x - 1.5)) * scale2D + offset2DX;
+                  const cy1 = (cl.z1 ?? (cl.z - 1.5)) * scale2D + offset2DZ;
+                  const cx2 = (cl.x2 ?? (cl.x + 1.5)) * scale2D + offset2DX;
+                  const cy2 = (cl.z2 ?? (cl.z + 1.5)) * scale2D + offset2DZ;
+                  const dx = cx2 - cx1;
+                  const dy = cy2 - cy1;
+                  const cLen = Math.hypot(dx, dy) || 1;
+                  const ux = dx / cLen;
+                  const uy = dy / cLen;
+                  const nx = -uy * 3.5;
+                  const ny = ux * 3.5;
+                  const mx = (cx1 + cx2) / 2;
+                  const my = (cy1 + cy2) / 2;
+                  const isSel = selectedAperture?.type === 'closet' && ((cl.id && selectedAperture.id === cl.id) || selectedAperture.index === idx);
+
+                  return (
+                    <G key={`closet-2d-${idx}`}>
+                      <Line x1={cx1} y1={cy1} x2={cx2} y2={cy2} stroke="#ffffff" strokeWidth={10 * zoom} />
+                      {/* Sliding door leaf 1 */}
+                      <Line x1={cx1} y1={cy1} x2={mx + ux * 3} y2={my + uy * 3} stroke={isSel ? '#f97316' : '#1c1c1e'} strokeWidth={isSel ? 3.0 : 2.0} />
+                      {/* Sliding door leaf 2 (offset) */}
+                      <Line x1={mx - ux * 3 + nx} y1={my - uy * 3 + ny} x2={cx2 + nx} y2={cy2 + ny} stroke={isSel ? '#f97316' : '#1c1c1e'} strokeWidth={isSel ? 3.0 : 2.0} />
+                      <Line
+                        x1={cx1} y1={cy1} x2={cx2} y2={cy2}
+                        stroke="transparent"
+                        strokeWidth={36}
+                        onPress={() => setSelectedAperture({ type: 'closet', id: cl.id, index: idx, x1: cl.x1 ?? (cl.x - 1.5), z1: cl.z1 ?? (cl.z - 1.5), x2: cl.x2 ?? (cl.x + 1.5), z2: cl.z2 ?? (cl.z + 1.5), widthFt: cl.widthFt || 4.0 })}
+                      />
                     </G>
                   );
                 })}
@@ -1261,6 +1442,74 @@ const styles = StyleSheet.create({
   },
   freeformSegTextActive: {
     color: '#1c1c1e',
+  },
+
+  // Contextual Floating Aperture Capsule (Option 1: Minimalist, visible only on tap)
+  floatingApertureCapsuleWrap: {
+    position: 'absolute',
+    top: 10,
+    alignSelf: 'center',
+    zIndex: 50,
+  },
+  floatingApertureCapsule: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.96)',
+    borderRadius: 20,
+    paddingHorizontal: 5,
+    paddingVertical: 3,
+    borderWidth: 0.5,
+    borderColor: 'rgba(0, 0, 0, 0.15)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 6,
+    gap: 2,
+  },
+  apertureSegBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  apertureSegBtnActive: {
+    backgroundColor: '#007aff',
+    shadowColor: '#007aff',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  apertureSegText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#48484a',
+  },
+  apertureSegTextActive: {
+    color: '#ffffff',
+  },
+  apertureDivider: {
+    width: 0.5,
+    height: 16,
+    backgroundColor: '#d1d1d6',
+    marginHorizontal: 2,
+  },
+  apertureCloseBtn: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#e5e5ea',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 2,
+  },
+  apertureCloseText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#636366',
+    lineHeight: 11,
   },
 
   floatingHudCapsule: {
