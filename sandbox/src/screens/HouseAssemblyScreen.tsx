@@ -205,6 +205,35 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
     return Math.max(4, baseScale2D * zoom);
   }, [zoom]);
 
+  // Live State Refs: Guarantees PanResponder closures never read stale state
+  const placedRoomNodesRef = useRef<RoomNode[]>(placedRoomNodes);
+  placedRoomNodesRef.current = placedRoomNodes;
+
+  const scale2DRef = useRef<number>(scale2D);
+  scale2DRef.current = scale2D;
+
+  const panOffsetRef = useRef<{ x: number; y: number }>(panOffset);
+  panOffsetRef.current = panOffset;
+
+  const selectedRoomIdRef = useRef<string | null>(selectedRoomId);
+  selectedRoomIdRef.current = selectedRoomId;
+
+  const viewModeRef = useRef<'2d' | '3d'>(viewMode);
+  viewModeRef.current = viewMode;
+
+  const canvasLayoutRef = useRef<{ width: number; height: number }>(canvasLayout);
+  canvasLayoutRef.current = canvasLayout;
+
+  const worldToCanvasLive = (wx: number, wz: number) => {
+    const s = scale2DRef.current;
+    const p = panOffsetRef.current;
+    const lay = canvasLayoutRef.current;
+    return {
+      x: lay.width / 2 + wx * s + p.x,
+      y: lay.height / 2 + wz * s + p.y,
+    };
+  };
+
   const worldToCanvas = (wx: number, wz: number) => {
     return {
       x: viewW / 2 + wx * scale2D + panOffset.x,
@@ -449,13 +478,17 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
               ? touch.locationY
               : touch.pageY - vp.pageY;
 
+            const liveRooms = placedRoomNodesRef.current;
+            const liveSelId = selectedRoomIdRef.current;
+            const liveScale = scale2DRef.current;
+
             // 1. Direct hit-test for corner rotation handle on currently selected room
-            if (selectedRoomId) {
-              const selNode = placedRoomNodes.find((n) => n.room.id === selectedRoomId);
+            if (liveSelId) {
+              const selNode = liveRooms.find((n) => n.room.id === liveSelId);
               if (selNode) {
-                const cc = worldToCanvas(selNode.x, selNode.z);
-                const rwPx = (selNode.rotation % 180 === 0 ? selNode.w : selNode.l) * scale2D;
-                const rlPx = (selNode.rotation % 180 === 0 ? selNode.l : selNode.w) * scale2D;
+                const cc = worldToCanvasLive(selNode.x, selNode.z);
+                const rwPx = (selNode.rotation % 180 === 0 ? selNode.w : selNode.l) * liveScale;
+                const rlPx = (selNode.rotation % 180 === 0 ? selNode.l : selNode.w) * liveScale;
                 const handleX = cc.x + rwPx / 2 - 14;
                 const handleY = cc.y - rlPx / 2 + 14;
                 const distToHandle = Math.hypot(canvasX - handleX, canvasY - handleY);
@@ -470,13 +503,13 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
             // 2. Pixel-accurate hit test across placed rooms (Closest room center wins)
             let hitRoomId: string | null = null;
             let bestCenterDist = Infinity;
-            const pad = 24; // 24px comfortable finger touch slop
+            const pad = 28; // 28px comfortable finger touch slop
 
-            for (let i = 0; i < placedRoomNodes.length; i++) {
-              const n = placedRoomNodes[i];
-              const rwPx = (n.rotation % 180 === 0 ? n.w : n.l) * scale2D;
-              const rlPx = (n.rotation % 180 === 0 ? n.l : n.w) * scale2D;
-              const center = worldToCanvas(n.x, n.z);
+            for (let i = 0; i < liveRooms.length; i++) {
+              const n = liveRooms[i];
+              const rwPx = (n.rotation % 180 === 0 ? n.w : n.l) * liveScale;
+              const rlPx = (n.rotation % 180 === 0 ? n.l : n.w) * liveScale;
+              const center = worldToCanvasLive(n.x, n.z);
               if (
                 canvasX >= center.x - rwPx / 2 - pad &&
                 canvasX <= center.x + rwPx / 2 + pad &&
@@ -491,7 +524,7 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
               }
             }
 
-            const hitNode = placedRoomNodes.find((n) => n.room.id === hitRoomId);
+            const hitNode = liveRooms.find((n) => n.room.id === hitRoomId);
             const hitName = hitNode ? hitNode.room.name.split('(')[0].trim() : 'NONE';
             const targetType = hitRoomId ? 'ROOM' : 'CANVAS';
             setDebugInfo(`Touch: (${canvasX.toFixed(0)}, ${canvasY.toFixed(0)}) | Mode: ${targetType} | Hit: ${hitName}`);
@@ -513,10 +546,10 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
                   target: targetType,
                   hitRoomId,
                   hitName,
-                  roomsOnCanvas: placedRoomNodes.map((r) => ({
+                  roomsOnCanvas: liveRooms.map((r) => ({
                     id: r.room.id,
                     name: r.room.name,
-                    centerCanvas: worldToCanvas(r.x, r.z),
+                    centerCanvas: worldToCanvasLive(r.x, r.z),
                   })),
                 }),
               }).catch(() => {});
@@ -564,8 +597,9 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
               setAngleX((prev) => Math.max(0.15, Math.min(1.4, prev - dy * 0.01)));
             } else if (activeGestureTargetRef.current.type === 'ROOM' && heldRoomIdRef.current) {
               // DRAG ONLY THE HELD ROOM (All other rooms stay fixed)
-              const dWorldX = dx / scale2D;
-              const dWorldZ = dy / scale2D;
+              const curScale = scale2DRef.current;
+              const dWorldX = dx / curScale;
+              const dWorldZ = dy / curScale;
               setPlacedRoomNodes((prev) =>
                 prev.map((n) => {
                   if (n.room.id === heldRoomIdRef.current) {
