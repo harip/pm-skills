@@ -104,12 +104,12 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
   const [angleX, setAngleX] = useState(0.52);
   const [angleY, setAngleY] = useState(-0.35);
 
-  // Touch & Press-and-Hold Tracking Refs
+  // Touch & Gesture Target Tracking Refs
   const lastTouchPosRef = useRef<{ x: number; y: number } | null>(null);
   const lastPinchDistRef = useRef<number | null>(null);
   const isHeldActiveRef = useRef<boolean>(false);
   const heldRoomIdRef = useRef<string | null>(null);
-  const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const activeGestureTargetRef = useRef<{ type: 'NONE' | 'CANVAS' | 'ROOM'; roomId?: string }>({ type: 'NONE' });
   const touchStartPosRef = useRef<{ x: number; y: number } | null>(null);
 
   const palette = ['#007aff', '#34c759', '#ff9500', '#af52de', '#5856d6', '#ff2d55'];
@@ -410,23 +410,22 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
     return { x: bestX, z: bestZ, guide: bestGuide };
   };
 
-  // Canvas PanResponder: Press & Hold (200ms) with Light Orange Border to Drag, Quick Tap to Select
+  // Canvas PanResponder: Unambiguous Touch Differentiation
+  // - Touch on background canvas: Drag moves all rooms as a whole (Canvas Pan Mode)
+  // - Touch on a room: Press & hold moves ONLY that room with Light Orange Border & Real-Time Magnetic Snapping
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
       onPanResponderGrant: (evt) => {
         const touches = evt.nativeEvent.touches;
-        if (longPressTimerRef.current) {
-          clearTimeout(longPressTimerRef.current);
-          longPressTimerRef.current = null;
-        }
 
         if (touches.length >= 2) {
           const dx = touches[0].pageX - touches[1].pageX;
           const dy = touches[0].pageY - touches[1].pageY;
           lastPinchDistRef.current = Math.hypot(dx, dy);
           lastTouchPosRef.current = null;
+          activeGestureTargetRef.current = { type: 'NONE' };
           isHeldActiveRef.current = false;
           heldRoomIdRef.current = null;
           setHeldRoomId(null);
@@ -454,19 +453,20 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
                 const handleY = cc.y - rlPx / 2 + 14;
                 const distToHandle = Math.hypot(canvasX - handleX, canvasY - handleY);
                 if (distToHandle <= 28) {
+                  activeGestureTargetRef.current = { type: 'NONE' };
                   handleRotateSelectedRoom();
                   return;
                 }
               }
             }
 
-            // Hit test top-most rooms
+            // 2. Hit test top-most room polygon
             let hitRoomId: string | null = null;
             for (let i = placedRoomNodes.length - 1; i >= 0; i--) {
               const n = placedRoomNodes[i];
               const rw = n.rotation % 180 === 0 ? n.w : n.l;
               const rl = n.rotation % 180 === 0 ? n.l : n.w;
-              const pad = 1.2;
+              const pad = 1.0;
               if (
                 worldTouch.x >= n.x - rw / 2 - pad &&
                 worldTouch.x <= n.x + rw / 2 + pad &&
@@ -479,18 +479,16 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
             }
 
             if (hitRoomId) {
-              // Immediately select room on tap
+              // Touch is ON A ROOM: Lock into ROOM DRAG MODE
+              activeGestureTargetRef.current = { type: 'ROOM', roomId: hitRoomId };
               setSelectedRoomId(hitRoomId);
-              triggerHaptic();
-
-              // Press & Hold (200ms) with finger slop tolerance up to 25pt
-              longPressTimerRef.current = setTimeout(() => {
-                isHeldActiveRef.current = true;
-                heldRoomIdRef.current = hitRoomId;
-                setHeldRoomId(hitRoomId); // Triggers Light Orange Border!
-                triggerMediumHaptic();
-              }, 200);
+              setHeldRoomId(hitRoomId); // Triggers Light Orange Border (#f97316)
+              isHeldActiveRef.current = true;
+              heldRoomIdRef.current = hitRoomId;
+              triggerMediumHaptic();
             } else {
+              // Touch is OUTSIDE ALL ROOMS: Lock into CANVAS PAN MODE (Move all rooms as a whole)
+              activeGestureTargetRef.current = { type: 'CANVAS' };
               isHeldActiveRef.current = false;
               heldRoomIdRef.current = null;
               setHeldRoomId(null);
@@ -501,10 +499,6 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
       onPanResponderMove: (evt) => {
         const touches = evt.nativeEvent.touches;
         if (touches.length >= 2) {
-          if (longPressTimerRef.current) {
-            clearTimeout(longPressTimerRef.current);
-            longPressTimerRef.current = null;
-          }
           const dx = touches[0].pageX - touches[1].pageX;
           const dy = touches[0].pageY - touches[1].pageY;
           const curDist = Math.hypot(dx, dy);
@@ -517,15 +511,6 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
           const curX = evt.nativeEvent.pageX;
           const curY = evt.nativeEvent.pageY;
 
-          // If moved > 25pt before 200ms, cancel long press (user intended canvas pan)
-          if (touchStartPosRef.current && longPressTimerRef.current && !isHeldActiveRef.current) {
-            const moveDist = Math.hypot(curX - touchStartPosRef.current.x, curY - touchStartPosRef.current.y);
-            if (moveDist > 25) {
-              clearTimeout(longPressTimerRef.current);
-              longPressTimerRef.current = null;
-            }
-          }
-
           if (lastTouchPosRef.current) {
             const dx = curX - lastTouchPosRef.current.x;
             const dy = curY - lastTouchPosRef.current.y;
@@ -533,8 +518,8 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
             if (viewMode === '3d') {
               setAngleY((prev) => prev - dx * 0.01);
               setAngleX((prev) => Math.max(0.15, Math.min(1.4, prev - dy * 0.01)));
-            } else if (isHeldActiveRef.current && heldRoomIdRef.current) {
-              // Drag ONLY the held room (Independent Movement with Light Orange Border)
+            } else if (activeGestureTargetRef.current.type === 'ROOM' && heldRoomIdRef.current) {
+              // DRAG ONLY THE HELD ROOM (All other rooms stay fixed)
               const dWorldX = dx / scale2D;
               const dWorldZ = dy / scale2D;
               setPlacedRoomNodes((prev) =>
@@ -545,6 +530,7 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
                       x: n.x + dWorldX,
                       z: n.z + dWorldZ,
                     };
+                    // Continuous Real-Time Magnetic Snapping against all other rooms
                     const snapped = applyMagneticSnapping(rawNode, prev);
                     setActiveSnapGuide(snapped.guide);
                     return {
@@ -556,8 +542,8 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
                   return n;
                 })
               );
-            } else if (!longPressTimerRef.current) {
-              // Pan Canvas Background
+            } else if (activeGestureTargetRef.current.type === 'CANVAS') {
+              // DRAG CANVAS BACKGROUND: Moves all rooms as a whole
               setPanOffset((prev) => ({ x: prev.x + dx, y: prev.y + dy }));
             }
           }
@@ -565,16 +551,13 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
         }
       },
       onPanResponderRelease: () => {
-        if (longPressTimerRef.current) {
-          clearTimeout(longPressTimerRef.current);
-          longPressTimerRef.current = null;
-        }
-        if (isHeldActiveRef.current) {
+        if (activeGestureTargetRef.current.type === 'ROOM' && isHeldActiveRef.current) {
           triggerHaptic();
         }
+        activeGestureTargetRef.current = { type: 'NONE' };
         isHeldActiveRef.current = false;
         heldRoomIdRef.current = null;
-        setHeldRoomId(null); // Release light orange border back to blue selection
+        setHeldRoomId(null); // Return light orange border back to blue selection
         lastTouchPosRef.current = null;
         touchStartPosRef.current = null;
         lastPinchDistRef.current = null;
