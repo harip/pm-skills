@@ -540,8 +540,8 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
           heldRoomIdRef.current = null;
           setHeldRoomId(null);
         } else if (touches.length === 1) {
-          const pageX = evt.nativeEvent.pageX;
-          const pageY = evt.nativeEvent.pageY;
+          const pageX = touches[0].pageX;
+          const pageY = touches[0].pageY;
           lastTouchPosRef.current = { x: pageX, y: pageY };
           touchStartPosRef.current = { x: pageX, y: pageY };
           lastPinchDistRef.current = null;
@@ -629,15 +629,19 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
         if (touches.length >= 2) {
           const dx = touches[0].pageX - touches[1].pageX;
           const dy = touches[0].pageY - touches[1].pageY;
-          const curDist = Math.hypot(dx, dy);
+          const currentDist = Math.hypot(dx, dy);
           if (lastPinchDistRef.current !== null && lastPinchDistRef.current > 0) {
-            const delta = (curDist - lastPinchDistRef.current) * 0.005;
-            setZoom((prev) => Math.max(0.4, Math.min(2.8, +(prev + delta).toFixed(3))));
+            const distDelta = currentDist - lastPinchDistRef.current;
+            lastPinchDistRef.current = currentDist;
+            const zoomDelta = distDelta * 0.006;
+            setZoom((prev) => Math.max(0.35, Math.min(4.0, +(prev + zoomDelta).toFixed(3))));
+          } else {
+            lastPinchDistRef.current = currentDist;
           }
-          lastPinchDistRef.current = curDist;
+          lastTouchPosRef.current = null;
         } else if (touches.length === 1) {
-          const curX = evt.nativeEvent.pageX;
-          const curY = evt.nativeEvent.pageY;
+          const curX = touches[0].pageX;
+          const curY = touches[0].pageY;
 
           if (lastTouchPosRef.current) {
             const dx = curX - lastTouchPosRef.current.x;
