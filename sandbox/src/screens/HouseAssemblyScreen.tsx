@@ -79,6 +79,7 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
   const [heldRoomId, setHeldRoomId] = useState<string | null>(null); // Active press-and-hold drag room
   const [activeSnapGuide, setActiveSnapGuide] = useState<SnapGuide | null>(null);
   const [mergedPartitions, setMergedPartitions] = useState<Set<string>>(new Set());
+  const [isHouseRotateMode, setIsHouseRotateMode] = useState<boolean>(false);
 
   // Apple Maps-style Layer Toggles: Only Doors & Windows ON by default per user request
   const [layers, setLayers] = useState<LayersConfig>({
@@ -222,6 +223,14 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
 
   const viewModeRef = useRef<'2d' | '3d'>(viewMode);
   viewModeRef.current = viewMode;
+
+  const isHouseRotateModeRef = useRef<boolean>(isHouseRotateMode);
+  isHouseRotateModeRef.current = isHouseRotateMode;
+
+  const toggleHouseRotateMode = () => {
+    triggerHaptic();
+    setIsHouseRotateMode((prev) => !prev);
+  };
 
   const canvasLayoutRef = useRef<{ width: number; height: number }>(canvasLayout);
   canvasLayoutRef.current = canvasLayout;
@@ -538,6 +547,14 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
           lastPinchDistRef.current = null;
 
           if (viewMode === '2d') {
+            if (isHouseRotateModeRef.current) {
+              activeGestureTargetRef.current = { type: 'HOUSE_ROTATE' as any };
+              isHeldActiveRef.current = false;
+              heldRoomIdRef.current = null;
+              setHeldRoomId(null);
+              return;
+            }
+
             const touch = evt.nativeEvent.touches?.[0] || evt.nativeEvent.changedTouches?.[0] || evt.nativeEvent;
             const vp = viewportLayoutRef.current;
             // Robust coordinate calculation across all iOS devices and layouts:
@@ -637,6 +654,34 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
             if (viewMode === '3d') {
               setAngleY((prev) => prev - dx * 0.01);
               setAngleX((prev) => Math.max(0.15, Math.min(1.4, prev - dy * 0.01)));
+            } else if (isHouseRotateModeRef.current) {
+              // ROTATE WHOLE HOUSE:
+              // Drag horizontally spins all rooms rigidly around the composite house centroid
+              const curScale = scale2DRef.current;
+              const dAngleRad = dx / (100 * curScale);
+              const cosD = Math.cos(dAngleRad);
+              const sinD = Math.sin(dAngleRad);
+
+              setPlacedRoomNodes((prev) => {
+                if (prev.length === 0) return prev;
+                const N = prev.length;
+                const cx = prev.reduce((acc, n) => acc + n.x, 0) / N;
+                const cz = prev.reduce((acc, n) => acc + n.z, 0) / N;
+
+                return prev.map((n) => {
+                  const relX = n.x - cx;
+                  const relZ = n.z - cz;
+                  const newX = cx + (relX * cosD - relZ * sinD);
+                  const newZ = cz + (relX * sinD + relZ * cosD);
+                  const newRot = (n.rotation + (dAngleRad * 180) / Math.PI + 360) % 360;
+                  return {
+                    ...n,
+                    x: Math.round(newX * 100) / 100,
+                    z: Math.round(newZ * 100) / 100,
+                    rotation: Math.round(newRot * 10) / 10,
+                  };
+                });
+              });
             } else if (activeGestureTargetRef.current.type === 'ROOM' && heldRoomIdRef.current) {
               // DRAG ONLY THE HELD ROOM (All other rooms stay fixed)
               const curScale = scale2DRef.current;
@@ -1661,8 +1706,9 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
             </View>
           )}
 
-          {/* Apple Maps / Google Maps-Style Floating Layer Button (Top-Right) */}
-          <View style={styles.floatingLayerBtnWrap} pointerEvents="box-none">
+          {/* Apple Maps-Style Top-Right Dual Stack: Layers + 3D Rotate Toggle (Option A) */}
+          <View style={styles.floatingTopRightStack} pointerEvents="box-none">
+            {/* Button 1: Map Layers */}
             <TouchableOpacity
               style={styles.floatingLayerBtn}
               onPress={() => setShowLayerMenu(true)}
@@ -1699,6 +1745,50 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
               {(layers.dimensions || layers.labels || layers.furniture) && (
                 <View style={styles.layerActiveDot} />
               )}
+            </TouchableOpacity>
+
+            {/* Button 2: 3D Rotate House Toggle (Option A: 3D Cube with Orbit Arrow) */}
+            <TouchableOpacity
+              style={[
+                styles.floatingRotateBtn,
+                isHouseRotateMode && styles.floatingRotateBtnActive,
+              ]}
+              onPress={toggleHouseRotateMode}
+              activeOpacity={0.8}
+              accessibilityLabel={isHouseRotateMode ? "Rotate House Mode Active" : "Enable Rotate House Mode"}
+              accessibilityRole="button"
+            >
+              <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+                {/* 3D Isometric Cube */}
+                <Path
+                  d="M12 2.5l6.5 3.75v7.5L12 17.5l-6.5-3.75v-7.5L12 2.5z"
+                  stroke={isHouseRotateMode ? 'rgba(255,255,255,0.7)' : '#636366'}
+                  strokeWidth={1.8}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <Path
+                  d="M12 2.5v15M18.5 6.25L12 10 5.5 6.25"
+                  stroke={isHouseRotateMode ? 'rgba(255,255,255,0.7)' : '#636366'}
+                  strokeWidth={1.8}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                {/* 3D Perspective Orbit Ring */}
+                <Path
+                  d="M2.5 16.5C3.8 19.5 7.5 21.5 12 21.5c5.5 0 10-3 10-6.5 0-1.8-1.2-3.4-3.2-4.5"
+                  stroke={isHouseRotateMode ? '#ffffff' : '#1c1c1e'}
+                  strokeWidth={2.2}
+                  strokeLinecap="round"
+                />
+                <Path
+                  d="M2.5 13.5V17H6"
+                  stroke={isHouseRotateMode ? '#ffffff' : '#1c1c1e'}
+                  strokeWidth={2.2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </Svg>
             </TouchableOpacity>
           </View>
 
@@ -1911,7 +2001,7 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
             >
               {viewMode === '3d' ? (
                 <>
-                  <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+                  <Svg width={15} height={15} viewBox="0 0 24 24" fill="none">
                     <Path
                       d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"
                       stroke="#007aff"
@@ -1940,7 +2030,7 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
                 </>
               ) : (
                 <>
-                  <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+                  <Svg width={15} height={15} viewBox="0 0 24 24" fill="none">
                     <Path
                       d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
                       stroke="#ff3b30"
@@ -2318,16 +2408,18 @@ const styles = StyleSheet.create({
     color: '#ff3b30',
   },
 
-  // Apple Maps / Google Maps-Style Floating Layer Button (Top-Right)
-  floatingLayerBtnWrap: {
+  // Apple Maps-Style Top-Right Dual Stack: Layers + 3D Rotate Toggle (Option A)
+  floatingTopRightStack: {
     position: 'absolute',
     top: 10,
     right: 10,
     zIndex: 40,
+    flexDirection: 'column',
+    gap: 8,
   },
   floatingLayerBtn: {
-    width: 42,
-    height: 42,
+    width: 40,
+    height: 40,
     borderRadius: 14,
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderWidth: 0.5,
@@ -2338,6 +2430,29 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.15,
     shadowRadius: 6,
+    elevation: 4,
+  },
+  floatingRotateBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderWidth: 0.5,
+    borderColor: '#d1d1d6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  floatingRotateBtnActive: {
+    backgroundColor: '#007aff',
+    borderColor: '#007aff',
+    shadowColor: '#007aff',
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
     elevation: 4,
   },
   layerActiveDot: {
@@ -2546,34 +2661,34 @@ const styles = StyleSheet.create({
     zIndex: 40,
   },
   floatingExportBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
+    width: 38,
+    height: 38,
+    borderRadius: 12,
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderWidth: 0.5,
     borderColor: '#d1d1d6',
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.12,
-    shadowRadius: 5,
-    elevation: 4,
-    gap: 1,
+    shadowRadius: 4,
+    elevation: 3,
+    gap: 0.5,
   },
   floatingExportTextStl: {
-    fontSize: 9,
+    fontSize: 8,
     fontWeight: '800',
     color: '#007aff',
     letterSpacing: 0.2,
-    lineHeight: 10,
+    lineHeight: 9,
   },
   floatingExportTextPdf: {
-    fontSize: 9,
+    fontSize: 8,
     fontWeight: '800',
     color: '#ff3b30',
     letterSpacing: 0.2,
-    lineHeight: 10,
+    lineHeight: 9,
   },
 
   // Room Picker Modal Sheet

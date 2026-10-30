@@ -1077,7 +1077,7 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
             >
               {viewMode === '3d' ? (
                 <>
-                  <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+                  <Svg width={15} height={15} viewBox="0 0 24 24" fill="none">
                     <Path
                       d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"
                       stroke="#007aff"
@@ -1106,7 +1106,7 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
                 </>
               ) : (
                 <>
-                  <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+                  <Svg width={15} height={15} viewBox="0 0 24 24" fill="none">
                     <Path
                       d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
                       stroke="#ff3b30"
@@ -1289,33 +1289,33 @@ const styles = StyleSheet.create({
     zIndex: 40,
   },
   floatingExportBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
+    width: 38,
+    height: 38,
+    borderRadius: 12,
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderWidth: 0.5,
     borderColor: '#d1d1d6',
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.12,
-    shadowRadius: 5,
-    elevation: 4,
-    gap: 1,
+    shadowRadius: 4,
+    elevation: 3,
+    gap: 0.5,
   },
   floatingExportTextStl: {
-    fontSize: 9,
+    fontSize: 8,
     fontWeight: '800',
     color: '#007aff',
     letterSpacing: 0.2,
-    lineHeight: 10,
+    lineHeight: 9,
   },
   floatingExportTextPdf: {
-    fontSize: 9,
+    fontSize: 8,
     fontWeight: '800',
     color: '#ff3b30',
     letterSpacing: 0.2,
-    lineHeight: 10,
+    lineHeight: 9,
   },
 });
