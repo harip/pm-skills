@@ -93,10 +93,14 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
   const viewportRef = useRef<View>(null);
   const viewportLayoutRef = useRef<{ pageX: number; pageY: number; width: number; height: number }>({
     pageX: 16,
-    pageY: 110,
+    pageY: 164,
     width: 360,
     height: 430,
   });
+
+  // Live Interactive Diagnostic Touch Tracking
+  const [debugInfo, setDebugInfo] = useState<string>('Live Diagnostic: Tap or hold any room');
+  const [debugDot, setDebugDot] = useState<{ x: number; y: number } | null>(null);
 
   // Viewport Zoom, Pan, and 3D Camera Angles
   const [zoom, setZoom] = useState(1.0);
@@ -435,14 +439,15 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
           lastPinchDistRef.current = null;
 
           if (viewMode === '2d') {
-            const touch = evt.nativeEvent.touches?.[0] || evt.nativeEvent;
-            let canvasX = touch.locationX;
-            let canvasY = touch.locationY;
-            if (canvasX === undefined || canvasX < 0 || canvasX > viewW || canvasY === undefined || canvasY < 0 || canvasY > viewH) {
-              const vp = viewportLayoutRef.current;
-              canvasX = touch.pageX - vp.pageX;
-              canvasY = touch.pageY - vp.pageY;
-            }
+            const touch = evt.nativeEvent.touches?.[0] || evt.nativeEvent.changedTouches?.[0] || evt.nativeEvent;
+            const vp = viewportLayoutRef.current;
+            // Robust coordinate calculation across all iOS devices and layouts:
+            let canvasX = (touch.locationX !== undefined && Math.abs(touch.locationX - touch.pageX) > 5)
+              ? touch.locationX
+              : touch.pageX - vp.pageX;
+            let canvasY = (touch.locationY !== undefined && Math.abs(touch.locationY - touch.pageY) > 5)
+              ? touch.locationY
+              : touch.pageY - vp.pageY;
 
             // 1. Direct hit-test for corner rotation handle on currently selected room
             if (selectedRoomId) {
@@ -454,7 +459,7 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
                 const handleX = cc.x + rwPx / 2 - 14;
                 const handleY = cc.y - rlPx / 2 + 14;
                 const distToHandle = Math.hypot(canvasX - handleX, canvasY - handleY);
-                if (distToHandle <= 32) {
+                if (distToHandle <= 36) {
                   activeGestureTargetRef.current = { type: 'NONE' };
                   handleRotateSelectedRoom();
                   return;
@@ -485,6 +490,37 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
                 }
               }
             }
+
+            const hitNode = placedRoomNodes.find((n) => n.room.id === hitRoomId);
+            const hitName = hitNode ? hitNode.room.name.split('(')[0].trim() : 'NONE';
+            const targetType = hitRoomId ? 'ROOM' : 'CANVAS';
+            setDebugInfo(`Touch: (${canvasX.toFixed(0)}, ${canvasY.toFixed(0)}) | Mode: ${targetType} | Hit: ${hitName}`);
+            setDebugDot({ x: canvasX, y: canvasY });
+
+            // Stream touch event to live listener on Mac
+            try {
+              fetch('http://192.168.86.110:8089/touch', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  event: 'TOUCH_DOWN',
+                  canvasX: +canvasX.toFixed(1),
+                  canvasY: +canvasY.toFixed(1),
+                  pageX: touch.pageX,
+                  pageY: touch.pageY,
+                  locationX: touch.locationX,
+                  locationY: touch.locationY,
+                  target: targetType,
+                  hitRoomId,
+                  hitName,
+                  roomsOnCanvas: placedRoomNodes.map((r) => ({
+                    id: r.room.id,
+                    name: r.room.name,
+                    centerCanvas: worldToCanvas(r.x, r.z),
+                  })),
+                }),
+              }).catch(() => {});
+            } catch {}
 
             if (hitRoomId) {
               // Touch is ON A ROOM: Lock into ROOM DRAG MODE (Light Orange Border #f97316)
@@ -569,6 +605,14 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
         lastTouchPosRef.current = null;
         touchStartPosRef.current = null;
         lastPinchDistRef.current = null;
+        setDebugDot(null);
+        try {
+          fetch('http://192.168.86.110:8089/touch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ event: 'TOUCH_UP' }),
+          }).catch(() => {});
+        } catch {}
       },
     })
   ).current;
@@ -1490,6 +1534,26 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
                   ))}
                 </G>
               )}
+
+              {/* Visual Diagnostic Touch Dot */}
+              {debugDot && (
+                <G>
+                  <Circle
+                    cx={debugDot.x}
+                    cy={debugDot.y}
+                    r={20}
+                    fill="rgba(249, 115, 22, 0.35)"
+                    stroke="#f97316"
+                    strokeWidth={2}
+                  />
+                  <Circle
+                    cx={debugDot.x}
+                    cy={debugDot.y}
+                    r={4}
+                    fill="#f97316"
+                  />
+                </G>
+              )}
             </Svg>
 
             {/* Empty Canvas Notice */}
@@ -1505,6 +1569,11 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
           </View>
 
           {/* Layer 2: Floating UI Overlays (z-index 40, Sibling to Canvas) */}
+
+          {/* Live Diagnostic HUD Bar */}
+          <View style={styles.debugHudPill} pointerEvents="none">
+            <Text style={styles.debugHudText}>{debugInfo}</Text>
+          </View>
 
           {/* Selected Room Floating Action Dock (Top of canvas) */}
           {selectedNode && (
@@ -1886,6 +1955,24 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#8e8e93',
     textAlign: 'center',
+  },
+
+  // Live Diagnostic HUD
+  debugHudPill: {
+    position: 'absolute',
+    bottom: 45,
+    alignSelf: 'center',
+    backgroundColor: 'rgba(28, 28, 30, 0.85)',
+    borderRadius: 12,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    zIndex: 50,
+  },
+  debugHudText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 0.2,
   },
 
   // Selected Room Dock (Top of canvas)
