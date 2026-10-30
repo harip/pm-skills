@@ -13,7 +13,7 @@ import { Database } from './src/db/database';
 type Tab = 'catalog' | 'scanner' | 'studio' | 'assembly';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<Tab>('studio');
+  const [activeTab, setActiveTab] = useState<Tab>('catalog');
   const [selectedRoom, setSelectedRoom] = useState<Room>(GeometryService.getSampleRooms()[0]);
   const [catalogRefreshKey, setCatalogRefreshKey] = useState(0);
 

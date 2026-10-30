@@ -1101,25 +1101,51 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
 
             {viewMode === '2d' ? (
               // ==========================================
-              // 2D PLAN VIEW (Floorplan)
+              // 2D PLAN VIEW (Certified CAD Floorplan)
+              // Matches RoomStudioScreen 100% with Walls, Swings, Windows & OBBs
               // ==========================================
               <G>
                 {/* Render Placed Room Nodes */}
                 {placedRoomNodes.map((n) => {
-                  const rw = n.rotation % 180 === 0 ? n.w : n.l;
-                  const rl = n.rotation % 180 === 0 ? n.l : n.w;
-                  const tl = worldToCanvas(n.x - rw / 2, n.z - rl / 2);
-                  const br = worldToCanvas(n.x + rw / 2, n.z + rl / 2);
-                  const cardW = Math.max(10, br.x - tl.x);
-                  const cardH = Math.max(10, br.y - tl.y);
-                  const isSelected = n.room.id === selectedRoomId;
-
-                  // Parse room objects to render in 2D
+                  const room = n.room;
                   let parsedMesh: any = null;
                   try {
-                    if (n.room.mesh_json) parsedMesh = JSON.parse(n.room.mesh_json);
+                    if (room.mesh_json) parsedMesh = JSON.parse(room.mesh_json);
                   } catch {}
-                  const objects: any[] = parsedMesh?.objects || [];
+
+                  const realWalls: any[] = parsedMesh?.walls || [];
+                  const realDoors: any[] = parsedMesh?.doors || [];
+                  const realWindows: any[] = parsedMesh?.windows || [];
+                  const realObjects: any[] = parsedMesh?.objects || [];
+
+                  // Continuous closed boundary polygon from LiDAR wall segments
+                  const polygon = GeometryService.buildRoomPolygon(realWalls, n.w, n.l);
+                  const N = polygon.length;
+                  const centerPoly = {
+                    x: polygon.reduce((acc, p) => acc + p.x, 0) / N,
+                    z: polygon.reduce((acc, p) => acc + p.z, 0) / N,
+                  };
+
+                  const rad = (n.rotation * Math.PI) / 180;
+                  const cosR = Math.cos(rad);
+                  const sinR = Math.sin(rad);
+
+                  // Transform room local point (feet) into assembly world & canvas space
+                  const roomLocalToCanvas = (lx: number, lz: number) => {
+                    const relX = lx - centerPoly.x;
+                    const relZ = lz - centerPoly.z;
+                    const wx = n.x + (relX * cosR - relZ * sinR);
+                    const wz = n.z + (relX * sinR + relZ * cosR);
+                    return worldToCanvas(wx, wz);
+                  };
+
+                  const polyCanvasPoints = polygon.map((p) => {
+                    const pt = roomLocalToCanvas(p.x, p.z);
+                    return `${pt.x.toFixed(1)},${pt.y.toFixed(1)}`;
+                  }).join(' ');
+
+                  const isSelected = n.room.id === selectedRoomId;
+                  const centerCanvas = roomLocalToCanvas(centerPoly.x, centerPoly.z);
 
                   return (
                     <G
@@ -1129,46 +1155,144 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
                         triggerHaptic();
                       }}
                     >
-                      {/* Room Floor Slab */}
-                      <Rect
-                        x={tl.x}
-                        y={tl.y}
-                        width={cardW}
-                        height={cardH}
-                        rx={3}
+                      {/* Outer Wall Boundary */}
+                      <Polygon
+                        points={polyCanvasPoints}
                         fill="#ffffff"
                         stroke={isSelected ? '#007aff' : '#1c1c1e'}
-                        strokeWidth={isSelected ? 2.5 : 1.8}
+                        strokeWidth={isSelected ? Math.max(5, 6 * zoom) : Math.max(4, 5 * zoom)}
+                        strokeLinejoin="miter"
                       />
 
-                      {/* Render 2D Furniture / Object Bounding Boxes */}
-                      {objects.map((obj, oIdx) => {
-                        const objW = Math.max(8, (obj.widthFt || 3) * scale2D);
-                        const objL = Math.max(8, (obj.lengthFt || 3) * scale2D);
-                        // Center relative to room
-                        const relX = (obj.x || 0) * scale2D;
-                        const relZ = (obj.z || 0) * scale2D;
-                        const objScreenX = tl.x + cardW / 2 + relX - objW / 2;
-                        const objScreenY = tl.y + cardH / 2 + relZ - objL / 2;
+                      {/* Inner Core Wall Line */}
+                      <Polygon
+                        points={polyCanvasPoints}
+                        fill="none"
+                        stroke={isSelected ? 'rgba(0,122,255,0.4)' : '#64748b'}
+                        strokeWidth={Math.max(1.5, 2 * zoom)}
+                      />
+
+                      {/* Wall Segment Dimension Callouts */}
+                      {polygon.map((p1, idx) => {
+                        const p2 = polygon[(idx + 1) % N];
+                        const pt1 = roomLocalToCanvas(p1.x, p1.z);
+                        const pt2 = roomLocalToCanvas(p2.x, p2.z);
+                        const midX = (pt1.x + pt2.x) / 2;
+                        const midY = (pt1.y + pt2.y) / 2;
+                        const segLenFt = Math.hypot(p2.x - p1.x, p2.z - p1.z);
+                        const dx = pt2.x - pt1.x, dy = pt2.y - pt1.y;
+                        const dLen = Math.hypot(dx, dy) || 1;
+                        const offX = (-dy / dLen) * 14;
+                        const offY = (dx / dLen) * 14;
+
+                        return (
+                          <SvgText
+                            key={`wall-lbl-${n.room.id}-${idx}`}
+                            x={midX + offX}
+                            y={midY + offY + 3}
+                            fill="#007aff"
+                            fontSize={Math.max(8, 9 * Math.min(1.4, zoom))}
+                            fontWeight="700"
+                            textAnchor="middle"
+                          >
+                            {GeometryService.formatFeetInches(segLenFt)}
+                          </SvgText>
+                        );
+                      })}
+
+                      {/* Render True Door Openings, Jambs & Swings */}
+                      {realDoors.map((d, dIdx) => {
+                        const d1 = roomLocalToCanvas(d.x1 ?? (d.x - 1.5), d.z1 ?? (d.z - 1.5));
+                        const d2 = roomLocalToCanvas(d.x2 ?? (d.x + 1.5), d.z2 ?? (d.z + 1.5));
+                        const dLen = Math.hypot(d2.x - d1.x, d2.y - d1.y) || (20 * zoom);
+
+                        return (
+                          <G key={`door-2d-${n.room.id}-${dIdx}`}>
+                            <Line x1={d1.x} y1={d1.y} x2={d2.x} y2={d2.y} stroke="#ffffff" strokeWidth={Math.max(6, 8 * zoom)} />
+                            <Path
+                              d={`M ${d1.x} ${d1.y} A ${dLen} ${dLen} 0 0 1 ${d2.x} ${d2.y}`}
+                              fill="none"
+                              stroke="#007aff"
+                              strokeWidth={1.2}
+                              strokeDasharray="3,3"
+                            />
+                            <Line x1={d1.x} y1={d1.y} x2={d1.x} y2={d1.y - dLen * 0.7} stroke="#007aff" strokeWidth={2} />
+                          </G>
+                        );
+                      })}
+
+                      {/* Render True Windows (AIA 3-Line CAD Representation) */}
+                      {realWindows.map((win, wIdx) => {
+                        const w1 = roomLocalToCanvas(win.x1 ?? (win.x - 1.5), win.z1 ?? (win.z - 1.5));
+                        const w2 = roomLocalToCanvas(win.x2 ?? (win.x + 1.5), win.z2 ?? (win.z + 1.5));
+                        const dx = w2.x - w1.x;
+                        const dy = w2.y - w1.y;
+                        const wLen = Math.hypot(dx, dy) || 1;
+                        const nx = (-dy / wLen) * 2.5;
+                        const ny = (dx / wLen) * 2.5;
+
+                        return (
+                          <G key={`win-2d-${n.room.id}-${wIdx}`}>
+                            <Line x1={w1.x} y1={w1.y} x2={w2.x} y2={w2.y} stroke="#ffffff" strokeWidth={Math.max(6, 8 * zoom)} />
+                            <Line x1={w1.x + nx} y1={w1.y + ny} x2={w2.x + nx} y2={w2.y + ny} stroke="#1c1c1e" strokeWidth={1.2} />
+                            <Line x1={w1.x} y1={w1.y} x2={w2.x} y2={w2.y} stroke="#007aff" strokeWidth={1.0} />
+                            <Line x1={w1.x - nx} y1={w1.y - ny} x2={w2.x - nx} y2={w2.y - ny} stroke="#1c1c1e" strokeWidth={1.2} />
+                          </G>
+                        );
+                      })}
+
+                      {/* Render Detected Objects with Exact CAD Oriented Bounding Box (OBB) */}
+                      {realObjects.map((obj, oIdx) => {
+                        const halfW = (obj.widthFt || 3) / 2;
+                        const halfL = (obj.lengthFt || 3) / 2;
+
+                        let ux = 1, uz = 0;
+                        let vx = 0, vz = 1;
+
+                        if (obj.dirXx !== undefined && obj.dirXz !== undefined) {
+                          const lenX = Math.hypot(obj.dirXx, obj.dirXz) || 1;
+                          ux = obj.dirXx / lenX;
+                          uz = obj.dirXz / lenX;
+                          if (obj.dirZx !== undefined && obj.dirZz !== undefined) {
+                            const lenZ = Math.hypot(obj.dirZx, obj.dirZz) || 1;
+                            vx = obj.dirZx / lenZ;
+                            vz = obj.dirZz / lenZ;
+                          } else {
+                            vx = -uz;
+                            vz = ux;
+                          }
+                        } else if (obj.yawDeg !== undefined) {
+                          const r = (obj.yawDeg * Math.PI) / 180;
+                          ux = Math.cos(r);
+                          uz = Math.sin(r);
+                          vx = -uz;
+                          vz = ux;
+                        }
+
+                        const ox = obj.x ?? 0;
+                        const oz = obj.z ?? 0;
+                        const c0 = roomLocalToCanvas(ox - halfW * ux - halfL * vx, oz - halfW * uz - halfL * vz);
+                        const c1 = roomLocalToCanvas(ox + halfW * ux - halfL * vx, oz + halfW * uz - halfL * vz);
+                        const c2 = roomLocalToCanvas(ox + halfW * ux + halfL * vx, oz + halfW * uz + halfL * vz);
+                        const c3 = roomLocalToCanvas(ox - halfW * ux + halfL * vx, oz - halfW * uz + halfL * vz);
+
+                        const polyPts = `${c0.x.toFixed(1)},${c0.y.toFixed(1)} ${c1.x.toFixed(1)},${c1.y.toFixed(1)} ${c2.x.toFixed(1)},${c2.y.toFixed(1)} ${c3.x.toFixed(1)},${c3.y.toFixed(1)}`;
+                        const centerObj = roomLocalToCanvas(ox, oz);
 
                         return (
                           <G key={`obj2d-${n.room.id}-${oIdx}`}>
-                            <Rect
-                              x={objScreenX}
-                              y={objScreenY}
-                              width={objW}
-                              height={objL}
-                              fill="#f0fdf4"
-                              stroke="#16a34a"
-                              strokeWidth={1}
-                              rx={2}
+                            <Polygon
+                              points={polyPts}
+                              fill="#eff6ff"
+                              stroke="#2563eb"
+                              strokeWidth={1.2}
                             />
                             <SvgText
-                              x={objScreenX + objW / 2}
-                              y={objScreenY + objL / 2 + 3}
-                              fill="#15803d"
+                              x={centerObj.x}
+                              y={centerObj.y + 3}
+                              fill="#1d4ed8"
                               fontSize={8}
-                              fontWeight="600"
+                              fontWeight="700"
                               textAnchor="middle"
                             >
                               {obj.category?.split(' ')[0] || 'Item'}
@@ -1177,37 +1301,35 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
                         );
                       })}
 
-                      {/* Room Label */}
+                      {/* Center Room Area Text */}
                       <SvgText
-                        x={tl.x + cardW / 2}
-                        y={tl.y + cardH / 2 - 8}
+                        x={centerCanvas.x}
+                        y={centerCanvas.y - 6}
                         fill="#1c1c1e"
-                        fontSize={12}
+                        fontSize={Math.max(11, 12 * Math.min(1.4, zoom))}
                         fontWeight="700"
                         textAnchor="middle"
                       >
-                        {n.room.name.split('(')[0].trim()}
+                        {n.room.name.split('(')[0].trim().toUpperCase()}
                       </SvgText>
-
-                      {/* Dimensions */}
                       <SvgText
-                        x={tl.x + cardW / 2}
-                        y={tl.y + cardH / 2 + 10}
-                        fill="#8e8e93"
-                        fontSize={10}
-                        fontWeight="500"
+                        x={centerCanvas.x}
+                        y={centerCanvas.y + 10}
+                        fill="#007aff"
+                        fontSize={Math.max(9, 10 * Math.min(1.4, zoom))}
+                        fontWeight="600"
                         textAnchor="middle"
                       >
-                        {`${Math.round(rw)}' × ${Math.round(rl)}'${n.rotation > 0 ? ` (${n.rotation}°)` : ''}`}
+                        {GeometryService.formatAreaSqFt(n.room.area_sqft || (n.w * n.l))}
                       </SvgText>
 
                       {/* Rotation indicator badge on selected room */}
                       {isSelected && (
                         <G>
-                          <Circle cx={tl.x + cardW - 10} cy={tl.y + 10} r={10} fill="#007aff" />
+                          <Circle cx={centerCanvas.x + (n.w * scale2D) / 2 - 10} cy={centerCanvas.y - (n.l * scale2D) / 2 + 10} r={10} fill="#007aff" />
                           <SvgText
-                            x={tl.x + cardW - 10}
-                            y={tl.y + 13.5}
+                            x={centerCanvas.x + (n.w * scale2D) / 2 - 10}
+                            y={centerCanvas.y - (n.l * scale2D) / 2 + 13.5}
                             fill="#ffffff"
                             fontSize={10}
                             fontWeight="700"
