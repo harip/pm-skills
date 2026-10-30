@@ -547,14 +547,6 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
           lastPinchDistRef.current = null;
 
           if (viewMode === '2d') {
-            if (isHouseRotateModeRef.current) {
-              activeGestureTargetRef.current = { type: 'HOUSE_ROTATE' as any };
-              isHeldActiveRef.current = false;
-              heldRoomIdRef.current = null;
-              setHeldRoomId(null);
-              return;
-            }
-
             const touch = evt.nativeEvent.touches?.[0] || evt.nativeEvent.changedTouches?.[0] || evt.nativeEvent;
             const vp = viewportLayoutRef.current;
             // Robust coordinate calculation across all iOS devices and layouts:
@@ -652,36 +644,14 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
             const dy = curY - lastTouchPosRef.current.y;
 
             if (viewMode === '3d') {
-              setAngleY((prev) => prev - dx * 0.01);
-              setAngleX((prev) => Math.max(0.15, Math.min(1.4, prev - dy * 0.01)));
-            } else if (isHouseRotateModeRef.current) {
-              // ROTATE WHOLE HOUSE:
-              // Drag horizontally spins all rooms rigidly around the composite house centroid
-              const curScale = scale2DRef.current;
-              const dAngleRad = dx / (100 * curScale);
-              const cosD = Math.cos(dAngleRad);
-              const sinD = Math.sin(dAngleRad);
-
-              setPlacedRoomNodes((prev) => {
-                if (prev.length === 0) return prev;
-                const N = prev.length;
-                const cx = prev.reduce((acc, n) => acc + n.x, 0) / N;
-                const cz = prev.reduce((acc, n) => acc + n.z, 0) / N;
-
-                return prev.map((n) => {
-                  const relX = n.x - cx;
-                  const relZ = n.z - cz;
-                  const newX = cx + (relX * cosD - relZ * sinD);
-                  const newZ = cz + (relX * sinD + relZ * cosD);
-                  const newRot = (n.rotation + (dAngleRad * 180) / Math.PI + 360) % 360;
-                  return {
-                    ...n,
-                    x: Math.round(newX * 100) / 100,
-                    z: Math.round(newZ * 100) / 100,
-                    rotation: Math.round(newRot * 10) / 10,
-                  };
-                });
-              });
+              if (isHouseRotateModeRef.current) {
+                // ROTATE 3D HOUSE (ALL DIRECTIONS - Silky Smooth Studio Rotation Formula):
+                setAngleY((prev) => prev + dx * 0.008);
+                setAngleX((prev) => Math.max(0.15, Math.min(1.45, prev - dy * 0.008)));
+              } else {
+                // PAN / TRANSLATE VIEW (When Rotate toggle is OFF, finger freely moves the house):
+                setPanOffset((prev) => ({ x: prev.x + dx, y: prev.y + dy }));
+              }
             } else if (activeGestureTargetRef.current.type === 'ROOM' && heldRoomIdRef.current) {
               // DRAG ONLY THE HELD ROOM (All other rooms stay fixed)
               const curScale = scale2DRef.current;
@@ -925,6 +895,12 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
     const canopies: { points: ProjectedPoint[]; key: string }[] = [];
     const lx = 0.35, lz = 0.55;
 
+    // Composite centroid of whole house so 3D rotation orbits perfectly in place
+    const houseCentroid = {
+      x: placedRoomNodes.length > 0 ? placedRoomNodes.reduce((acc, n) => acc + n.x, 0) / placedRoomNodes.length : 0,
+      z: placedRoomNodes.length > 0 ? placedRoomNodes.reduce((acc, n) => acc + n.z, 0) / placedRoomNodes.length : 0,
+    };
+
     for (const node of placedRoomNodes) {
       const room = node.room;
       let parsedMesh: any = null;
@@ -959,8 +935,8 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
         const rotX = lxFt * cosR - lzFt * sinR;
         const rotZ = lxFt * sinR + lzFt * cosR;
 
-        const wx = node.x + rotX;
-        const wz = node.z + rotZ;
+        const wx = (node.x - houseCentroid.x) + rotX;
+        const wz = (node.z - houseCentroid.z) + rotZ;
         const wy = lyFt;
 
         return { wx, wz, wy };
@@ -1747,49 +1723,51 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
               )}
             </TouchableOpacity>
 
-            {/* Button 2: 3D Rotate House Toggle (Option A: 3D Cube with Orbit Arrow) */}
-            <TouchableOpacity
-              style={[
-                styles.floatingRotateBtn,
-                isHouseRotateMode && styles.floatingRotateBtnActive,
-              ]}
-              onPress={toggleHouseRotateMode}
-              activeOpacity={0.8}
-              accessibilityLabel={isHouseRotateMode ? "Rotate House Mode Active" : "Enable Rotate House Mode"}
-              accessibilityRole="button"
-            >
-              <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
-                {/* 3D Isometric Cube */}
-                <Path
-                  d="M12 2.5l6.5 3.75v7.5L12 17.5l-6.5-3.75v-7.5L12 2.5z"
-                  stroke={isHouseRotateMode ? 'rgba(255,255,255,0.7)' : '#636366'}
-                  strokeWidth={1.8}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-                <Path
-                  d="M12 2.5v15M18.5 6.25L12 10 5.5 6.25"
-                  stroke={isHouseRotateMode ? 'rgba(255,255,255,0.7)' : '#636366'}
-                  strokeWidth={1.8}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-                {/* 3D Perspective Orbit Ring */}
-                <Path
-                  d="M2.5 16.5C3.8 19.5 7.5 21.5 12 21.5c5.5 0 10-3 10-6.5 0-1.8-1.2-3.4-3.2-4.5"
-                  stroke={isHouseRotateMode ? '#ffffff' : '#1c1c1e'}
-                  strokeWidth={2.2}
-                  strokeLinecap="round"
-                />
-                <Path
-                  d="M2.5 13.5V17H6"
-                  stroke={isHouseRotateMode ? '#ffffff' : '#1c1c1e'}
-                  strokeWidth={2.2}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </Svg>
-            </TouchableOpacity>
+            {/* Button 2: 3D Rotate House Toggle (Option A: 3D Cube with Orbit Arrow) - ONLY VISIBLE IN 3D MODE */}
+            {viewMode === '3d' && (
+              <TouchableOpacity
+                style={[
+                  styles.floatingRotateBtn,
+                  isHouseRotateMode && styles.floatingRotateBtnActive,
+                ]}
+                onPress={toggleHouseRotateMode}
+                activeOpacity={0.8}
+                accessibilityLabel={isHouseRotateMode ? "Rotate House Mode Active" : "Enable Rotate House Mode"}
+                accessibilityRole="button"
+              >
+                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+                  {/* 3D Isometric Cube */}
+                  <Path
+                    d="M12 2.5l6.5 3.75v7.5L12 17.5l-6.5-3.75v-7.5L12 2.5z"
+                    stroke={isHouseRotateMode ? 'rgba(255,255,255,0.7)' : '#636366'}
+                    strokeWidth={1.8}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  <Path
+                    d="M12 2.5v15M18.5 6.25L12 10 5.5 6.25"
+                    stroke={isHouseRotateMode ? 'rgba(255,255,255,0.7)' : '#636366'}
+                    strokeWidth={1.8}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  {/* 3D Perspective Orbit Ring */}
+                  <Path
+                    d="M2.5 16.5C3.8 19.5 7.5 21.5 12 21.5c5.5 0 10-3 10-6.5 0-1.8-1.2-3.4-3.2-4.5"
+                    stroke={isHouseRotateMode ? '#ffffff' : '#1c1c1e'}
+                    strokeWidth={2.2}
+                    strokeLinecap="round"
+                  />
+                  <Path
+                    d="M2.5 13.5V17H6"
+                    stroke={isHouseRotateMode ? '#ffffff' : '#1c1c1e'}
+                    strokeWidth={2.2}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </Svg>
+              </TouchableOpacity>
+            )}
           </View>
 
           {/* Apple Maps-Style Layer Selection Modal Bottom Sheet */}
@@ -1970,7 +1948,10 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
               <View style={styles.freeformSegment}>
                 <TouchableOpacity
                   style={[styles.freeformSegBtn, viewMode === '2d' && styles.freeformSegBtnActive]}
-                  onPress={() => setViewMode('2d')}
+                  onPress={() => {
+                    setViewMode('2d');
+                    setIsHouseRotateMode(false);
+                  }}
                   activeOpacity={0.8}
                 >
                   <Text style={[styles.freeformSegText, viewMode === '2d' && styles.freeformSegTextActive]}>
