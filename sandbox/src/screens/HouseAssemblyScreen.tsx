@@ -780,12 +780,15 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
 
   // Export Composite STL
   const doExportCompositeStl = async (withRoof: boolean, includeFurniture: boolean) => {
-    const placedRoomsList = placedRoomNodes.map((n) => n.room);
-    if (placedRoomsList.length === 0) {
+    if (placedRoomNodes.length === 0) {
       Alert.alert('Studio Empty', 'Please place at least one room on the canvas before exporting.');
       return;
     }
-    const stl = StlExporterService.generateCompositeStl(placedRoomsList, { withRoof, includeFurniture });
+    const stl = StlExporterService.generatePlacedCompositeStl(placedRoomNodes, {
+      withRoof,
+      includeFurniture,
+      heightMode: threeDHeightMode,
+    });
     const suffix = withRoof
       ? '_Whole_House_With_Roof.stl'
       : includeFurniture

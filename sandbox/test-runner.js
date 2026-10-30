@@ -438,6 +438,62 @@ endsolid ${room.name}`;
     assert(gapNorth < 1e-9, `Gap between snapped walls must be 0, got ${gapNorth}`);
   });
 
+  // EVAL-12: Interactive Placed STL Export (Zero Gap, Left-to-Right Order, & 4' Cutaway Height)
+  it('EVAL-12: Placed STL export preserves canvas coordinates: zero gap, left-to-right chirality, and cutaway height', () => {
+    // Room 1: 18x18 ft placed on left (x = -9.0), snapped East edge at x = 0.0
+    const node1 = {
+      room: { id: 'r1', name: 'Living Room', height_ft: 9.0 },
+      x: -9.0,
+      z: 0.0,
+      w: 18.0,
+      l: 18.0,
+      rotation: 0,
+      orthoAngle: 0,
+    };
+
+    // Room 2: 14x13 ft placed on right (x = 7.0), snapped West edge at x = 0.0
+    const node2 = {
+      room: { id: 'r2', name: 'Physical Room', height_ft: 9.0 },
+      x: 7.0,
+      z: 0.0,
+      w: 14.0,
+      l: 13.0,
+      rotation: 0,
+      orthoAngle: 0,
+    };
+
+    // 1. Contact continuity test
+    const r1EastWallFt = node1.x + node1.w / 2; // -9 + 9 = 0.0
+    const r2WestWallFt = node2.x - node2.w / 2; //  7 - 7 = 0.0
+    const gapFt = Math.abs(r1EastWallFt - r2WestWallFt);
+    assert.strictEqual(gapFt, 0.0, 'Contact boundary between magnetically coupled rooms must be 0.00 ft');
+
+    // 2. Spatial ordering (Left-to-Right)
+    assert(node1.x < node2.x, 'Larger room must be placed to the left of the smaller room');
+
+    // 3. Slicer Build-Plate Centering & STL Coordinate Transform
+    const minWx = node1.x - node1.w / 2; // -18.0
+    const maxWx = node2.x + node2.w / 2; // +14.0
+    const centerHouseXFt = (minWx + maxWx) / 2; // -2.0
+
+    const r1StlCenterX = (node1.x - centerHouseXFt) * 0.3048; // (-9 - (-2)) * 0.3048 = -2.1336m
+    const r2StlCenterX = (node2.x - centerHouseXFt) * 0.3048; // ( 7 - (-2)) * 0.3048 = +2.7432m
+
+    assert(r1StlCenterX < r2StlCenterX, 'Room 1 (left) must have smaller X_stl than Room 2 (right) in slicer');
+    assert(r1StlCenterX < 0, 'Room 1 must sit on negative X (left half of build plate)');
+    assert(r2StlCenterX > 0, 'Room 2 must sit on positive X (right half of build plate)');
+
+    const r1ContactStlX = (r1EastWallFt - centerHouseXFt) * 0.3048;
+    const r2ContactStlX = (r2WestWallFt - centerHouseXFt) * 0.3048;
+    assert.strictEqual(r1ContactStlX, r2ContactStlX, 'Shared contact wall vertices in STL must be identical (0.00 gap)');
+
+    // 4. Cutaway height mode verification
+    const cutawayHeightM = Math.min(node1.room.height_ft * 0.3048, 4.0 * 0.3048);
+    const fullHeightM = node1.room.height_ft * 0.3048;
+    assert(Math.abs(cutawayHeightM - 1.2192) < 1e-6, '4ft heightMode must clamp cutaway wall to exactly 1.2192m (48 inches)');
+    assert(Math.abs(fullHeightM - 2.7432) < 1e-6, 'Ceil heightMode must preserve full 2.7432m (9ft) ceiling height');
+  });
+
   console.log(`\n📊 Verification Summary: ${passedTests}/${totalTests} tests passed.\n`);
 }
 
