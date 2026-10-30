@@ -14,6 +14,8 @@ import {
   NativeModules,
   Vibration,
   ScrollView,
+  Switch,
+  Modal,
 } from 'react-native';
 import Svg, { Polygon, Line, Rect, Circle, Text as SvgText, G, Path } from 'react-native-svg';
 import { Room } from '../types/room';
@@ -1734,75 +1736,178 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
             </View>
           )}
 
-          {/* Apple Maps-Style Floating Layer Toggle Pill (Top-Right) */}
-          <View style={styles.layerPillWrap} pointerEvents="box-none">
+          {/* Apple Maps / Google Maps-Style Floating Layer Button (Top-Right) */}
+          <View style={styles.floatingLayerBtnWrap} pointerEvents="box-none">
             <TouchableOpacity
-              style={[styles.layerPillBtn, showLayerMenu && styles.layerPillBtnActive]}
-              onPress={() => {
-                setShowLayerMenu(!showLayerMenu);
-                triggerHaptic();
-              }}
+              style={styles.floatingLayerBtn}
+              onPress={() => setShowLayerMenu(true)}
               activeOpacity={0.8}
+              accessibilityLabel="Map Layers"
+              accessibilityRole="button"
             >
-              <Text style={styles.layerPillIcon}>🥞</Text>
-              <Text style={[styles.layerPillText, showLayerMenu && styles.layerPillTextActive]}>Layers</Text>
+              {/* Stacked Map Layers 3D Vector Icon */}
+              <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+                <Path
+                  d="M12 2L2 7L12 12L22 7L12 2Z"
+                  stroke="#1c1c1e"
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <Path
+                  d="M2 12L12 17L22 12"
+                  stroke="#1c1c1e"
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <Path
+                  d="M2 17L12 22L22 17"
+                  stroke="#1c1c1e"
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </Svg>
+
+              {/* Active Badge: Highlights when extra layers (Dimensions, Labels, Furniture) are active */}
+              {(layers.dimensions || layers.labels || layers.furniture) && (
+                <View style={styles.layerActiveDot} />
+              )}
             </TouchableOpacity>
+          </View>
 
-            {/* Collapsible Layer Menu */}
-            {showLayerMenu && (
-              <View style={styles.layerMenuCard}>
-                <Text style={styles.layerMenuTitle}>CANVAS LAYERS</Text>
+          {/* Apple Maps-Style Layer Selection Modal Bottom Sheet */}
+          <Modal
+            visible={showLayerMenu}
+            transparent={true}
+            animationType="fade"
+            onRequestClose={() => setShowLayerMenu(false)}
+          >
+            <TouchableOpacity
+              style={styles.sheetBackdrop}
+              activeOpacity={1}
+              onPress={() => setShowLayerMenu(false)}
+            >
+              <View
+                style={styles.sheetContainer}
+                onStartShouldSetResponder={() => true}
+                onTouchEnd={(e) => e.stopPropagation()}
+              >
+                {/* Sheet Grab Handle */}
+                <View style={styles.sheetHandle} />
 
-                <TouchableOpacity
-                  style={styles.layerMenuItem}
-                  onPress={() => setLayers((prev) => ({ ...prev, doorsWindows: !prev.doorsWindows }))}
-                >
-                  <Text style={styles.layerItemLabel}>🚪 Doors & Windows</Text>
-                  <View style={[styles.layerSwitchPill, layers.doorsWindows && styles.layerSwitchPillActive]}>
-                    <Text style={[styles.layerSwitchText, layers.doorsWindows && styles.layerSwitchTextActive]}>
-                      {layers.doorsWindows ? 'ON' : 'OFF'}
+                {/* Sheet Header */}
+                <View style={styles.sheetHeader}>
+                  <View>
+                    <Text style={styles.sheetTitle}>CAD Layers</Text>
+                    <Text style={styles.sheetSubtitle}>
+                      {`${(layers.doorsWindows ? 1 : 0) + (layers.dimensions ? 1 : 0) + (layers.labels ? 1 : 0) + (layers.furniture ? 1 : 0)} of 4 layers enabled`}
                     </Text>
                   </View>
-                </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.sheetCloseBtn}
+                    onPress={() => setShowLayerMenu(false)}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  >
+                    <Text style={styles.sheetCloseText}>✕</Text>
+                  </TouchableOpacity>
+                </View>
 
-                <TouchableOpacity
-                  style={styles.layerMenuItem}
-                  onPress={() => setLayers((prev) => ({ ...prev, dimensions: !prev.dimensions }))}
-                >
-                  <Text style={styles.layerItemLabel}>📏 Dimensions</Text>
-                  <View style={[styles.layerSwitchPill, layers.dimensions && styles.layerSwitchPillActive]}>
-                    <Text style={[styles.layerSwitchText, layers.dimensions && styles.layerSwitchTextActive]}>
-                      {layers.dimensions ? 'ON' : 'OFF'}
-                    </Text>
+                {/* Layer Toggle Rows */}
+                <View style={styles.sheetRowsContainer}>
+                  {/* 1. Doors & Windows */}
+                  <View style={styles.sheetRow}>
+                    <View style={styles.sheetRowInfo}>
+                      <View style={[styles.sheetIconBox, { backgroundColor: '#fef3c7' }]}>
+                        <Text style={styles.sheetIconGlyph}>🚪</Text>
+                      </View>
+                      <View>
+                        <Text style={styles.sheetRowTitle}>Doors & Windows</Text>
+                        <Text style={styles.sheetRowDesc}>Wall apertures and swing arcs</Text>
+                      </View>
+                    </View>
+                    <Switch
+                      value={layers.doorsWindows}
+                      onValueChange={(val) => setLayers((prev) => ({ ...prev, doorsWindows: val }))}
+                      trackColor={{ false: '#e5e5ea', true: '#007aff' }}
+                      thumbColor="#ffffff"
+                      ios_backgroundColor="#e5e5ea"
+                    />
                   </View>
-                </TouchableOpacity>
 
-                <TouchableOpacity
-                  style={styles.layerMenuItem}
-                  onPress={() => setLayers((prev) => ({ ...prev, labels: !prev.labels }))}
-                >
-                  <Text style={styles.layerItemLabel}>🏷️ Labels & Names</Text>
-                  <View style={[styles.layerSwitchPill, layers.labels && styles.layerSwitchPillActive]}>
-                    <Text style={[styles.layerSwitchText, layers.labels && styles.layerSwitchTextActive]}>
-                      {layers.labels ? 'ON' : 'OFF'}
-                    </Text>
+                  {/* 2. Dimensions */}
+                  <View style={styles.sheetRow}>
+                    <View style={styles.sheetRowInfo}>
+                      <View style={[styles.sheetIconBox, { backgroundColor: '#eff6ff' }]}>
+                        <Text style={styles.sheetIconGlyph}>📏</Text>
+                      </View>
+                      <View>
+                        <Text style={styles.sheetRowTitle}>Dimensions</Text>
+                        <Text style={styles.sheetRowDesc}>CAD wall lengths & measurements</Text>
+                      </View>
+                    </View>
+                    <Switch
+                      value={layers.dimensions}
+                      onValueChange={(val) => setLayers((prev) => ({ ...prev, dimensions: val }))}
+                      trackColor={{ false: '#e5e5ea', true: '#007aff' }}
+                      thumbColor="#ffffff"
+                      ios_backgroundColor="#e5e5ea"
+                    />
                   </View>
-                </TouchableOpacity>
 
-                <TouchableOpacity
-                  style={styles.layerMenuItem}
-                  onPress={() => setLayers((prev) => ({ ...prev, furniture: !prev.furniture }))}
-                >
-                  <Text style={styles.layerItemLabel}>🛋️ Furniture (OBB)</Text>
-                  <View style={[styles.layerSwitchPill, layers.furniture && styles.layerSwitchPillActive]}>
-                    <Text style={[styles.layerSwitchText, layers.furniture && styles.layerSwitchTextActive]}>
-                      {layers.furniture ? 'ON' : 'OFF'}
-                    </Text>
+                  {/* 3. Room Labels & Areas */}
+                  <View style={styles.sheetRow}>
+                    <View style={styles.sheetRowInfo}>
+                      <View style={[styles.sheetIconBox, { backgroundColor: '#ecfdf5' }]}>
+                        <Text style={styles.sheetIconGlyph}>🏷️</Text>
+                      </View>
+                      <View>
+                        <Text style={styles.sheetRowTitle}>Room Labels & Areas</Text>
+                        <Text style={styles.sheetRowDesc}>Room names and square footage</Text>
+                      </View>
+                    </View>
+                    <Switch
+                      value={layers.labels}
+                      onValueChange={(val) => setLayers((prev) => ({ ...prev, labels: val }))}
+                      trackColor={{ false: '#e5e5ea', true: '#007aff' }}
+                      thumbColor="#ffffff"
+                      ios_backgroundColor="#e5e5ea"
+                    />
                   </View>
+
+                  {/* 4. Furniture */}
+                  <View style={styles.sheetRow}>
+                    <View style={styles.sheetRowInfo}>
+                      <View style={[styles.sheetIconBox, { backgroundColor: '#f3e8ff' }]}>
+                        <Text style={styles.sheetIconGlyph}>🛋️</Text>
+                      </View>
+                      <View>
+                        <Text style={styles.sheetRowTitle}>Furniture & Fixtures</Text>
+                        <Text style={styles.sheetRowDesc}>Scanned 3D bounding boxes</Text>
+                      </View>
+                    </View>
+                    <Switch
+                      value={layers.furniture}
+                      onValueChange={(val) => setLayers((prev) => ({ ...prev, furniture: val }))}
+                      trackColor={{ false: '#e5e5ea', true: '#007aff' }}
+                      thumbColor="#ffffff"
+                      ios_backgroundColor="#e5e5ea"
+                    />
+                  </View>
+                </View>
+
+                {/* Done Button */}
+                <TouchableOpacity
+                  style={styles.sheetDoneBtn}
+                  onPress={() => setShowLayerMenu(false)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.sheetDoneBtnText}>Done</Text>
                 </TouchableOpacity>
               </View>
-            )}
-          </View>
+            </TouchableOpacity>
+          </Modal>
 
           {/* BOTTOM-LEFT: Merge Walls Button */}
           {activeSnapGuide && activeSnapGuide.overlapLen > 0 && viewMode === '2d' && (
@@ -2093,7 +2198,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 10,
     left: 10,
-    right: 10,
+    right: 58,
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderRadius: 14,
     paddingVertical: 8,
@@ -2177,94 +2282,144 @@ const styles = StyleSheet.create({
     color: '#ff3b30',
   },
 
-  // Apple Maps-Style Floating Layer Toggle (Top-Right)
-  layerPillWrap: {
+  // Apple Maps / Google Maps-Style Floating Layer Button (Top-Right)
+  floatingLayerBtnWrap: {
     position: 'absolute',
-    top: 60,
+    top: 10,
     right: 10,
     zIndex: 40,
-    alignItems: 'flex-end',
   },
-  layerPillBtn: {
+  floatingLayerBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderWidth: 0.5,
+    borderColor: '#d1d1d6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  layerActiveDot: {
+    position: 'absolute',
+    top: 5,
+    right: 5,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#007aff',
+    borderWidth: 1.5,
+    borderColor: '#ffffff',
+  },
+
+  // Apple Maps-Style Layer Selection Modal Bottom Sheet
+  sheetBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.40)',
+    justifyContent: 'flex-end',
+  },
+  sheetContainer: {
+    backgroundColor: '#ffffff',
+    borderTopLeftRadius: 26,
+    borderTopRightRadius: 26,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 36,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  sheetHandle: {
+    width: 36,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: '#d1d1d6',
+    alignSelf: 'center',
+    marginBottom: 14,
+  },
+  sheetHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    backgroundColor: 'rgba(255, 255, 255, 0.94)',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 16,
-    borderWidth: 0.5,
-    borderColor: '#e5e5ea',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 3,
+    justifyContent: 'space-between',
+    paddingBottom: 14,
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#e5e5ea',
   },
-  layerPillBtnActive: {
-    backgroundColor: '#007aff',
-    borderColor: '#007aff',
-  },
-  layerPillIcon: {
-    fontSize: 12,
-  },
-  layerPillText: {
-    fontSize: 11,
+  sheetTitle: {
+    fontSize: 18,
     fontWeight: '700',
     color: '#1c1c1e',
   },
-  layerPillTextActive: {
-    color: '#ffffff',
+  sheetSubtitle: {
+    fontSize: 13,
+    color: '#8e8e93',
+    marginTop: 2,
+    fontWeight: '500',
   },
-  layerMenuCard: {
-    marginTop: 6,
-    backgroundColor: 'rgba(255, 255, 255, 0.98)',
-    borderRadius: 14,
-    padding: 10,
-    borderWidth: 0.5,
-    borderColor: '#e5e5ea',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
-    elevation: 5,
-    minWidth: 180,
-    gap: 8,
+  sheetCloseBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#f2f2f7',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  layerMenuTitle: {
-    fontSize: 9,
+  sheetCloseText: {
+    fontSize: 13,
     fontWeight: '700',
     color: '#8e8e93',
-    letterSpacing: 0.4,
-    marginBottom: 2,
   },
-  layerMenuItem: {
+  sheetRowsContainer: {
+    paddingVertical: 14,
+    gap: 16,
+  },
+  sheetRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 2,
+    justifyContent: 'space-between',
   },
-  layerItemLabel: {
-    fontSize: 11,
+  sheetRowInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  sheetIconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sheetIconGlyph: {
+    fontSize: 18,
+  },
+  sheetRowTitle: {
+    fontSize: 15,
     fontWeight: '600',
     color: '#1c1c1e',
   },
-  layerSwitchPill: {
-    backgroundColor: '#e5e5ea',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 8,
-  },
-  layerSwitchPillActive: {
-    backgroundColor: '#007aff',
-  },
-  layerSwitchText: {
-    fontSize: 9,
-    fontWeight: '700',
+  sheetRowDesc: {
+    fontSize: 12,
     color: '#8e8e93',
+    marginTop: 1,
   },
-  layerSwitchTextActive: {
+  sheetDoneBtn: {
+    marginTop: 8,
+    backgroundColor: '#1c1c1e',
+    paddingVertical: 14,
+    borderRadius: 14,
+    alignItems: 'center',
+  },
+  sheetDoneBtnText: {
     color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '700',
   },
 
   // Bottom-Left Minimalist Merge Button
