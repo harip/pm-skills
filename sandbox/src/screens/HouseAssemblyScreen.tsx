@@ -76,12 +76,12 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
   const [activeSnapGuide, setActiveSnapGuide] = useState<SnapGuide | null>(null);
   const [mergedPartitions, setMergedPartitions] = useState<Set<string>>(new Set());
 
-  // Apple Maps-style Layer Toggles
+  // Apple Maps-style Layer Toggles: Only Doors & Windows ON by default per user request
   const [layers, setLayers] = useState<LayersConfig>({
     doorsWindows: true,
-    dimensions: true,
-    labels: true,
-    furniture: true,
+    dimensions: false,
+    labels: false,
+    furniture: false,
   });
   const [showLayerMenu, setShowLayerMenu] = useState(false);
 
@@ -283,25 +283,95 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
   const triggerHaptic = () => {};
   const triggerMediumHaptic = () => {};
 
+  interface RoomGeometryBounds {
+    halfMinX: number;
+    halfMaxX: number;
+    halfMinZ: number;
+    halfMaxZ: number;
+    width: number;
+    length: number;
+  }
+
   /**
-   * 4-Sided Collinear Magnetic Snapping Engine
+   * Computes exact boundary extent (sub-millimeter) of the room polygon in world space
+   * relative to (node.x, node.z), matching exactly how the 2D SVG canvas renders the walls.
+   */
+  const computeRoomGeometryBounds = (node: RoomNode): RoomGeometryBounds => {
+    let parsedMesh: any = null;
+    try {
+      if (node.room.mesh_json) parsedMesh = JSON.parse(node.room.mesh_json);
+    } catch {}
+
+    const realWalls: any[] = parsedMesh?.walls || [];
+    const polygon = GeometryService.buildRoomPolygon(realWalls, node.w, node.l);
+    const N = polygon.length;
+    if (N === 0) {
+      const rw = node.rotation % 180 === 0 ? node.w : node.l;
+      const rl = node.rotation % 180 === 0 ? node.l : node.w;
+      return {
+        halfMinX: -rw / 2,
+        halfMaxX: rw / 2,
+        halfMinZ: -rl / 2,
+        halfMaxZ: rl / 2,
+        width: rw,
+        length: rl,
+      };
+    }
+
+    const centerPoly = {
+      x: polygon.reduce((acc, p) => acc + p.x, 0) / N,
+      z: polygon.reduce((acc, p) => acc + p.z, 0) / N,
+    };
+
+    const totalRad = (node.rotation * Math.PI) / 180 + node.orthoAngle;
+    const cosR = Math.cos(totalRad);
+    const sinR = Math.sin(totalRad);
+
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minZ = Infinity;
+    let maxZ = -Infinity;
+
+    for (const p of polygon) {
+      const relX = p.x - centerPoly.x;
+      const relZ = p.z - centerPoly.z;
+      const rotX = relX * cosR - relZ * sinR;
+      const rotZ = relX * sinR + relZ * cosR;
+      if (rotX < minX) minX = rotX;
+      if (rotX > maxX) maxX = rotX;
+      if (rotZ < minZ) minZ = rotZ;
+      if (rotZ > maxZ) maxZ = rotZ;
+    }
+
+    return {
+      halfMinX: minX,
+      halfMaxX: maxX,
+      halfMinZ: minZ,
+      halfMaxZ: maxZ,
+      width: maxX - minX,
+      length: maxZ - minZ,
+    };
+  };
+
+  /**
+   * 4-Sided Collinear Magnetic Snapping Engine:
+   * Uses exact polygon wall bounds so adjacent rooms touch with ZERO gap (0.00 offset).
    */
   const applyMagneticSnapping = (
     targetNode: RoomNode,
     nodesList: RoomNode[] = placedRoomNodes
   ): { x: number; z: number; guide: SnapGuide | null } => {
-    const rw = targetNode.rotation % 180 === 0 ? targetNode.w : targetNode.l;
-    const rl = targetNode.rotation % 180 === 0 ? targetNode.l : targetNode.w;
+    const tB = computeRoomGeometryBounds(targetNode);
 
     let bestX = targetNode.x;
     let bestZ = targetNode.z;
     let bestGuide: SnapGuide | null = null;
     let bestScore = 0;
 
-    const tMinX = targetNode.x - rw / 2;
-    const tMaxX = targetNode.x + rw / 2;
-    const tMinZ = targetNode.z - rl / 2;
-    const tMaxZ = targetNode.z + rl / 2;
+    const tMinX = targetNode.x + tB.halfMinX;
+    const tMaxX = targetNode.x + tB.halfMaxX;
+    const tMinZ = targetNode.z + tB.halfMinZ;
+    const tMaxZ = targetNode.z + tB.halfMaxZ;
 
     const THRESH_CORNER_FT = 2.5;
     const THRESH_EDGE_FT = 3.0;
@@ -309,24 +379,27 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
     for (const other of nodesList) {
       if (other.room.id === targetNode.room.id) continue;
 
-      const ow = other.rotation % 180 === 0 ? other.w : other.l;
-      const ol = other.rotation % 180 === 0 ? other.l : other.w;
+      const oB = computeRoomGeometryBounds(other);
 
-      const oMinX = other.x - ow / 2;
-      const oMaxX = other.x + ow / 2;
-      const oMinZ = other.z - ol / 2;
-      const oMaxZ = other.z + ol / 2;
+      const oMinX = other.x + oB.halfMinX;
+      const oMaxX = other.x + oB.halfMaxX;
+      const oMinZ = other.z + oB.halfMinZ;
+      const oMaxZ = other.z + oB.halfMaxZ;
 
-      // 1. Corner Flush Pairs
+      // 1. Corner Flush Pairs (Snaps rooms flush so walls touch with 0 gap)
       const cornerPairs = [
-        { snapX: oMinX - rw / 2, snapZ: oMinZ + rl / 2, diffX: tMaxX - oMinX, diffZ: tMinZ - oMinZ, axis: 'EW', wallX: oMinX },
-        { snapX: oMinX - rw / 2, snapZ: oMaxZ - rl / 2, diffX: tMaxX - oMinX, diffZ: tMaxZ - oMaxZ, axis: 'EW', wallX: oMinX },
-        { snapX: oMaxX + rw / 2, snapZ: oMinZ + rl / 2, diffX: tMinX - oMaxX, diffZ: tMinZ - oMinZ, axis: 'EW', wallX: oMaxX },
-        { snapX: oMaxX + rw / 2, snapZ: oMaxZ - rl / 2, diffX: tMinX - oMaxX, diffZ: tMaxZ - oMaxZ, axis: 'EW', wallX: oMaxX },
-        { snapX: oMinX + rw / 2, snapZ: oMinZ - rl / 2, diffX: tMinX - oMinX, diffZ: tMaxZ - oMinZ, axis: 'NS', wallZ: oMinZ },
-        { snapX: oMaxX - rw / 2, snapZ: oMinZ - rl / 2, diffX: tMaxX - oMaxX, diffZ: tMaxZ - oMinZ, axis: 'NS', wallZ: oMinZ },
-        { snapX: oMinX + rw / 2, snapZ: oMaxZ + rl / 2, diffX: tMinX - oMinX, diffZ: tMinZ - oMaxZ, axis: 'NS', wallZ: oMaxZ },
-        { snapX: oMaxX - rw / 2, snapZ: oMaxZ + rl / 2, diffX: tMaxX - oMaxX, diffZ: tMinZ - oMaxZ, axis: 'NS', wallZ: oMaxZ },
+        // Target West of Other: Target Right Wall touches Other Left Wall (wall at oMinX)
+        { snapX: oMinX - tB.halfMaxX, snapZ: oMinZ - tB.halfMinZ, diffX: tMaxX - oMinX, diffZ: tMinZ - oMinZ, axis: 'EW', wallX: oMinX },
+        { snapX: oMinX - tB.halfMaxX, snapZ: oMaxZ - tB.halfMaxZ, diffX: tMaxX - oMinX, diffZ: tMaxZ - oMaxZ, axis: 'EW', wallX: oMinX },
+        // Target East of Other: Target Left Wall touches Other Right Wall (wall at oMaxX)
+        { snapX: oMaxX - tB.halfMinX, snapZ: oMinZ - tB.halfMinZ, diffX: tMinX - oMaxX, diffZ: tMinZ - oMinZ, axis: 'EW', wallX: oMaxX },
+        { snapX: oMaxX - tB.halfMinX, snapZ: oMaxZ - tB.halfMaxZ, diffX: tMinX - oMaxX, diffZ: tMaxZ - oMaxZ, axis: 'EW', wallX: oMaxX },
+        // Target North of Other: Target Bottom Wall touches Other Top Wall (wall at oMinZ)
+        { snapX: oMinX - tB.halfMinX, snapZ: oMinZ - tB.halfMaxZ, diffX: tMinX - oMinX, diffZ: tMaxZ - oMinZ, axis: 'NS', wallZ: oMinZ },
+        { snapX: oMaxX - tB.halfMaxX, snapZ: oMinZ - tB.halfMaxZ, diffX: tMaxX - oMaxX, diffZ: tMaxZ - oMinZ, axis: 'NS', wallZ: oMinZ },
+        // Target South of Other: Target Top Wall touches Other Bottom Wall (wall at oMaxZ)
+        { snapX: oMinX - tB.halfMinX, snapZ: oMaxZ - tB.halfMinZ, diffX: tMinX - oMinX, diffZ: tMinZ - oMaxZ, axis: 'NS', wallZ: oMaxZ },
+        { snapX: oMaxX - tB.halfMaxX, snapZ: oMaxZ - tB.halfMinZ, diffX: tMaxX - oMaxX, diffZ: tMinZ - oMaxZ, axis: 'NS', wallZ: oMaxZ },
       ];
 
       for (const cp of cornerPairs) {
@@ -337,37 +410,38 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
           bestScore = 50;
 
           if (cp.axis === 'EW') {
-            const zStart = Math.max(bestZ - rl / 2, oMinZ);
-            const zEnd = Math.min(bestZ + rl / 2, oMaxZ);
+            const zStart = Math.max(bestZ + tB.halfMinZ, oMinZ);
+            const zEnd = Math.min(bestZ + tB.halfMaxZ, oMaxZ);
             bestGuide = {
               x1: cp.wallX ?? cp.snapX,
               z1: zStart,
               x2: cp.wallX ?? cp.snapX,
               z2: zEnd,
-              anchorX: cp.snapX,
-              anchorZ: cp.snapZ,
+              anchorX: cp.wallX ?? cp.snapX,
+              anchorZ: (zStart + zEnd) / 2,
               overlapLen: Math.max(0, zEnd - zStart),
             };
           } else {
-            const xStart = Math.max(bestX - rw / 2, oMinX);
-            const xEnd = Math.min(bestX + rw / 2, oMaxX);
+            const xStart = Math.max(bestX + tB.halfMinX, oMinX);
+            const xEnd = Math.min(bestX + tB.halfMaxX, oMaxX);
             bestGuide = {
               x1: xStart,
               z1: cp.wallZ ?? cp.snapZ,
               x2: xEnd,
               z2: cp.wallZ ?? cp.snapZ,
-              anchorX: cp.snapX,
-              anchorZ: cp.snapZ,
+              anchorX: (xStart + xEnd) / 2,
+              anchorZ: cp.wallZ ?? cp.snapZ,
               overlapLen: Math.max(0, xEnd - xStart),
             };
           }
         }
       }
 
-      // 2. Collinear Wall Edge Lock
+      // 2. Collinear Wall Edge Lock (Rooms touch flush along shared wall with 0 gap)
       if (bestScore < 25) {
-        if (Math.abs(tMaxX - oMinX) <= THRESH_EDGE_FT && Math.abs(tMinZ - oMinZ) < rl + ol) {
-          bestX = oMinX - rw / 2;
+        // Target West of Other: Target Right Wall touches Other Left Wall (wall at oMinX)
+        if (Math.abs(tMaxX - oMinX) <= THRESH_EDGE_FT && Math.abs(tMinZ - oMinZ) < tB.length + oB.length) {
+          bestX = oMinX - tB.halfMaxX;
           bestScore = 25;
           const zStart = Math.max(tMinZ, oMinZ);
           const zEnd = Math.min(tMaxZ, oMaxZ);
@@ -380,8 +454,9 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
             anchorZ: (zStart + zEnd) / 2,
             overlapLen: Math.max(0, zEnd - zStart),
           };
-        } else if (Math.abs(tMinX - oMaxX) <= THRESH_EDGE_FT && Math.abs(tMinZ - oMinZ) < rl + ol) {
-          bestX = oMaxX + rw / 2;
+        // Target East of Other: Target Left Wall touches Other Right Wall (wall at oMaxX)
+        } else if (Math.abs(tMinX - oMaxX) <= THRESH_EDGE_FT && Math.abs(tMinZ - oMinZ) < tB.length + oB.length) {
+          bestX = oMaxX - tB.halfMinX;
           bestScore = 25;
           const zStart = Math.max(tMinZ, oMinZ);
           const zEnd = Math.min(tMaxZ, oMaxZ);
@@ -394,8 +469,9 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
             anchorZ: (zStart + zEnd) / 2,
             overlapLen: Math.max(0, zEnd - zStart),
           };
-        } else if (Math.abs(tMaxZ - oMinZ) <= THRESH_EDGE_FT && Math.abs(tMinX - oMinX) < rw + ow) {
-          bestZ = oMinZ - rl / 2;
+        // Target North of Other: Target Bottom Wall touches Other Top Wall (wall at oMinZ)
+        } else if (Math.abs(tMaxZ - oMinZ) <= THRESH_EDGE_FT && Math.abs(tMinX - oMinX) < tB.width + oB.width) {
+          bestZ = oMinZ - tB.halfMaxZ;
           bestScore = 25;
           const xStart = Math.max(tMinX, oMinX);
           const xEnd = Math.min(tMaxX, oMaxX);
@@ -408,8 +484,9 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
             anchorZ: oMinZ,
             overlapLen: Math.max(0, xEnd - xStart),
           };
-        } else if (Math.abs(tMinZ - oMaxZ) <= THRESH_EDGE_FT && Math.abs(tMinX - oMinX) < rw + ow) {
-          bestZ = oMaxZ + rl / 2;
+        // Target South of Other: Target Top Wall touches Other Bottom Wall (wall at oMaxZ)
+        } else if (Math.abs(tMinZ - oMaxZ) <= THRESH_EDGE_FT && Math.abs(tMinX - oMinX) < tB.width + oB.width) {
+          bestZ = oMaxZ - tB.halfMinZ;
           bestScore = 25;
           const xStart = Math.max(tMinX, oMinX);
           const xEnd = Math.min(tMaxX, oMaxX);
@@ -479,10 +556,9 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
               const selNode = liveRooms.find((n) => n.room.id === liveSelId);
               if (selNode) {
                 const cc = worldToCanvasLive(selNode.x, selNode.z);
-                const rwPx = (selNode.rotation % 180 === 0 ? selNode.w : selNode.l) * liveScale;
-                const rlPx = (selNode.rotation % 180 === 0 ? selNode.l : selNode.w) * liveScale;
-                const handleX = cc.x + rwPx / 2 - 14;
-                const handleY = cc.y - rlPx / 2 + 14;
+                const b = computeRoomGeometryBounds(selNode);
+                const handleX = cc.x + b.halfMaxX * liveScale - 14;
+                const handleY = cc.y + b.halfMinZ * liveScale + 14;
                 const distToHandle = Math.hypot(canvasX - handleX, canvasY - handleY);
                 if (distToHandle <= 36) {
                   activeGestureTargetRef.current = { type: 'NONE' };
@@ -499,8 +575,9 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
 
             for (let i = 0; i < liveRooms.length; i++) {
               const n = liveRooms[i];
-              const rwPx = (n.rotation % 180 === 0 ? n.w : n.l) * liveScale;
-              const rlPx = (n.rotation % 180 === 0 ? n.l : n.w) * liveScale;
+              const b = computeRoomGeometryBounds(n);
+              const rwPx = b.width * liveScale;
+              const rlPx = b.length * liveScale;
               const center = worldToCanvasLive(n.x, n.z);
               if (
                 canvasX >= center.x - rwPx / 2 - pad &&
@@ -690,8 +767,8 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
 
     let maxRightEdge = 0;
     placedRoomNodes.forEach((n) => {
-      const nw = n.rotation % 180 === 0 ? n.w : n.l;
-      maxRightEdge = Math.max(maxRightEdge, n.x + nw / 2);
+      const b = computeRoomGeometryBounds(n);
+      maxRightEdge = Math.max(maxRightEdge, n.x + b.halfMaxX);
     });
 
     const rw = room.width_ft || 16;
@@ -699,9 +776,9 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
     const rh = room.height_ft || 9;
     const orthoAngle = computeOrthoAlignment(room.mesh_json);
 
-    const newNode: RoomNode = {
+    const tmpNode: RoomNode = {
       room,
-      x: placedRoomNodes.length === 0 ? 0 : maxRightEdge + 3.0 + rw / 2,
+      x: 0,
       z: 0,
       w: rw,
       l: rl,
@@ -710,6 +787,12 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
       floorLevel: room.floor_level || 'Ground Floor',
       color: palette[placedRoomNodes.length % palette.length],
       orthoAngle,
+    };
+    const newB = computeRoomGeometryBounds(tmpNode);
+
+    const newNode: RoomNode = {
+      ...tmpNode,
+      x: placedRoomNodes.length === 0 ? 0 : maxRightEdge + 3.0 - newB.halfMinX,
     };
 
     setPlacedRoomNodes((prev) => [...prev, newNode]);
@@ -1470,10 +1553,9 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
 
                         {/* Rotation handle on corner of selected room (tap to rotate) */}
                         {isSelected && (() => {
-                          const rwPx = (n.rotation % 180 === 0 ? n.w : n.l) * scale2D;
-                          const rlPx = (n.rotation % 180 === 0 ? n.l : n.w) * scale2D;
-                          const hX = centerCanvas.x + rwPx / 2 - 14;
-                          const hY = centerCanvas.y - rlPx / 2 + 14;
+                          const b = computeRoomGeometryBounds(n);
+                          const hX = centerCanvas.x + b.halfMaxX * scale2D - 14;
+                          const hY = centerCanvas.y + b.halfMinZ * scale2D + 14;
                           return (
                             <G
                               onPress={() => {

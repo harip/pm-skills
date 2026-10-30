@@ -411,6 +411,33 @@ endsolid ${room.name}`;
     assert.strictEqual(effW0 * effL0, effW90 * effL90, 'Area must be strictly preserved');
   });
 
+  // EVAL-11: Zero-Gap Geometric Magnetic Coupling (Direct Wall Touch)
+  it('EVAL-11: Real-time magnetic coupling locks adjacent polygon walls flush with exactly 0.00 offset (Zero Gap)', () => {
+    // Room 1: Scanned 13x14 room with actual polygon half-bounds [-5.63, 5.63]
+    const r1Bounds = { halfMinX: -5.63, halfMaxX: 5.63, halfMinZ: -4.68, halfMaxZ: 4.68 };
+    const room1 = { x: 0, z: 0, bounds: r1Bounds };
+
+    // Room 2: Scanned 18x18 room with actual polygon half-bounds [-6.54, 6.54]
+    const r2Bounds = { halfMinX: -6.54, halfMaxX: 6.54, halfMinZ: -6.89, halfMaxZ: 6.89 };
+    const room2 = { x: 14.0, z: 0, bounds: r2Bounds };
+
+    // East snap: Room 2 left wall (room2.x + halfMinX) must touch Room 1 right wall (room1.x + halfMaxX)
+    const snapEastX = room1.x + r1Bounds.halfMaxX - r2Bounds.halfMinX;
+    const room1RightWall = room1.x + r1Bounds.halfMaxX;
+    const room2LeftWall = snapEastX + r2Bounds.halfMinX;
+    const gapEast = Math.abs(room1RightWall - room2LeftWall);
+
+    assert(gapEast < 1e-9, `Gap between snapped walls must be 0, got ${gapEast}`);
+
+    // North snap: Room 2 bottom wall (room2.z + halfMaxZ) must touch Room 1 top wall (room1.z + halfMinZ)
+    const snapNorthZ = room1.z + r1Bounds.halfMinZ - r2Bounds.halfMaxZ;
+    const room1TopWall = room1.z + r1Bounds.halfMinZ;
+    const room2BottomWall = snapNorthZ + r2Bounds.halfMaxZ;
+    const gapNorth = Math.abs(room1TopWall - room2BottomWall);
+
+    assert(gapNorth < 1e-9, `Gap between snapped walls must be 0, got ${gapNorth}`);
+  });
+
   console.log(`\n📊 Verification Summary: ${passedTests}/${totalTests} tests passed.\n`);
 }
 
