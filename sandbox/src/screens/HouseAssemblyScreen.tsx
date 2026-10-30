@@ -115,6 +115,7 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
   const heldRoomIdRef = useRef<string | null>(null);
   const activeGestureTargetRef = useRef<{ type: 'NONE' | 'CANVAS' | 'ROOM'; roomId?: string }>({ type: 'NONE' });
   const touchStartPosRef = useRef<{ x: number; y: number } | null>(null);
+  const unconstrainedPosRef = useRef<{ x: number; z: number }>({ x: 0, z: 0 });
 
   const palette = ['#007aff', '#34c759', '#ff9500', '#af52de', '#5856d6', '#ff2d55'];
   const baseScale2D = 9.0; // 9 pixels per foot
@@ -278,18 +279,9 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
     };
   };
 
-  // Trigger iOS Native Haptic Feedback
-  const triggerHaptic = () => {
-    try {
-      if (Platform.OS === 'ios') Vibration.vibrate(10);
-    } catch {}
-  };
-
-  const triggerMediumHaptic = () => {
-    try {
-      if (Platform.OS === 'ios') Vibration.vibrate(35);
-    } catch {}
-  };
+  // Native Haptics: Disabled per user request
+  const triggerHaptic = () => {};
+  const triggerMediumHaptic = () => {};
 
   /**
    * 4-Sided Collinear Magnetic Snapping Engine
@@ -311,8 +303,8 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
     const tMinZ = targetNode.z - rl / 2;
     const tMaxZ = targetNode.z + rl / 2;
 
-    const THRESH_CORNER_FT = 2.0;
-    const THRESH_EDGE_FT = 2.5;
+    const THRESH_CORNER_FT = 2.5;
+    const THRESH_EDGE_FT = 3.0;
 
     for (const other of nodesList) {
       if (other.room.id === targetNode.room.id) continue;
@@ -562,7 +554,9 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
               setHeldRoomId(hitRoomId);
               isHeldActiveRef.current = true;
               heldRoomIdRef.current = hitRoomId;
-              triggerMediumHaptic();
+              if (hitNode) {
+                unconstrainedPosRef.current = { x: hitNode.x, z: hitNode.z };
+              }
             } else {
               // Touch is OUTSIDE ALL ROOMS: Lock into CANVAS PAN MODE (Move all rooms as a whole)
               activeGestureTargetRef.current = { type: 'CANVAS' };
@@ -600,13 +594,16 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
               const curScale = scale2DRef.current;
               const dWorldX = dx / curScale;
               const dWorldZ = dy / curScale;
+              unconstrainedPosRef.current.x += dWorldX;
+              unconstrainedPosRef.current.z += dWorldZ;
+
               setPlacedRoomNodes((prev) =>
                 prev.map((n) => {
                   if (n.room.id === heldRoomIdRef.current) {
                     const rawNode = {
                       ...n,
-                      x: n.x + dWorldX,
-                      z: n.z + dWorldZ,
+                      x: unconstrainedPosRef.current.x,
+                      z: unconstrainedPosRef.current.z,
                     };
                     // Continuous Real-Time Magnetic Snapping against all other rooms
                     const snapped = applyMagneticSnapping(rawNode, prev);
