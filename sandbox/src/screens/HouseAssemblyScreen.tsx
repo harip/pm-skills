@@ -73,6 +73,7 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
   const [activeTab, setActiveTab] = useState<'studio' | 'dollhouse'>('studio');
   const [viewMode, setViewMode] = useState<'2d' | '3d'>('2d');
   const [threeDHeightMode, setThreeDHeightMode] = useState<'4ft' | 'ceil'>('4ft');
+  const [showRoomPicker, setShowRoomPicker] = useState(false);
   const [placedRoomNodes, setPlacedRoomNodes] = useState<RoomNode[]>([]);
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
   const [heldRoomId, setHeldRoomId] = useState<string | null>(null); // Active press-and-hold drag room
@@ -1200,47 +1201,13 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
               {placedRoomNodes.length} Rooms Placed • {Math.round(totalArea)} sq ft
             </Text>
           </View>
-          <TouchableOpacity onPress={handleExportSheet} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-            <Text style={styles.navDoneText}>Done</Text>
+          <TouchableOpacity
+            style={styles.navExportBtn}
+            onPress={handleExportSheet}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Text style={styles.navExportBtnText}>⬇ STL</Text>
           </TouchableOpacity>
-        </View>
-
-        {/* Exactly 2 Main Tabs: Studio (Active) | 3D Dollhouse View */}
-        <View style={styles.mainTabsWrap}>
-          <View style={styles.mainTabs}>
-            <TouchableOpacity
-              style={[styles.mainTab, activeTab === 'studio' && styles.mainTabActive]}
-              onPress={() => {
-                setActiveTab('studio');
-                setViewMode('2d');
-              }}
-              activeOpacity={0.8}
-            >
-              <View style={styles.tabContentRow}>
-                <Text style={[styles.mainTabText, activeTab === 'studio' && styles.mainTabTextActive]}>
-                  Studio
-                </Text>
-                <View style={styles.tabBadge}>
-                  <Text style={styles.tabBadgeText}>
-                    {placedRoomNodes.length} on canvas
-                  </Text>
-                </View>
-              </View>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.mainTab, activeTab === 'dollhouse' && styles.mainTabActive]}
-              onPress={() => {
-                setActiveTab('dollhouse');
-                setViewMode('3d');
-              }}
-              activeOpacity={0.8}
-            >
-              <Text style={[styles.mainTabText, activeTab === 'dollhouse' && styles.mainTabTextActive]}>
-                3D Dollhouse
-              </Text>
-            </TouchableOpacity>
-          </View>
         </View>
 
         {/* Hero CAD Viewport */}
@@ -1845,109 +1812,170 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
             </TouchableOpacity>
           </Modal>
 
-          {/* BOTTOM-LEFT: Contextual 3D Height Switcher (Only visible when 3D mode is active) */}
-          {viewMode === '3d' && (
-            <View style={styles.heightToggleBottomLeft}>
+          {/* Apple Freeform Unified Floating Capsule (Bottom Center) */}
+          <View style={styles.freeformCapsuleWrap} pointerEvents="box-none">
+            <View style={styles.freeformCapsule}>
+              {/* ＋ Insert Room Button */}
               <TouchableOpacity
-                style={[styles.viewToggleBtn, threeDHeightMode === '4ft' && styles.viewToggleBtnActive]}
-                onPress={() => setThreeDHeightMode('4ft')}
+                style={styles.freeformAddBtn}
+                onPress={() => setShowRoomPicker(true)}
                 activeOpacity={0.8}
+                accessibilityLabel="Add Room"
               >
-                <Text style={[styles.viewToggleText, threeDHeightMode === '4ft' && styles.viewToggleTextActive]}>
-                  ✂ 4'
-                </Text>
+                <Text style={styles.freeformAddBtnText}>＋</Text>
               </TouchableOpacity>
+
+              <View style={styles.freeformDivider} />
+
+              {/* Contextual 3D Height Switcher (Only visible in 3D Mode) */}
+              {viewMode === '3d' && (
+                <>
+                  <View style={styles.freeformSegment}>
+                    <TouchableOpacity
+                      style={[styles.freeformSegBtn, threeDHeightMode === '4ft' && styles.freeformSegBtnActive]}
+                      onPress={() => setThreeDHeightMode('4ft')}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={[styles.freeformSegText, threeDHeightMode === '4ft' && styles.freeformSegTextActive]}>
+                        ✂ 4'
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.freeformSegBtn, threeDHeightMode === 'ceil' && styles.freeformSegBtnActive]}
+                      onPress={() => setThreeDHeightMode('ceil')}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={[styles.freeformSegText, threeDHeightMode === 'ceil' && styles.freeformSegTextActive]}>
+                        🏛 Ceil
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                  <View style={styles.freeformDivider} />
+                </>
+              )}
+
+              {/* 2D / 3D Mode Switcher */}
+              <View style={styles.freeformSegment}>
+                <TouchableOpacity
+                  style={[styles.freeformSegBtn, viewMode === '2d' && styles.freeformSegBtnActive]}
+                  onPress={() => setViewMode('2d')}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.freeformSegText, viewMode === '2d' && styles.freeformSegTextActive]}>
+                    2D
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.freeformSegBtn, viewMode === '3d' && styles.freeformSegBtnActive]}
+                  onPress={() => setViewMode('3d')}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.freeformSegText, viewMode === '3d' && styles.freeformSegTextActive]}>
+                    3D
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </View>
+
+        {/* Apple HIG Room Library Modal Sheet (Replaces the clunky 140px bottom tray) */}
+        <Modal
+          visible={showRoomPicker}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setShowRoomPicker(false)}
+        >
+          <TouchableOpacity
+            style={styles.sheetBackdrop}
+            activeOpacity={1}
+            onPress={() => setShowRoomPicker(false)}
+          >
+            <View
+              style={styles.sheetContainer}
+              onStartShouldSetResponder={() => true}
+              onTouchEnd={(e) => e.stopPropagation()}
+            >
+              <View style={styles.sheetHandle} />
+
+              <View style={styles.sheetHeader}>
+                <View>
+                  <Text style={styles.sheetTitle}>Room Library</Text>
+                  <Text style={styles.sheetSubtitle}>
+                    {placedRoomNodes.length} of {allRooms.length} rooms placed on canvas
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.sheetCloseBtn}
+                  onPress={() => setShowRoomPicker(false)}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Text style={styles.sheetCloseText}>✕</Text>
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView style={styles.roomPickerScroll} showsVerticalScrollIndicator={false}>
+                {allRooms.map((r, idx) => {
+                  const isPlaced = placedRoomNodes.some((n) => n.room.id === r.id);
+                  const isSelected = selectedRoomId === r.id;
+                  const rw = Math.round(r.width_ft || 16);
+                  const rl = Math.round(r.length_ft || 14);
+                  const rh = Math.round(r.height_ft || 8.5);
+
+                  return (
+                    <View key={r.id} style={[styles.roomPickerCard, isPlaced && styles.roomPickerCardPlaced]}>
+                      <View style={styles.roomPickerCardInfo}>
+                        <View style={[styles.roomPickerNumBadge, isPlaced && styles.roomPickerNumBadgePlaced]}>
+                          <Text style={[styles.roomPickerNumText, isPlaced && styles.roomPickerNumTextPlaced]}>
+                            {idx + 1}
+                          </Text>
+                        </View>
+                        <View>
+                          <Text style={styles.roomPickerCardTitle} numberOfLines={1}>
+                            {r.name.split('(')[0].trim()}
+                          </Text>
+                          <Text style={styles.roomPickerCardMeta}>
+                            {rw}' × {rl}' • {rw * rl} sq ft • {rh}' ceiling
+                          </Text>
+                        </View>
+                      </View>
+
+                      {isPlaced ? (
+                        <TouchableOpacity
+                          style={styles.roomPickerAddedPill}
+                          onPress={() => {
+                            setSelectedRoomId(r.id);
+                            setShowRoomPicker(false);
+                          }}
+                        >
+                          <Text style={styles.roomPickerAddedText}>✓ Placed</Text>
+                        </TouchableOpacity>
+                      ) : (
+                        <TouchableOpacity
+                          style={styles.roomPickerAddBtn}
+                          onPress={() => {
+                            handleAddRoomToCanvas(r);
+                            setShowRoomPicker(false);
+                          }}
+                        >
+                          <Text style={styles.roomPickerAddBtnText}>＋ Add</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  );
+                })}
+              </ScrollView>
+
               <TouchableOpacity
-                style={[styles.viewToggleBtn, threeDHeightMode === 'ceil' && styles.viewToggleBtnActive]}
-                onPress={() => setThreeDHeightMode('ceil')}
+                style={styles.sheetDoneBtn}
+                onPress={() => setShowRoomPicker(false)}
                 activeOpacity={0.8}
               >
-                <Text style={[styles.viewToggleText, threeDHeightMode === 'ceil' && styles.viewToggleTextActive]}>
-                  🏛 Ceil
-                </Text>
+                <Text style={styles.sheetDoneBtnText}>Done</Text>
               </TouchableOpacity>
             </View>
-          )}
-
-          {/* BOTTOM-RIGHT: Minimalist 2D / 3D Switcher */}
-          <View style={styles.viewToggleBottom}>
-            <TouchableOpacity
-              style={[styles.viewToggleBtn, viewMode === '2d' && styles.viewToggleBtnActive]}
-              onPress={() => setViewMode('2d')}
-            >
-              <Text style={[styles.viewToggleText, viewMode === '2d' && styles.viewToggleTextActive]}>2D</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.viewToggleBtn, viewMode === '3d' && styles.viewToggleBtnActive]}
-              onPress={() => setViewMode('3d')}
-            >
-              <Text style={[styles.viewToggleText, viewMode === '3d' && styles.viewToggleTextActive]}>3D</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Bottom Drawer: "Add 1 Room by 1 Room" Tray */}
-        <View style={styles.bottomDrawer}>
-          <View style={styles.drawerHeader}>
-            <Text style={styles.drawerTitle}>Captured Rooms</Text>
-            <Text style={styles.drawerSub}>Tap to select • Press & Hold to move</Text>
-          </View>
-
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.roomTrayScroll}>
-            {allRooms.map((r) => {
-              const isPlaced = placedRoomNodes.some((n) => n.room.id === r.id);
-              const isSelected = selectedRoomId === r.id;
-              const isHeld = heldRoomId === r.id;
-              const rw = Math.round(r.width_ft || 16);
-              const rl = Math.round(r.length_ft || 14);
-
-              return (
-                <TouchableOpacity
-                  key={r.id}
-                  style={[
-                    styles.roomTrayCard,
-                    isPlaced && styles.roomTrayCardPlaced,
-                    isSelected && styles.roomTrayCardSelected,
-                    isHeld && styles.roomTrayCardHeld,
-                  ]}
-                  onPress={() => {
-                    if (isPlaced) {
-                      setSelectedRoomId(r.id);
-                      triggerHaptic();
-                    } else {
-                      handleAddRoomToCanvas(r);
-                    }
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <View>
-                    <View style={styles.rtcHeaderRow}>
-                      <Text style={styles.rtcName} numberOfLines={1}>
-                        {r.name.split('(')[0].trim()}
-                      </Text>
-                      {isSelected && <Text style={[styles.rtcSelectedDot, isHeld && styles.rtcSelectedDotHeld]}>●</Text>}
-                    </View>
-                    <Text style={styles.rtcMeta}>
-                      {rw}' × {rl}' • {rw * rl} sq ft
-                    </Text>
-                  </View>
-
-                  {isPlaced ? (
-                    <View style={[styles.rtcBtnAdded, isSelected && styles.rtcBtnAddedSelected, isHeld && styles.rtcBtnAddedHeld]}>
-                      <Text style={[styles.rtcBtnAddedText, (isSelected || isHeld) && styles.rtcBtnAddedTextSelected]}>
-                        {isHeld ? '● Moving' : isSelected ? '● Selected' : '✓ On Canvas'}
-                      </Text>
-                    </View>
-                  ) : (
-                    <View style={styles.rtcBtnAdd}>
-                      <Text style={styles.rtcBtnAddText}>+ Add to Studio</Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-        </View>
+          </TouchableOpacity>
+        </Modal>
       </View>
     </SafeAreaView>
   );
@@ -2328,181 +2356,178 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
-  // Bottom-Left Contextual 3D Height Switcher (Only visible when 3D mode is active)
-  heightToggleBottomLeft: {
+  // Apple Freeform Unified Floating Capsule (Bottom Center)
+  freeformCapsuleWrap: {
     position: 'absolute',
-    bottom: 12,
-    left: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.94)',
-    borderRadius: 19,
-    padding: 3,
+    bottom: 16,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    zIndex: 40,
+  },
+  freeformCapsule: {
     flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.94)',
+    borderRadius: 24,
+    paddingHorizontal: 6,
+    paddingVertical: 5,
     borderWidth: 0.5,
     borderColor: '#e5e5ea',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 3,
-    zIndex: 40,
-    height: 38,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    elevation: 6,
+    gap: 6,
   },
-
-  // Bottom-Right Minimalist 2D / 3D Switcher
-  viewToggleBottom: {
-    position: 'absolute',
-    bottom: 12,
-    right: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.94)',
-    borderRadius: 19,
-    padding: 3,
+  freeformAddBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#007aff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#007aff',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+  },
+  freeformAddBtnText: {
+    color: '#ffffff',
+    fontSize: 20,
+    fontWeight: '600',
+    lineHeight: 22,
+    textAlign: 'center',
+  },
+  freeformDivider: {
+    width: 1,
+    height: 20,
+    backgroundColor: '#e5e5ea',
+  },
+  freeformSegment: {
     flexDirection: 'row',
-    borderWidth: 0.5,
-    borderColor: '#e5e5ea',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 3,
-    zIndex: 40,
-    height: 38,
-  },
-  viewToggleBtn: {
-    paddingHorizontal: 12,
+    backgroundColor: '#f2f2f7',
     borderRadius: 16,
+    padding: 2,
+    gap: 2,
+  },
+  freeformSegBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  viewToggleBtnActive: {
-    backgroundColor: '#007aff',
-    shadowColor: '#007aff',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.3,
-    shadowRadius: 2,
-  },
-  viewToggleText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#8e8e93',
-  },
-  viewToggleTextActive: {
-    color: '#ffffff',
-  },
-
-  // Bottom Room Drawer Tray
-  bottomDrawer: {
-    backgroundColor: '#f5f5f7',
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 16,
-    gap: 8,
-  },
-  drawerHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 4,
-  },
-  drawerTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#1c1c1e',
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
-  },
-  drawerSub: {
-    fontSize: 11,
-    color: '#8e8e93',
-    fontWeight: '500',
-  },
-  roomTrayScroll: {
-    gap: 10,
-    paddingVertical: 2,
-  },
-  roomTrayCard: {
-    minWidth: 130,
+  freeformSegBtnActive: {
     backgroundColor: '#ffffff',
-    borderRadius: 14,
-    padding: 10,
-    borderWidth: 1,
-    borderColor: '#e5e5ea',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.03,
+    shadowOpacity: 0.12,
     shadowRadius: 2,
-    elevation: 1,
-    justifyContent: 'space-between',
-    gap: 8,
+    elevation: 2,
   },
-  roomTrayCardPlaced: {
-    backgroundColor: '#fafafc',
-    opacity: 0.8,
+  freeformSegText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#8e8e93',
   },
-  roomTrayCardSelected: {
-    borderColor: '#007aff',
-    borderWidth: 1.5,
-    backgroundColor: '#f0f7ff',
+  freeformSegTextActive: {
+    color: '#1c1c1e',
   },
-  roomTrayCardHeld: {
-    borderColor: '#f97316',
-    borderWidth: 2,
-    backgroundColor: '#fffaf0',
+
+  // Nav Export STL button
+  navExportBtn: {
+    backgroundColor: '#007aff',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    shadowColor: '#007aff',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
   },
-  rtcHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  rtcSelectedDot: {
-    color: '#007aff',
-    fontSize: 10,
-  },
-  rtcSelectedDotHeld: {
-    color: '#f97316',
-  },
-  rtcName: {
+  navExportBtnText: {
+    color: '#ffffff',
     fontSize: 13,
     fontWeight: '700',
-    color: '#1c1c1e',
+  },
+
+  // Room Picker Modal Sheet
+  roomPickerScroll: {
+    maxHeight: 280,
+    marginVertical: 12,
+  },
+  roomPickerCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 12,
+    borderRadius: 16,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#e5e5ea',
+    marginBottom: 8,
+  },
+  roomPickerCardPlaced: {
+    backgroundColor: '#f8fafc',
+    borderColor: '#e2e8f0',
+  },
+  roomPickerCardInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
     flex: 1,
   },
-  rtcMeta: {
-    fontSize: 11,
+  roomPickerNumBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: '#007aff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  roomPickerNumBadgePlaced: {
+    backgroundColor: '#e2e8f0',
+  },
+  roomPickerNumText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  roomPickerNumTextPlaced: {
+    color: '#64748b',
+  },
+  roomPickerCardTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1c1c1e',
+  },
+  roomPickerCardMeta: {
+    fontSize: 12,
     color: '#8e8e93',
     marginTop: 2,
   },
-  rtcBtnAdd: {
-    backgroundColor: '#e8f2ff',
-    borderRadius: 8,
-    paddingVertical: 5,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  rtcBtnAddText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#007aff',
-  },
-  rtcBtnAdded: {
-    backgroundColor: '#f0f0f4',
-    borderRadius: 8,
-    paddingVertical: 5,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  rtcBtnAddedSelected: {
+  roomPickerAddBtn: {
     backgroundColor: '#007aff',
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 12,
   },
-  rtcBtnAddedHeld: {
-    backgroundColor: '#f97316',
-  },
-  rtcBtnAddedText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#8e8e93',
-  },
-  rtcBtnAddedTextSelected: {
+  roomPickerAddBtnText: {
     color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  roomPickerAddedPill: {
+    backgroundColor: '#e2e8f0',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 12,
+  },
+  roomPickerAddedText: {
+    color: '#475569',
+    fontSize: 12,
     fontWeight: '700',
   },
 });

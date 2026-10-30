@@ -698,39 +698,6 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
           </View>
         </View>
 
-        {/* Minimal View Switcher: 3D vs 2D + 4ft Section Cut Button */}
-        <View style={styles.topControlBar}>
-          <View style={styles.viewSwitcher}>
-            <TouchableOpacity
-              style={[styles.switcherBtn, viewMode === '3d' && styles.switcherBtnActive]}
-              onPress={() => setViewMode('3d')}
-            >
-              <Text style={[styles.switcherText, viewMode === '3d' && styles.switcherTextActive]}>
-                🧊 3D Solid Model
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.switcherBtn, viewMode === '2d' && styles.switcherBtnActive]}
-              onPress={() => setViewMode('2d')}
-            >
-              <Text style={[styles.switcherText, viewMode === '2d' && styles.switcherTextActive]}>
-                📐 2D Floor Plan
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {viewMode === '3d' && (
-            <TouchableOpacity
-              style={[styles.sectionCutBtn, sectionCut4Ft && styles.sectionCutBtnActive]}
-              onPress={() => setSectionCut4Ft((prev) => !prev)}
-            >
-              <Text style={[styles.sectionCutBtnText, sectionCut4Ft && styles.sectionCutBtnTextActive]}>
-                {sectionCut4Ft ? '✂️ 4ft Cut: ON' : '🏠 Full Ceiling'}
-              </Text>
-            </TouchableOpacity>
-          )}
-        </View>
-
         {/* Hero Full-Bleed Viewport Canvas */}
         <View
           style={styles.viewportContainer}
@@ -753,19 +720,6 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
               {'  •  '}
               {currentFloor}
             </Text>
-          </View>
-
-          {/* Floating Zoom Controls at Bottom-Right */}
-          <View style={styles.floatingZoomControls}>
-            <TouchableOpacity style={styles.zoomBtn} onPress={handleZoomOut}>
-              <Text style={styles.zoomBtnText}>−</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.zoomIndicator} onPress={resetView}>
-              <Text style={styles.zoomIndicatorText}>{Math.round(zoom * 100)}%</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.zoomBtn} onPress={handleZoomIn}>
-              <Text style={styles.zoomBtnText}>+</Text>
-            </TouchableOpacity>
           </View>
 
           {/* SVG Multi-Touch Canvas */}
@@ -1042,6 +996,60 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
               </>
             )}
           </Svg>
+
+          {/* Apple Freeform Unified Floating Capsule (Bottom Center) */}
+          <View style={styles.freeformCapsuleWrap} pointerEvents="box-none">
+            <View style={styles.freeformCapsule}>
+              {/* Contextual 3D Height Switcher (Only visible in 3D Mode) */}
+              {viewMode === '3d' && (
+                <>
+                  <View style={styles.freeformSegment}>
+                    <TouchableOpacity
+                      style={[styles.freeformSegBtn, sectionCut4Ft && styles.freeformSegBtnActive]}
+                      onPress={() => setSectionCut4Ft(true)}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={[styles.freeformSegText, sectionCut4Ft && styles.freeformSegTextActive]}>
+                        ✂ 4'
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.freeformSegBtn, !sectionCut4Ft && styles.freeformSegBtnActive]}
+                      onPress={() => setSectionCut4Ft(false)}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={[styles.freeformSegText, !sectionCut4Ft && styles.freeformSegTextActive]}>
+                        🏛 Ceil
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                  <View style={styles.freeformDivider} />
+                </>
+              )}
+
+              {/* 2D / 3D Mode Switcher */}
+              <View style={styles.freeformSegment}>
+                <TouchableOpacity
+                  style={[styles.freeformSegBtn, viewMode === '2d' && styles.freeformSegBtnActive]}
+                  onPress={() => setViewMode('2d')}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.freeformSegText, viewMode === '2d' && styles.freeformSegTextActive]}>
+                    2D
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.freeformSegBtn, viewMode === '3d' && styles.freeformSegBtnActive]}
+                  onPress={() => setViewMode('3d')}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.freeformSegText, viewMode === '3d' && styles.freeformSegTextActive]}>
+                    3D
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
         </View>
 
         {/* Minimal Bottom Action Toolbar */}
@@ -1093,48 +1101,6 @@ const styles = StyleSheet.create({
   },
   moreBtnText: { fontSize: 14, fontWeight: '700', color: '#1c1c1e' },
 
-  topControlBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 4,
-    gap: 8,
-  },
-  viewSwitcher: {
-    flex: 1,
-    flexDirection: 'row',
-    backgroundColor: 'rgba(118, 118, 128, 0.12)',
-    borderRadius: 9,
-    padding: 2,
-  },
-  sectionCutBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: 8,
-    backgroundColor: 'rgba(118, 118, 128, 0.12)',
-  },
-  sectionCutBtnActive: {
-    backgroundColor: '#1c1c1e',
-  },
-  sectionCutBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#636366',
-  },
-  sectionCutBtnTextActive: {
-    color: '#ffffff',
-  },
-  switcherBtn: { flex: 1, paddingVertical: 7, alignItems: 'center', borderRadius: 7 },
-  switcherBtnActive: {
-    backgroundColor: '#ffffff',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.12,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  switcherText: { fontSize: 13, fontWeight: '600', color: '#8e8e93' },
-  switcherTextActive: { color: '#007aff' },
-
   viewportContainer: {
     flex: 1,
     backgroundColor: '#ffffff',
@@ -1149,6 +1115,67 @@ const styles = StyleSheet.create({
     elevation: 2,
     position: 'relative',
     marginVertical: 4,
+  },
+
+  // Apple Freeform Unified Floating Capsule (Bottom Center)
+  freeformCapsuleWrap: {
+    position: 'absolute',
+    bottom: 14,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    zIndex: 40,
+  },
+  freeformCapsule: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.94)',
+    borderRadius: 24,
+    paddingHorizontal: 6,
+    paddingVertical: 5,
+    borderWidth: 0.5,
+    borderColor: '#e5e5ea',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    elevation: 6,
+    gap: 6,
+  },
+  freeformDivider: {
+    width: 1,
+    height: 20,
+    backgroundColor: '#e5e5ea',
+  },
+  freeformSegment: {
+    flexDirection: 'row',
+    backgroundColor: '#f2f2f7',
+    borderRadius: 16,
+    padding: 2,
+    gap: 2,
+  },
+  freeformSegBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  freeformSegBtnActive: {
+    backgroundColor: '#ffffff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.12,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  freeformSegText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#8e8e93',
+  },
+  freeformSegTextActive: {
+    color: '#1c1c1e',
   },
 
   floatingHudCapsule: {
@@ -1168,27 +1195,6 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   floatingHudText: { fontSize: 12, fontWeight: '700', color: '#1c1c1e' },
-
-  floatingZoomControls: {
-    position: 'absolute',
-    bottom: 12,
-    right: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.92)',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.08)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    zIndex: 10,
-  },
-  zoomBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
-  zoomBtnText: { fontSize: 16, fontWeight: '700', color: '#007aff' },
-  zoomIndicator: { paddingHorizontal: 6 },
-  zoomIndicatorText: { fontSize: 11, fontWeight: '700', color: '#636366' },
 
   bottomToolbar: {
     paddingVertical: 10,
