@@ -19,7 +19,6 @@ import Svg, { Polygon, Line, Rect, Circle, Text as SvgText, G, Path } from 'reac
 import { Room } from '../types/room';
 import { GeometryService, ProjectedPoint } from '../services/geometryService';
 import { StlExporterService } from '../services/stlExporterService';
-import { StitchEngine } from '../services/stitchEngine';
 import { Database } from '../db/database';
 
 interface Props {
@@ -37,6 +36,7 @@ interface RoomNode {
   rotation: number;// 0, 90, 180, 270 degrees
   floorLevel: string;
   color: string;
+  orthoAngle: number; // Principal axis alignment angle in radians
 }
 
 interface SnapGuide {
@@ -59,6 +59,13 @@ interface Face3D {
   key: string;
 }
 
+interface LayersConfig {
+  doorsWindows: boolean;
+  dimensions: boolean;
+  labels: boolean;
+  furniture: boolean;
+}
+
 export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBack }) => {
   const [allRooms, setAllRooms] = useState<Room[]>([]);
   const [activeTab, setActiveTab] = useState<'studio' | 'dollhouse'>('studio');
@@ -67,6 +74,15 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
   const [activeSnapGuide, setActiveSnapGuide] = useState<SnapGuide | null>(null);
   const [mergedPartitions, setMergedPartitions] = useState<Set<string>>(new Set());
+
+  // Apple Maps-style Layer Toggles
+  const [layers, setLayers] = useState<LayersConfig>({
+    doorsWindows: true,
+    dimensions: true,
+    labels: true,
+    furniture: true,
+  });
+  const [showLayerMenu, setShowLayerMenu] = useState(false);
 
   // Dynamic Viewport Canvas Layout
   const [canvasLayout, setCanvasLayout] = useState({ width: 360, height: 430 });
@@ -92,9 +108,49 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
   const lastPinchDistRef = useRef<number | null>(null);
   const isDraggingRoomRef = useRef<boolean>(false);
   const draggedRoomIdRef = useRef<string | null>(null);
+  const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const touchStartPosRef = useRef<{ x: number; y: number } | null>(null);
 
   const palette = ['#007aff', '#34c759', '#ff9500', '#af52de', '#5856d6', '#ff2d55'];
   const baseScale2D = 9.0; // 9 pixels per foot
+
+  /**
+   * Principal Axis Orthogonalization:
+   * Computes the angle required to rotate the room's longest/primary wall
+   * so it aligns squarely (0° or 90°) with the horizontal/vertical grid.
+   */
+  const computeOrthoAlignment = (meshJson?: string): number => {
+    if (!meshJson) return 0;
+    try {
+      const parsed = JSON.parse(meshJson);
+      const walls: any[] = parsed.walls || [];
+      if (walls.length === 0) return 0;
+
+      let longestLen = -1;
+      let dominantAngle = 0;
+
+      for (const w of walls) {
+        const x1 = w.x1 ?? (w.x !== undefined ? w.x - 2 : 0);
+        const z1 = w.z1 ?? (w.z !== undefined ? w.z - 2 : 0);
+        const x2 = w.x2 ?? (w.x !== undefined ? w.x + 2 : 0);
+        const z2 = w.z2 ?? (w.z !== undefined ? w.z + 2 : 0);
+        const dx = x2 - x1;
+        const dz = z2 - z1;
+        const len = Math.hypot(dx, dz);
+        if (len > longestLen && len > 0.5) {
+          longestLen = len;
+          let angle = Math.atan2(dz, dx);
+          // Normalize to [-PI/4, PI/4] for orthogonal alignment
+          while (angle <= -Math.PI / 4) angle += Math.PI / 2;
+          while (angle > Math.PI / 4) angle -= Math.PI / 2;
+          dominantAngle = angle;
+        }
+      }
+      return -dominantAngle;
+    } catch {
+      return 0;
+    }
+  };
 
   // Load rooms from DB or sample
   useEffect(() => {
@@ -110,6 +166,7 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
         const rw = targetRoom.width_ft || 16;
         const rl = targetRoom.length_ft || 14;
         const rh = targetRoom.height_ft || 9;
+        const orthoAngle = computeOrthoAlignment(targetRoom.mesh_json);
         const initialNode: RoomNode = {
           room: targetRoom,
           x: 0,
@@ -120,6 +177,7 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
           rotation: 0,
           floorLevel: targetRoom.floor_level || 'Ground Floor',
           color: palette[0],
+          orthoAngle,
         };
         setPlacedRoomNodes([initialNode]);
         setSelectedRoomId(targetRoom.id);
@@ -200,8 +258,18 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
     } catch {}
   };
 
+  const triggerMediumHaptic = () => {
+    try {
+      if (Platform.OS === 'ios') {
+        Vibration.vibrate(25);
+      }
+    } catch {}
+  };
+
   /**
-   * 4-Sided Collinear Magnetic Snapping Engine
+   * 4-Sided Collinear Magnetic Snapping Engine (Bug-Free Seam Calculation)
+   * Strictly evaluates North, South, East, West flush joints.
+   * Generates collinear seam lines without diagonal slashes across rooms.
    */
   const applyMagneticSnapping = (
     targetNode: RoomNode,
@@ -234,7 +302,7 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
       const oMinZ = other.z - ol / 2;
       const oMaxZ = other.z + ol / 2;
 
-      // Corner-to-Corner Flush Snap Pairs
+      // 1. Corner-to-Corner Flush Snap Pairs
       const cornerPairs = [
         { snapX: oMinX - rw / 2, snapZ: oMinZ + rl / 2, diffX: tMaxX - oMinX, diffZ: tMinZ - oMinZ, axis: 'EW', wallX: oMinX },
         { snapX: oMinX - rw / 2, snapZ: oMaxZ - rl / 2, diffX: tMaxX - oMinX, diffZ: tMaxZ - oMaxZ, axis: 'EW', wallX: oMinX },
@@ -281,7 +349,7 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
         }
       }
 
-      // Collinear Wall Edge Lock
+      // 2. Collinear Wall Edge Lock
       if (bestScore < 25) {
         if (Math.abs(tMaxX - oMinX) <= THRESH_EDGE_FT && Math.abs(tMinZ - oMinZ) < rl + ol) {
           bestX = oMinX - rw / 2;
@@ -350,13 +418,18 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
     return { x: bestX, z: bestZ, guide: bestGuide };
   };
 
-  // PanResponder with Robust Absolute Screen Coordinate Hit Testing
+  // PanResponder with Press & Hold (200ms) to Drag and Instant Tap to Select
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
       onPanResponderGrant: (evt) => {
         const touches = evt.nativeEvent.touches;
+        if (longPressTimerRef.current) {
+          clearTimeout(longPressTimerRef.current);
+          longPressTimerRef.current = null;
+        }
+
         if (touches.length >= 2) {
           const dx = touches[0].pageX - touches[1].pageX;
           const dy = touches[0].pageY - touches[1].pageY;
@@ -368,22 +441,22 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
           const pageX = evt.nativeEvent.pageX;
           const pageY = evt.nativeEvent.pageY;
           lastTouchPosRef.current = { x: pageX, y: pageY };
+          touchStartPosRef.current = { x: pageX, y: pageY };
           lastPinchDistRef.current = null;
 
           if (viewMode === '2d') {
-            // Screen-relative canvas coordinates (immune to child touch event displacement)
             const vp = viewportLayoutRef.current;
             const canvasX = pageX - (vp.pageX || 16);
             const canvasY = pageY - (vp.pageY || 110);
             const worldTouch = canvasToWorld(canvasX, canvasY);
 
-            // Hit test top-most rooms in reverse order
+            // Hit test top-most rooms
             let hitRoomId: string | null = null;
             for (let i = placedRoomNodes.length - 1; i >= 0; i--) {
               const n = placedRoomNodes[i];
               const rw = n.rotation % 180 === 0 ? n.w : n.l;
               const rl = n.rotation % 180 === 0 ? n.l : n.w;
-              const pad = 1.2; // Generous 1.2ft mobile touch boundary
+              const pad = 1.2;
               if (
                 worldTouch.x >= n.x - rw / 2 - pad &&
                 worldTouch.x <= n.x + rw / 2 + pad &&
@@ -398,8 +471,13 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
             if (hitRoomId) {
               setSelectedRoomId(hitRoomId);
               draggedRoomIdRef.current = hitRoomId;
-              isDraggingRoomRef.current = true;
               triggerHaptic();
+
+              // Press & Hold (200ms) unlocks independent room drag
+              longPressTimerRef.current = setTimeout(() => {
+                isDraggingRoomRef.current = true;
+                triggerMediumHaptic();
+              }, 200);
             } else {
               isDraggingRoomRef.current = false;
               draggedRoomIdRef.current = null;
@@ -410,7 +488,10 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
       onPanResponderMove: (evt) => {
         const touches = evt.nativeEvent.touches;
         if (touches.length >= 2) {
-          // Pinch-to-zoom
+          if (longPressTimerRef.current) {
+            clearTimeout(longPressTimerRef.current);
+            longPressTimerRef.current = null;
+          }
           const dx = touches[0].pageX - touches[1].pageX;
           const dy = touches[0].pageY - touches[1].pageY;
           const curDist = Math.hypot(dx, dy);
@@ -422,12 +503,21 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
         } else if (touches.length === 1) {
           const curX = evt.nativeEvent.pageX;
           const curY = evt.nativeEvent.pageY;
+
+          // If moved significantly before 200ms, cancel long press (it's a canvas pan)
+          if (touchStartPosRef.current && longPressTimerRef.current) {
+            const moveDist = Math.hypot(curX - touchStartPosRef.current.x, curY - touchStartPosRef.current.y);
+            if (moveDist > 10) {
+              clearTimeout(longPressTimerRef.current);
+              longPressTimerRef.current = null;
+            }
+          }
+
           if (lastTouchPosRef.current) {
             const dx = curX - lastTouchPosRef.current.x;
             const dy = curY - lastTouchPosRef.current.y;
 
             if (viewMode === '3d') {
-              // 3D Orbit
               setAngleY((prev) => prev - dx * 0.01);
               setAngleX((prev) => Math.max(0.15, Math.min(1.4, prev - dy * 0.01)));
             } else if (isDraggingRoomRef.current && draggedRoomIdRef.current) {
@@ -462,7 +552,12 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
         }
       },
       onPanResponderRelease: () => {
+        if (longPressTimerRef.current) {
+          clearTimeout(longPressTimerRef.current);
+          longPressTimerRef.current = null;
+        }
         lastTouchPosRef.current = null;
+        touchStartPosRef.current = null;
         lastPinchDistRef.current = null;
         isDraggingRoomRef.current = false;
         draggedRoomIdRef.current = null;
@@ -470,7 +565,7 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
     })
   ).current;
 
-  // Rotate Selected Room
+  // Rotate Selected Room (0° -> 90° -> 180° -> 270°)
   const handleRotateSelectedRoom = () => {
     if (!selectedRoomId) return;
     setPlacedRoomNodes((prev) =>
@@ -519,6 +614,7 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
     const rw = room.width_ft || 16;
     const rl = room.length_ft || 14;
     const rh = room.height_ft || 9;
+    const orthoAngle = computeOrthoAlignment(room.mesh_json);
 
     const newNode: RoomNode = {
       room,
@@ -530,6 +626,7 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
       rotation: 0,
       floorLevel: room.floor_level || 'Ground Floor',
       color: palette[placedRoomNodes.length % palette.length],
+      orthoAngle,
     };
 
     setPlacedRoomNodes((prev) => [...prev, newNode]);
@@ -617,22 +714,17 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
 
   // =========================================================================
   // CERTIFIED CAD GEOMETRY ENGINE: Full 3D Solid Model Reconstruction
-  // Reconstructs real walls, apertures (doors/windows), window glass & furniture
   // =========================================================================
   const { allFaces3D, allCanopies } = useMemo(() => {
     const faces: Face3D[] = [];
     const canopies: { points: ProjectedPoint[]; key: string }[] = [];
-
-    // Directional light vector
     const lx = 0.35, lz = 0.55;
 
     for (const node of placedRoomNodes) {
       const room = node.room;
       let parsedMesh: any = null;
       try {
-        if (room.mesh_json) {
-          parsedMesh = JSON.parse(room.mesh_json);
-        }
+        if (room.mesh_json) parsedMesh = JSON.parse(room.mesh_json);
       } catch {
         parsedMesh = null;
       }
@@ -651,12 +743,11 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
         z: polygon.reduce((acc, p) => acc + p.z, 0) / N,
       };
 
-      // Room rotation in radians
-      const rad = (node.rotation * Math.PI) / 180;
-      const cosR = Math.cos(rad);
-      const sinR = Math.sin(rad);
+      // Combined rotation: Ortho-Straightening + user rotation (0°, 90°, 180°, 270°)
+      const totalRad = (node.rotation * Math.PI) / 180 + node.orthoAngle;
+      const cosR = Math.cos(totalRad);
+      const sinR = Math.sin(totalRad);
 
-      // Local to World CAD Transform
       const localToWorldCAD = (vxM: number, vyM: number, vzM: number) => {
         const lxFt = vxM / 0.3048 - centerPoly.x;
         const lzFt = vzM / 0.3048 - centerPoly.z;
@@ -733,7 +824,6 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
           nz = -nz;
         }
 
-        // Rotate normal to world frame
         const rnx = nx * cosR - nz * sinR;
         const rnz = nx * sinR + nz * cosR;
         const dot = rnx * lx + rnz * lz;
@@ -849,110 +939,107 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
       }
 
       // 3. True 3D Solid Objects / Furniture (Bed, Sofa, Table, Storage)
-      realObjects.forEach((obj, oIdx) => {
-        const objXM = (obj.x ?? 0) * 0.3048;
-        const objZM = (obj.z ?? 0) * 0.3048;
-        const halfWM = ((obj.widthFt || 3) * 0.3048) / 2;
-        const halfLM = ((obj.lengthFt || 3) * 0.3048) / 2;
-        const objHeightM = (obj.heightFt || 2.5) * 0.3048;
+      if (layers.furniture) {
+        realObjects.forEach((obj, oIdx) => {
+          const objXM = (obj.x ?? 0) * 0.3048;
+          const objZM = (obj.z ?? 0) * 0.3048;
+          const halfWM = ((obj.widthFt || 3) * 0.3048) / 2;
+          const halfLM = ((obj.lengthFt || 3) * 0.3048) / 2;
+          const objHeightM = (obj.heightFt || 2.5) * 0.3048;
 
-        let ux = 1, uz = 0;
-        let vx = 0, vz = 1;
+          let ux = 1, uz = 0;
+          let vx = 0, vz = 1;
 
-        if (obj.dirXx !== undefined && obj.dirXz !== undefined) {
-          const lenX = Math.hypot(obj.dirXx, obj.dirXz) || 1;
-          ux = obj.dirXx / lenX;
-          uz = obj.dirXz / lenX;
-          if (obj.dirZx !== undefined && obj.dirZz !== undefined) {
-            const lenZ = Math.hypot(obj.dirZx, obj.dirZz) || 1;
-            vx = obj.dirZx / lenZ;
-            vz = obj.dirZz / lenZ;
-          } else {
+          if (obj.dirXx !== undefined && obj.dirXz !== undefined) {
+            const lenX = Math.hypot(obj.dirXx, obj.dirXz) || 1;
+            ux = obj.dirXx / lenX;
+            uz = obj.dirXz / lenX;
+            if (obj.dirZx !== undefined && obj.dirZz !== undefined) {
+              const lenZ = Math.hypot(obj.dirZx, obj.dirZz) || 1;
+              vx = obj.dirZx / lenZ;
+              vz = obj.dirZz / lenZ;
+            } else {
+              vx = -uz;
+              vz = ux;
+            }
+          } else if (obj.yawDeg !== undefined) {
+            const r = (obj.yawDeg * Math.PI) / 180;
+            ux = Math.cos(r);
+            uz = Math.sin(r);
             vx = -uz;
             vz = ux;
           }
-        } else if (obj.yawDeg !== undefined) {
-          const r = (obj.yawDeg * Math.PI) / 180;
-          ux = Math.cos(r);
-          uz = Math.sin(r);
-          vx = -uz;
-          vz = ux;
-        }
 
-        const c0 = { x: -halfWM * ux - halfLM * vx, z: -halfWM * uz - halfLM * vz };
-        const c1 = { x:  halfWM * ux - halfLM * vx, z:  halfWM * uz - halfLM * vz };
-        const c2 = { x:  halfWM * ux + halfLM * vx, z:  halfWM * uz + halfLM * vz };
-        const c3 = { x: -halfWM * ux + halfLM * vx, z: -halfWM * uz + halfLM * vz };
+          const c0 = { x: -halfWM * ux - halfLM * vx, z: -halfWM * uz - halfLM * vz };
+          const c1 = { x:  halfWM * ux - halfLM * vx, z:  halfWM * uz - halfLM * vz };
+          const c2 = { x:  halfWM * ux + halfLM * vx, z:  halfWM * uz + halfLM * vz };
+          const c3 = { x: -halfWM * ux + halfLM * vx, z: -halfWM * uz + halfLM * vz };
 
-        const pb0 = projectCADVertex(objXM + c0.x, 0, objZM + c0.z);
-        const pb1 = projectCADVertex(objXM + c1.x, 0, objZM + c1.z);
-        const pb2 = projectCADVertex(objXM + c2.x, 0, objZM + c2.z);
-        const pb3 = projectCADVertex(objXM + c3.x, 0, objZM + c3.z);
+          const pb0 = projectCADVertex(objXM + c0.x, 0, objZM + c0.z);
+          const pb1 = projectCADVertex(objXM + c1.x, 0, objZM + c1.z);
+          const pb2 = projectCADVertex(objXM + c2.x, 0, objZM + c2.z);
+          const pb3 = projectCADVertex(objXM + c3.x, 0, objZM + c3.z);
 
-        const pt0 = projectCADVertex(objXM + c0.x, objHeightM, objZM + c0.z);
-        const pt1 = projectCADVertex(objXM + c1.x, objHeightM, objZM + c1.z);
-        const pt2 = projectCADVertex(objXM + c2.x, objHeightM, objZM + c2.z);
-        const pt3 = projectCADVertex(objXM + c3.x, objHeightM, objZM + c3.z);
+          const pt0 = projectCADVertex(objXM + c0.x, objHeightM, objZM + c0.z);
+          const pt1 = projectCADVertex(objXM + c1.x, objHeightM, objZM + c1.z);
+          const pt2 = projectCADVertex(objXM + c2.x, objHeightM, objZM + c2.z);
+          const pt3 = projectCADVertex(objXM + c3.x, objHeightM, objZM + c3.z);
 
-        const catLower = (obj.category || '').toLowerCase();
-        const isBed = catLower.includes('bed');
-        const isStorage = catLower.includes('storage') || catLower.includes('cabinet') || catLower.includes('tv');
-        const isChair = catLower.includes('chair') || catLower.includes('sofa');
-        const baseR = isBed ? 200 : isStorage ? 190 : isChair ? 165 : 180;
-        const baseG = isBed ? 190 : isStorage ? 205 : isChair ? 180 : 195;
-        const baseB = isBed ? 230 : isStorage ? 240 : isChair ? 220 : 225;
-        const strokeCol = isBed ? '#8b5cf6' : isStorage ? '#3b82f6' : isChair ? '#6366f1' : '#64748b';
+          const catLower = (obj.category || '').toLowerCase();
+          const isBed = catLower.includes('bed');
+          const isStorage = catLower.includes('storage') || catLower.includes('cabinet') || catLower.includes('tv');
+          const isChair = catLower.includes('chair') || catLower.includes('sofa');
+          const baseR = isBed ? 200 : isStorage ? 190 : isChair ? 165 : 180;
+          const baseG = isBed ? 190 : isStorage ? 205 : isChair ? 180 : 195;
+          const baseB = isBed ? 230 : isStorage ? 240 : isChair ? 220 : 225;
+          const strokeCol = isBed ? '#8b5cf6' : isStorage ? '#3b82f6' : isChair ? '#6366f1' : '#64748b';
 
-        // Top face
-        faces.push({
-          points: [pt0, pt1, pt2, pt3],
-          avgDepth: (pt0.depth + pt1.depth + pt2.depth + pt3.depth) / 4 - 0.05,
-          fill: `rgb(${Math.min(255, baseR + 35)}, ${Math.min(255, baseG + 30)}, ${Math.min(255, baseB + 20)})`,
-          stroke: strokeCol,
-          strokeWidth: 1.2,
-          key: `obj-top-${node.room.id}-${oIdx}`,
+          faces.push({
+            points: [pt0, pt1, pt2, pt3],
+            avgDepth: (pt0.depth + pt1.depth + pt2.depth + pt3.depth) / 4 - 0.05,
+            fill: `rgb(${Math.min(255, baseR + 35)}, ${Math.min(255, baseG + 30)}, ${Math.min(255, baseB + 20)})`,
+            stroke: strokeCol,
+            strokeWidth: 1.2,
+            key: `obj-top-${node.room.id}-${oIdx}`,
+          });
+
+          faces.push({
+            points: [pb0, pb1, pt1, pt0],
+            avgDepth: (pb0.depth + pb1.depth + pt1.depth + pt0.depth) / 4,
+            fill: `rgb(${baseR}, ${baseG}, ${baseB})`,
+            stroke: strokeCol,
+            strokeWidth: 1.0,
+            key: `obj-back-${node.room.id}-${oIdx}`,
+          });
+
+          faces.push({
+            points: [pb1, pb2, pt2, pt1],
+            avgDepth: (pb1.depth + pb2.depth + pt2.depth + pt1.depth) / 4,
+            fill: `rgb(${Math.round(baseR * 0.9)}, ${Math.round(baseG * 0.9)}, ${Math.round(baseB * 0.9)})`,
+            stroke: strokeCol,
+            strokeWidth: 1.0,
+            key: `obj-right-${node.room.id}-${oIdx}`,
+          });
+
+          faces.push({
+            points: [pb2, pb3, pt3, pt2],
+            avgDepth: (pb2.depth + pb3.depth + pt3.depth + pt2.depth) / 4,
+            fill: `rgb(${Math.round(baseR * 0.85)}, ${Math.round(baseG * 0.85)}, ${Math.round(baseB * 0.88)})`,
+            stroke: strokeCol,
+            strokeWidth: 1.0,
+            key: `obj-front-${node.room.id}-${oIdx}`,
+          });
+
+          faces.push({
+            points: [pb3, pb0, pt0, pt3],
+            avgDepth: (pb3.depth + pb0.depth + pt0.depth + pt3.depth) / 4,
+            fill: `rgb(${Math.round(baseR * 0.95)}, ${Math.round(baseG * 0.95)}, ${Math.round(baseB * 0.95)})`,
+            stroke: strokeCol,
+            strokeWidth: 1.0,
+            key: `obj-left-${node.room.id}-${oIdx}`,
+          });
         });
-
-        // Back
-        faces.push({
-          points: [pb0, pb1, pt1, pt0],
-          avgDepth: (pb0.depth + pb1.depth + pt1.depth + pt0.depth) / 4,
-          fill: `rgb(${baseR}, ${baseG}, ${baseB})`,
-          stroke: strokeCol,
-          strokeWidth: 1.0,
-          key: `obj-back-${node.room.id}-${oIdx}`,
-        });
-
-        // Right
-        faces.push({
-          points: [pb1, pb2, pt2, pt1],
-          avgDepth: (pb1.depth + pb2.depth + pt2.depth + pt1.depth) / 4,
-          fill: `rgb(${Math.round(baseR * 0.9)}, ${Math.round(baseG * 0.9)}, ${Math.round(baseB * 0.9)})`,
-          stroke: strokeCol,
-          strokeWidth: 1.0,
-          key: `obj-right-${node.room.id}-${oIdx}`,
-        });
-
-        // Front
-        faces.push({
-          points: [pb2, pb3, pt3, pt2],
-          avgDepth: (pb2.depth + pb3.depth + pt3.depth + pt2.depth) / 4,
-          fill: `rgb(${Math.round(baseR * 0.85)}, ${Math.round(baseG * 0.85)}, ${Math.round(baseB * 0.88)})`,
-          stroke: strokeCol,
-          strokeWidth: 1.0,
-          key: `obj-front-${node.room.id}-${oIdx}`,
-        });
-
-        // Left
-        faces.push({
-          points: [pb3, pb0, pt0, pt3],
-          avgDepth: (pb3.depth + pb0.depth + pt0.depth + pt3.depth) / 4,
-          fill: `rgb(${Math.round(baseR * 0.95)}, ${Math.round(baseG * 0.95)}, ${Math.round(baseB * 0.95)})`,
-          stroke: strokeCol,
-          strokeWidth: 1.0,
-          key: `obj-left-${node.room.id}-${oIdx}`,
-        });
-      });
+      }
 
       // 4. Ceiling Wireframe Canopy
       const ceilingProjected = polygon.map((p) =>
@@ -964,11 +1051,10 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
       });
     }
 
-    // Depth-sort faces back-to-front (Painters algorithm for occlusion)
     faces.sort((a, b) => b.avgDepth - a.avgDepth);
 
     return { allFaces3D: faces, allCanopies: canopies };
-  }, [placedRoomNodes, angleX, angleY, zoom, panOffset, selectedRoomId, viewW, viewH]);
+  }, [placedRoomNodes, angleX, angleY, zoom, panOffset, selectedRoomId, viewW, viewH, layers.furniture]);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -1048,7 +1134,7 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
                 <Text style={styles.selDimsText}>
                   {Math.round(selectedNode.rotation % 180 === 0 ? selectedNode.w : selectedNode.l)}' ×{' '}
                   {Math.round(selectedNode.rotation % 180 === 0 ? selectedNode.l : selectedNode.w)}' •{' '}
-                  {Math.round(selectedNode.w * selectedNode.l)} sq ft • {selectedNode.rotation}°
+                  {Math.round(selectedNode.w * selectedNode.l)} sq ft • {selectedNode.rotation}° (Straightened)
                 </Text>
               </View>
 
@@ -1073,6 +1159,76 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
               </View>
             </View>
           )}
+
+          {/* Apple Maps-Style Floating Layer Toggle Pill (Top-Right) */}
+          <View style={styles.layerPillWrap}>
+            <TouchableOpacity
+              style={[styles.layerPillBtn, showLayerMenu && styles.layerPillBtnActive]}
+              onPress={() => {
+                setShowLayerMenu(!showLayerMenu);
+                triggerHaptic();
+              }}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.layerPillIcon}>🥞</Text>
+              <Text style={[styles.layerPillText, showLayerMenu && styles.layerPillTextActive]}>Layers</Text>
+            </TouchableOpacity>
+
+            {/* Collapsible Layer Menu */}
+            {showLayerMenu && (
+              <View style={styles.layerMenuCard}>
+                <Text style={styles.layerMenuTitle}>CANVAS LAYERS</Text>
+
+                <TouchableOpacity
+                  style={styles.layerMenuItem}
+                  onPress={() => setLayers((prev) => ({ ...prev, doorsWindows: !prev.doorsWindows }))}
+                >
+                  <Text style={styles.layerItemLabel}>🚪 Doors & Windows</Text>
+                  <View style={[styles.layerSwitchPill, layers.doorsWindows && styles.layerSwitchPillActive]}>
+                    <Text style={[styles.layerSwitchText, layers.doorsWindows && styles.layerSwitchTextActive]}>
+                      {layers.doorsWindows ? 'ON' : 'OFF'}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.layerMenuItem}
+                  onPress={() => setLayers((prev) => ({ ...prev, dimensions: !prev.dimensions }))}
+                >
+                  <Text style={styles.layerItemLabel}>📏 Dimensions</Text>
+                  <View style={[styles.layerSwitchPill, layers.dimensions && styles.layerSwitchPillActive]}>
+                    <Text style={[styles.layerSwitchText, layers.dimensions && styles.layerSwitchTextActive]}>
+                      {layers.dimensions ? 'ON' : 'OFF'}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.layerMenuItem}
+                  onPress={() => setLayers((prev) => ({ ...prev, labels: !prev.labels }))}
+                >
+                  <Text style={styles.layerItemLabel}>🏷️ Labels & Names</Text>
+                  <View style={[styles.layerSwitchPill, layers.labels && styles.layerSwitchPillActive]}>
+                    <Text style={[styles.layerSwitchText, layers.labels && styles.layerSwitchTextActive]}>
+                      {layers.labels ? 'ON' : 'OFF'}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.layerMenuItem}
+                  onPress={() => setLayers((prev) => ({ ...prev, furniture: !prev.furniture }))}
+                >
+                  <Text style={styles.layerItemLabel}>🛋️ Furniture (OBB)</Text>
+                  <View style={[styles.layerSwitchPill, layers.furniture && styles.layerSwitchPillActive]}>
+                    <Text style={[styles.layerSwitchText, layers.furniture && styles.layerSwitchTextActive]}>
+                      {layers.furniture ? 'ON' : 'OFF'}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
 
           {/* Unified SVG Canvas: 2D Floorplan or 3D Isometric View */}
           <Svg width={viewW} height={viewH} style={styles.cadCanvas}>
@@ -1101,8 +1257,7 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
 
             {viewMode === '2d' ? (
               // ==========================================
-              // 2D PLAN VIEW (Certified CAD Floorplan)
-              // Matches RoomStudioScreen 100% with Walls, Swings, Windows & OBBs
+              // 2D PLAN VIEW (Certified CAD Floorplan - Straightened)
               // ==========================================
               <G>
                 {/* Render Placed Room Nodes */}
@@ -1126,9 +1281,10 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
                     z: polygon.reduce((acc, p) => acc + p.z, 0) / N,
                   };
 
-                  const rad = (n.rotation * Math.PI) / 180;
-                  const cosR = Math.cos(rad);
-                  const sinR = Math.sin(rad);
+                  // Combined rotation: Ortho-Straightening + user rotation (0°, 90°, 180°, 270°)
+                  const totalRad = (n.rotation * Math.PI) / 180 + n.orthoAngle;
+                  const cosR = Math.cos(totalRad);
+                  const sinR = Math.sin(totalRad);
 
                   // Transform room local point (feet) into assembly world & canvas space
                   const roomLocalToCanvas = (lx: number, lz: number) => {
@@ -1172,156 +1328,166 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
                         strokeWidth={Math.max(1.5, 2 * zoom)}
                       />
 
-                      {/* Wall Segment Dimension Callouts */}
-                      {polygon.map((p1, idx) => {
-                        const p2 = polygon[(idx + 1) % N];
-                        const pt1 = roomLocalToCanvas(p1.x, p1.z);
-                        const pt2 = roomLocalToCanvas(p2.x, p2.z);
-                        const midX = (pt1.x + pt2.x) / 2;
-                        const midY = (pt1.y + pt2.y) / 2;
-                        const segLenFt = Math.hypot(p2.x - p1.x, p2.z - p1.z);
-                        const dx = pt2.x - pt1.x, dy = pt2.y - pt1.y;
-                        const dLen = Math.hypot(dx, dy) || 1;
-                        const offX = (-dy / dLen) * 14;
-                        const offY = (dx / dLen) * 14;
+                      {/* Layer: Wall Segment Dimension Callouts */}
+                      {layers.dimensions &&
+                        polygon.map((p1, idx) => {
+                          const p2 = polygon[(idx + 1) % N];
+                          const pt1 = roomLocalToCanvas(p1.x, p1.z);
+                          const pt2 = roomLocalToCanvas(p2.x, p2.z);
+                          const midX = (pt1.x + pt2.x) / 2;
+                          const midY = (pt1.y + pt2.y) / 2;
+                          const segLenFt = Math.hypot(p2.x - p1.x, p2.z - p1.z);
+                          const dx = pt2.x - pt1.x, dy = pt2.y - pt1.y;
+                          const dLen = Math.hypot(dx, dy) || 1;
+                          const offX = (-dy / dLen) * 14;
+                          const offY = (dx / dLen) * 14;
 
-                        return (
-                          <SvgText
-                            key={`wall-lbl-${n.room.id}-${idx}`}
-                            x={midX + offX}
-                            y={midY + offY + 3}
-                            fill="#007aff"
-                            fontSize={Math.max(8, 9 * Math.min(1.4, zoom))}
-                            fontWeight="700"
-                            textAnchor="middle"
-                          >
-                            {GeometryService.formatFeetInches(segLenFt)}
-                          </SvgText>
-                        );
-                      })}
-
-                      {/* Render True Door Openings, Jambs & Swings */}
-                      {realDoors.map((d, dIdx) => {
-                        const d1 = roomLocalToCanvas(d.x1 ?? (d.x - 1.5), d.z1 ?? (d.z - 1.5));
-                        const d2 = roomLocalToCanvas(d.x2 ?? (d.x + 1.5), d.z2 ?? (d.z + 1.5));
-                        const dLen = Math.hypot(d2.x - d1.x, d2.y - d1.y) || (20 * zoom);
-
-                        return (
-                          <G key={`door-2d-${n.room.id}-${dIdx}`}>
-                            <Line x1={d1.x} y1={d1.y} x2={d2.x} y2={d2.y} stroke="#ffffff" strokeWidth={Math.max(6, 8 * zoom)} />
-                            <Path
-                              d={`M ${d1.x} ${d1.y} A ${dLen} ${dLen} 0 0 1 ${d2.x} ${d2.y}`}
-                              fill="none"
-                              stroke="#007aff"
-                              strokeWidth={1.2}
-                              strokeDasharray="3,3"
-                            />
-                            <Line x1={d1.x} y1={d1.y} x2={d1.x} y2={d1.y - dLen * 0.7} stroke="#007aff" strokeWidth={2} />
-                          </G>
-                        );
-                      })}
-
-                      {/* Render True Windows (AIA 3-Line CAD Representation) */}
-                      {realWindows.map((win, wIdx) => {
-                        const w1 = roomLocalToCanvas(win.x1 ?? (win.x - 1.5), win.z1 ?? (win.z - 1.5));
-                        const w2 = roomLocalToCanvas(win.x2 ?? (win.x + 1.5), win.z2 ?? (win.z + 1.5));
-                        const dx = w2.x - w1.x;
-                        const dy = w2.y - w1.y;
-                        const wLen = Math.hypot(dx, dy) || 1;
-                        const nx = (-dy / wLen) * 2.5;
-                        const ny = (dx / wLen) * 2.5;
-
-                        return (
-                          <G key={`win-2d-${n.room.id}-${wIdx}`}>
-                            <Line x1={w1.x} y1={w1.y} x2={w2.x} y2={w2.y} stroke="#ffffff" strokeWidth={Math.max(6, 8 * zoom)} />
-                            <Line x1={w1.x + nx} y1={w1.y + ny} x2={w2.x + nx} y2={w2.y + ny} stroke="#1c1c1e" strokeWidth={1.2} />
-                            <Line x1={w1.x} y1={w1.y} x2={w2.x} y2={w2.y} stroke="#007aff" strokeWidth={1.0} />
-                            <Line x1={w1.x - nx} y1={w1.y - ny} x2={w2.x - nx} y2={w2.y - ny} stroke="#1c1c1e" strokeWidth={1.2} />
-                          </G>
-                        );
-                      })}
-
-                      {/* Render Detected Objects with Exact CAD Oriented Bounding Box (OBB) */}
-                      {realObjects.map((obj, oIdx) => {
-                        const halfW = (obj.widthFt || 3) / 2;
-                        const halfL = (obj.lengthFt || 3) / 2;
-
-                        let ux = 1, uz = 0;
-                        let vx = 0, vz = 1;
-
-                        if (obj.dirXx !== undefined && obj.dirXz !== undefined) {
-                          const lenX = Math.hypot(obj.dirXx, obj.dirXz) || 1;
-                          ux = obj.dirXx / lenX;
-                          uz = obj.dirXz / lenX;
-                          if (obj.dirZx !== undefined && obj.dirZz !== undefined) {
-                            const lenZ = Math.hypot(obj.dirZx, obj.dirZz) || 1;
-                            vx = obj.dirZx / lenZ;
-                            vz = obj.dirZz / lenZ;
-                          } else {
-                            vx = -uz;
-                            vz = ux;
-                          }
-                        } else if (obj.yawDeg !== undefined) {
-                          const r = (obj.yawDeg * Math.PI) / 180;
-                          ux = Math.cos(r);
-                          uz = Math.sin(r);
-                          vx = -uz;
-                          vz = ux;
-                        }
-
-                        const ox = obj.x ?? 0;
-                        const oz = obj.z ?? 0;
-                        const c0 = roomLocalToCanvas(ox - halfW * ux - halfL * vx, oz - halfW * uz - halfL * vz);
-                        const c1 = roomLocalToCanvas(ox + halfW * ux - halfL * vx, oz + halfW * uz - halfL * vz);
-                        const c2 = roomLocalToCanvas(ox + halfW * ux + halfL * vx, oz + halfW * uz + halfL * vz);
-                        const c3 = roomLocalToCanvas(ox - halfW * ux + halfL * vx, oz - halfW * uz + halfL * vz);
-
-                        const polyPts = `${c0.x.toFixed(1)},${c0.y.toFixed(1)} ${c1.x.toFixed(1)},${c1.y.toFixed(1)} ${c2.x.toFixed(1)},${c2.y.toFixed(1)} ${c3.x.toFixed(1)},${c3.y.toFixed(1)}`;
-                        const centerObj = roomLocalToCanvas(ox, oz);
-
-                        return (
-                          <G key={`obj2d-${n.room.id}-${oIdx}`}>
-                            <Polygon
-                              points={polyPts}
-                              fill="#eff6ff"
-                              stroke="#2563eb"
-                              strokeWidth={1.2}
-                            />
+                          return (
                             <SvgText
-                              x={centerObj.x}
-                              y={centerObj.y + 3}
-                              fill="#1d4ed8"
-                              fontSize={8}
+                              key={`wall-lbl-${n.room.id}-${idx}`}
+                              x={midX + offX}
+                              y={midY + offY + 3}
+                              fill="#007aff"
+                              fontSize={Math.max(8, 9 * Math.min(1.4, zoom))}
                               fontWeight="700"
                               textAnchor="middle"
                             >
-                              {obj.category?.split(' ')[0] || 'Item'}
+                              {GeometryService.formatFeetInches(segLenFt)}
                             </SvgText>
-                          </G>
-                        );
-                      })}
+                          );
+                        })}
 
-                      {/* Center Room Area Text */}
-                      <SvgText
-                        x={centerCanvas.x}
-                        y={centerCanvas.y - 6}
-                        fill="#1c1c1e"
-                        fontSize={Math.max(11, 12 * Math.min(1.4, zoom))}
-                        fontWeight="700"
-                        textAnchor="middle"
-                      >
-                        {n.room.name.split('(')[0].trim().toUpperCase()}
-                      </SvgText>
-                      <SvgText
-                        x={centerCanvas.x}
-                        y={centerCanvas.y + 10}
-                        fill="#007aff"
-                        fontSize={Math.max(9, 10 * Math.min(1.4, zoom))}
-                        fontWeight="600"
-                        textAnchor="middle"
-                      >
-                        {GeometryService.formatAreaSqFt(n.room.area_sqft || (n.w * n.l))}
-                      </SvgText>
+                      {/* Layer: Render True Door Openings & Swings */}
+                      {layers.doorsWindows &&
+                        realDoors.map((d, dIdx) => {
+                          const d1 = roomLocalToCanvas(d.x1 ?? (d.x - 1.5), d.z1 ?? (d.z - 1.5));
+                          const d2 = roomLocalToCanvas(d.x2 ?? (d.x + 1.5), d.z2 ?? (d.z + 1.5));
+                          const dLen = Math.hypot(d2.x - d1.x, d2.y - d1.y) || (20 * zoom);
+
+                          return (
+                            <G key={`door-2d-${n.room.id}-${dIdx}`}>
+                              <Line x1={d1.x} y1={d1.y} x2={d2.x} y2={d2.y} stroke="#ffffff" strokeWidth={Math.max(6, 8 * zoom)} />
+                              <Path
+                                d={`M ${d1.x} ${d1.y} A ${dLen} ${dLen} 0 0 1 ${d2.x} ${d2.y}`}
+                                fill="none"
+                                stroke="#007aff"
+                                strokeWidth={1.2}
+                                strokeDasharray="3,3"
+                              />
+                              <Line x1={d1.x} y1={d1.y} x2={d1.x} y2={d1.y - dLen * 0.7} stroke="#007aff" strokeWidth={2} />
+                            </G>
+                          );
+                        })}
+
+                      {/* Layer: Render True Windows (AIA 3-Line CAD) */}
+                      {layers.doorsWindows &&
+                        realWindows.map((win, wIdx) => {
+                          const w1 = roomLocalToCanvas(win.x1 ?? (win.x - 1.5), win.z1 ?? (win.z - 1.5));
+                          const w2 = roomLocalToCanvas(win.x2 ?? (win.x + 1.5), win.z2 ?? (win.z + 1.5));
+                          const dx = w2.x - w1.x;
+                          const dy = w2.y - w1.y;
+                          const wLen = Math.hypot(dx, dy) || 1;
+                          const nx = (-dy / wLen) * 2.5;
+                          const ny = (dx / wLen) * 2.5;
+
+                          return (
+                            <G key={`win-2d-${n.room.id}-${wIdx}`}>
+                              <Line x1={w1.x} y1={w1.y} x2={w2.x} y2={w2.y} stroke="#ffffff" strokeWidth={Math.max(6, 8 * zoom)} />
+                              <Line x1={w1.x + nx} y1={w1.y + ny} x2={w2.x + nx} y2={w2.y + ny} stroke="#1c1c1e" strokeWidth={1.2} />
+                              <Line x1={w1.x} y1={w1.y} x2={w2.x} y2={w2.y} stroke="#007aff" strokeWidth={1.0} />
+                              <Line x1={w1.x - nx} y1={w1.y - ny} x2={w2.x - nx} y2={w2.y - ny} stroke="#1c1c1e" strokeWidth={1.2} />
+                            </G>
+                          );
+                        })}
+
+                      {/* Layer: Render Detected Objects with Exact CAD Oriented Bounding Box (OBB) */}
+                      {layers.furniture &&
+                        realObjects.map((obj, oIdx) => {
+                          const halfW = (obj.widthFt || 3) / 2;
+                          const halfL = (obj.lengthFt || 3) / 2;
+
+                          let ux = 1, uz = 0;
+                          let vx = 0, vz = 1;
+
+                          if (obj.dirXx !== undefined && obj.dirXz !== undefined) {
+                            const lenX = Math.hypot(obj.dirXx, obj.dirXz) || 1;
+                            ux = obj.dirXx / lenX;
+                            uz = obj.dirXz / lenX;
+                            if (obj.dirZx !== undefined && obj.dirZz !== undefined) {
+                              const lenZ = Math.hypot(obj.dirZx, obj.dirZz) || 1;
+                              vx = obj.dirZx / lenZ;
+                              vz = obj.dirZz / lenZ;
+                            } else {
+                              vx = -uz;
+                              vz = ux;
+                            }
+                          } else if (obj.yawDeg !== undefined) {
+                            const r = (obj.yawDeg * Math.PI) / 180;
+                            ux = Math.cos(r);
+                            uz = Math.sin(r);
+                            vx = -uz;
+                            vz = ux;
+                          }
+
+                          const ox = obj.x ?? 0;
+                          const oz = obj.z ?? 0;
+                          const c0 = roomLocalToCanvas(ox - halfW * ux - halfL * vx, oz - halfW * uz - halfL * vz);
+                          const c1 = roomLocalToCanvas(ox + halfW * ux - halfL * vx, oz + halfW * uz - halfL * vz);
+                          const c2 = roomLocalToCanvas(ox + halfW * ux + halfL * vx, oz + halfW * uz + halfL * vz);
+                          const c3 = roomLocalToCanvas(ox - halfW * ux + halfL * vx, oz - halfW * uz + halfL * vz);
+
+                          const polyPts = `${c0.x.toFixed(1)},${c0.y.toFixed(1)} ${c1.x.toFixed(1)},${c1.y.toFixed(1)} ${c2.x.toFixed(1)},${c2.y.toFixed(1)} ${c3.x.toFixed(1)},${c3.y.toFixed(1)}`;
+                          const centerObj = roomLocalToCanvas(ox, oz);
+
+                          return (
+                            <G key={`obj2d-${n.room.id}-${oIdx}`}>
+                              <Polygon
+                                points={polyPts}
+                                fill="#eff6ff"
+                                stroke="#2563eb"
+                                strokeWidth={1.2}
+                              />
+                              {layers.labels && (
+                                <SvgText
+                                  x={centerObj.x}
+                                  y={centerObj.y + 3}
+                                  fill="#1d4ed8"
+                                  fontSize={8}
+                                  fontWeight="700"
+                                  textAnchor="middle"
+                                >
+                                  {obj.category?.split(' ')[0] || 'Item'}
+                                </SvgText>
+                              )}
+                            </G>
+                          );
+                        })}
+
+                      {/* Layer: Center Room Area & Name Text */}
+                      {layers.labels && (
+                        <>
+                          <SvgText
+                            x={centerCanvas.x}
+                            y={centerCanvas.y - 6}
+                            fill="#1c1c1e"
+                            fontSize={Math.max(11, 12 * Math.min(1.4, zoom))}
+                            fontWeight="700"
+                            textAnchor="middle"
+                          >
+                            {n.room.name.split('(')[0].trim().toUpperCase()}
+                          </SvgText>
+                          <SvgText
+                            x={centerCanvas.x}
+                            y={centerCanvas.y + 10}
+                            fill="#007aff"
+                            fontSize={Math.max(9, 10 * Math.min(1.4, zoom))}
+                            fontWeight="600"
+                            textAnchor="middle"
+                          >
+                            {GeometryService.formatAreaSqFt(n.room.area_sqft || (n.w * n.l))}
+                          </SvgText>
+                        </>
+                      )}
 
                       {/* Rotation indicator badge on selected room */}
                       {isSelected && (
@@ -1754,6 +1920,96 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: '#ff3b30',
+  },
+
+  // Apple Maps-Style Floating Layer Toggle (Top-Right)
+  layerPillWrap: {
+    position: 'absolute',
+    top: 60,
+    right: 10,
+    zIndex: 30,
+    alignItems: 'flex-end',
+  },
+  layerPillBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(255, 255, 255, 0.94)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 0.5,
+    borderColor: '#e5e5ea',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  layerPillBtnActive: {
+    backgroundColor: '#007aff',
+    borderColor: '#007aff',
+  },
+  layerPillIcon: {
+    fontSize: 12,
+  },
+  layerPillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#1c1c1e',
+  },
+  layerPillTextActive: {
+    color: '#ffffff',
+  },
+  layerMenuCard: {
+    marginTop: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.98)',
+    borderRadius: 14,
+    padding: 10,
+    borderWidth: 0.5,
+    borderColor: '#e5e5ea',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 5,
+    minWidth: 180,
+    gap: 8,
+  },
+  layerMenuTitle: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#8e8e93',
+    letterSpacing: 0.4,
+    marginBottom: 2,
+  },
+  layerMenuItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 2,
+  },
+  layerItemLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#1c1c1e',
+  },
+  layerSwitchPill: {
+    backgroundColor: '#e5e5ea',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  layerSwitchPillActive: {
+    backgroundColor: '#007aff',
+  },
+  layerSwitchText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#8e8e93',
+  },
+  layerSwitchTextActive: {
+    color: '#ffffff',
   },
 
   // Bottom-Left Minimalist Merge Button
