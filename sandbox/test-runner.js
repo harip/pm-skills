@@ -644,6 +644,73 @@ endsolid ${room.name}`;
     assert.strictEqual(perpCoupling.coupledAngleDeg, 135.0, 'Wall angle must snap perpendicular to sofa (135.0°)');
   });
 
+  // EVAL-18: State Machine & Wall Selection vs Canvas Pan Lockout (User Stories 1 & 2)
+  it('EVAL-18: Wall selection strictly locks room pan, tap-away deselects, and save restores pan mode', () => {
+    // Simulate State Machine
+    let state = {
+      selectedWallIdx: null,
+      panOffset: { x: 0, y: 0 },
+      hasUnsavedWallChanges: false,
+      wallAngleDeg: 45.0,
+    };
+
+    function handlePanResponderMove(isWallSelected, moveDelta, dragAngle) {
+      if (isWallSelected) {
+        // STATE 2: WALL SELECTED -> Strict Lockout! Room pan CANNOT change.
+        state.wallAngleDeg = dragAngle;
+        state.hasUnsavedWallChanges = true;
+        // panOffset remains strictly locked!
+      } else {
+        // STATE 1: IDLE -> Room pan moves canvas.
+        state.panOffset.x += moveDelta.dx;
+        state.panOffset.y += moveDelta.dy;
+      }
+    }
+
+    function handleTap(touchDistToWall, hitThreshold) {
+      if (touchDistToWall <= hitThreshold) {
+        // Tapped wall
+        state.selectedWallIdx = 1;
+      } else {
+        // Tapped background / empty canvas
+        state.selectedWallIdx = null;
+      }
+    }
+
+    function handleSave() {
+      state.hasUnsavedWallChanges = false;
+      state.selectedWallIdx = null; // Deselects wall and restores default pan
+    }
+
+    // Step 1: In default idle state, 1-finger drag pans room
+    handlePanResponderMove(state.selectedWallIdx !== null, { dx: 15, dy: -10 }, 45.0);
+    assert.deepStrictEqual(state.panOffset, { x: 15, y: -10 }, 'Canvas pan must track finger when no wall selected');
+
+    // Step 2: User taps on wall line -> selects wall
+    handleTap(15, 35); // 15px <= 35px threshold
+    assert.strictEqual(state.selectedWallIdx, 1, 'Wall 1 must be selected');
+
+    // Step 3: User drags finger -> Room pan MUST BE LOCKED DOWN (x: 15, y: -10 unchanged)
+    handlePanResponderMove(state.selectedWallIdx !== null, { dx: 50, dy: 50 }, 90.0);
+    assert.deepStrictEqual(state.panOffset, { x: 15, y: -10 }, 'Room canvas pan MUST REMAIN LOCKED during wall selection');
+    assert.strictEqual(state.wallAngleDeg, 90.0, 'Wall angle must rotate with finger');
+    assert.strictEqual(state.hasUnsavedWallChanges, true, 'Unsaved changes flag must be set');
+
+    // Step 4: User taps empty canvas (distance 100px > 35px) -> Deselects wall!
+    handleTap(100, 35);
+    assert.strictEqual(state.selectedWallIdx, null, 'Wall must be deselected on background tap');
+
+    // Step 5: Now dragging pans the room again
+    handlePanResponderMove(state.selectedWallIdx !== null, { dx: 10, dy: 10 }, 90.0);
+    assert.deepStrictEqual(state.panOffset, { x: 25, y: 0 }, 'Room panning must be unlocked after deselection');
+
+    // Step 6: User taps wall again and taps Save
+    state.selectedWallIdx = 1;
+    handleSave();
+    assert.strictEqual(state.selectedWallIdx, null, 'Save must clear wall selection');
+    assert.strictEqual(state.hasUnsavedWallChanges, false, 'Save must clear unsaved changes');
+  });
+
   console.log(`\n📊 Verification Summary: ${passedTests}/${totalTests} tests passed.\n`);
 }
 

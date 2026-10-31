@@ -79,6 +79,8 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
   // High-frequency delta tracking refs for 60fps ultra-responsive gestures
   const lastTouchPosRef = useRef<{ x: number; y: number } | null>(null);
   const lastPinchDistRef = useRef<number | null>(null);
+  const touchStartPosRef = useRef<{ x: number; y: number } | null>(null);
+  const isDraggingRef = useRef<boolean>(false);
 
   // Synchronized refs to eliminate stale closure bugs inside panResponder
   const isRotatingWallRef = useRef<boolean>(false);
@@ -139,6 +141,17 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
   const spanX = Math.max(1, maxX - minX);
   const spanZ = Math.max(1, maxZ - minZ);
 
+  // Synchronous CAD-grade 2D Scale and Viewport Offsets
+  const pad2D = 45;
+  const baseScale2D = Math.min((viewW - pad2D * 2) / spanX, (viewH - pad2D * 2) / spanZ);
+  const scale2D = baseScale2D * zoom;
+  const offset2DX = (viewW - spanX * scale2D) / 2 - minX * scale2D + panOffset.x;
+  const offset2DZ = (viewH - spanZ * scale2D) / 2 - minZ * scale2D + panOffset.y;
+
+  scale2DRef.current = scale2D;
+  offset2DXRef.current = offset2DX;
+  offset2DZRef.current = offset2DZ;
+
   // Sync refs on each render
   selectedWallIdxRef.current = selectedWallIdx;
   wallAnchorInfoRef.current = wallAnchorInfo;
@@ -147,7 +160,7 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
   hasUnsavedWallChangesRef.current = hasUnsavedWallChanges;
   realObjectsRef.current = realObjects;
 
-  // Ultra-Responsive Multi-Touch PanResponder (Instant Delta Tracking)
+  // Ultra-Responsive Multi-Touch PanResponder (Instant Delta Tracking & State Machine)
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
@@ -159,69 +172,23 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
           const dy = touches[0].pageY - touches[1].pageY;
           lastPinchDistRef.current = Math.hypot(dx, dy);
           lastTouchPosRef.current = null;
+          touchStartPosRef.current = null;
+          isDraggingRef.current = false;
           isRotatingWallRef.current = false;
         } else if (touches.length === 1) {
           const curX = touches[0].pageX;
           const curY = touches[0].pageY;
-
-          // In 2D mode, check if user touched directly near the rotating handle or a wall line
-          if (viewModeRef.current === '2d') {
-            const curLocalX = (curX - offset2DXRef.current) / scale2DRef.current;
-            const curLocalZ = (curY - offset2DZRef.current) / scale2DRef.current;
-            const curPoly = activePolygonRef.current || polygon;
-            const n = curPoly.length;
-
-            // 1. Check rotating handle first
-            if (selectedWallIdxRef.current !== null && wallAnchorInfoRef.current) {
-              const rotScreenX =
-                wallAnchorInfoRef.current.rotating.x * scale2DRef.current + offset2DXRef.current;
-              const rotScreenY =
-                wallAnchorInfoRef.current.rotating.z * scale2DRef.current + offset2DZRef.current;
-              const distToHandle = Math.hypot(curX - rotScreenX, curY - rotScreenY);
-              if (distToHandle < 50) {
-                isRotatingWallRef.current = true;
-                setHasUnsavedWallChanges(true);
-                hasUnsavedWallChangesRef.current = true;
-                lastTouchPosRef.current = null;
-                lastPinchDistRef.current = null;
-                return;
-              }
-            }
-
-            // 2. Direct touch on any wall segment
-            let closestWallIdx = -1;
-            let closestDist = Infinity;
-            for (let i = 0; i < n; i++) {
-              const p1 = curPoly[i];
-              const p2 = curPoly[(i + 1) % n];
-              const { dist } = GeometryService.distanceToSegment(
-                { x: curLocalX, z: curLocalZ },
-                p1,
-                p2
-              );
-              if (dist < closestDist) {
-                closestDist = dist;
-                closestWallIdx = i;
-              }
-            }
-
-            const hitThresholdFt = 26 / scale2DRef.current;
-            if (closestDist <= hitThresholdFt && closestWallIdx >= 0) {
-              handleSelectWall(closestWallIdx, {
-                nativeEvent: { locationX: curX, locationY: curY },
-              });
-              isRotatingWallRef.current = true;
-              setHasUnsavedWallChanges(true);
-              hasUnsavedWallChangesRef.current = true;
-              lastTouchPosRef.current = null;
-              lastPinchDistRef.current = null;
-              return;
-            }
-          }
-
-          isRotatingWallRef.current = false;
+          touchStartPosRef.current = { x: curX, y: curY };
           lastTouchPosRef.current = { x: curX, y: curY };
+          isDraggingRef.current = false;
           lastPinchDistRef.current = null;
+
+          if (viewModeRef.current === '2d' && selectedWallIdxRef.current !== null && wallAnchorInfoRef.current) {
+            // Wall is already selected -> Lock room panning and prepare for rotation drag
+            isRotatingWallRef.current = true;
+          } else {
+            isRotatingWallRef.current = false;
+          }
         }
       },
       onPanResponderMove: (evt) => {
@@ -240,66 +207,79 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
             lastPinchDistRef.current = currentDist;
           }
           lastTouchPosRef.current = null;
+          return;
         }
-        // 1-Finger Drag: Active Wall Rotation or 360° Orbit / 1:1 Pan
-        else if (touches.length === 1) {
+
+        // 1-Finger Drag
+        if (touches.length === 1) {
           const curX = touches[0].pageX;
           const curY = touches[0].pageY;
 
-          // Manual finger rotation (smooth 1:1 drag with preview)
-          if (isRotatingWallRef.current && wallAnchorInfoRef.current) {
-            const curLocalX = (curX - offset2DXRef.current) / scale2DRef.current;
-            const curLocalZ = (curY - offset2DZRef.current) / scale2DRef.current;
-            const { anchor, rotVertexIdx, anchorIdx } = wallAnchorInfoRef.current;
-
-            const dx = curLocalX - anchor.x;
-            const dz = curLocalZ - anchor.z;
-            const len = Math.max(1.0, Math.hypot(dx, dz));
-            const rawAngleRad = Math.atan2(dz, dx);
-            let rawAngleDeg = (rawAngleRad * 180) / Math.PI;
-            if (rawAngleDeg < 0) rawAngleDeg += 360;
-
-            // Preview calculation for snap & fixture coupling
-            const snapCalc = GeometryService.calculateAnchorAndRotation(
-              anchor,
-              { x: anchor.x + len * Math.cos(rawAngleRad), z: anchor.z + len * Math.sin(rawAngleRad) },
-              { x: curLocalX, z: curLocalZ },
-              { x: curLocalX, z: curLocalZ },
-              6.0,
-              realObjectsRef.current
-            );
-
-            const freeRotPt: PolygonPoint = {
-              x: anchor.x + len * Math.cos(rawAngleRad),
-              z: anchor.z + len * Math.sin(rawAngleRad),
-            };
-
-            const curPoly = activePolygonRef.current || polygon;
-            const candidatePoly = curPoly.map((pt, i) =>
-              i === rotVertexIdx ? freeRotPt : pt
-            );
-
-            if (!GeometryService.isPolygonSelfIntersecting(candidatePoly)) {
-              setActivePolygon(candidatePoly);
-              activePolygonRef.current = candidatePoly;
-              const newInfo = {
-                anchor,
-                anchorIdx,
-                rotVertexIdx,
-                rotating: freeRotPt,
-                angleDeg: rawAngleDeg,
-                isSnapped: snapCalc.isSnapped,
-                snappedAxis: snapCalc.snappedAxis,
-                fixtureName: snapCalc.fixtureName,
-              };
-              setWallAnchorInfo(newInfo);
-              wallAnchorInfoRef.current = newInfo;
-              setHasUnsavedWallChanges(true);
-              hasUnsavedWallChangesRef.current = true;
+          if (touchStartPosRef.current) {
+            const moveDist = Math.hypot(curX - touchStartPosRef.current.x, curY - touchStartPosRef.current.y);
+            if (moveDist >= 8) {
+              isDraggingRef.current = true;
             }
+          }
+
+          // STATE 2: WALL SELECTED (CANVAS ROOM PANNING STRICTLY LOCKED)
+          if (viewModeRef.current === '2d' && selectedWallIdxRef.current !== null && wallAnchorInfoRef.current) {
+            if (isDraggingRef.current) {
+              const curLocalX = (curX - offset2DXRef.current) / scale2DRef.current;
+              const curLocalZ = (curY - offset2DZRef.current) / scale2DRef.current;
+              const { anchor, rotVertexIdx, anchorIdx } = wallAnchorInfoRef.current;
+
+              const dx = curLocalX - anchor.x;
+              const dz = curLocalZ - anchor.z;
+              const len = Math.max(1.0, Math.hypot(dx, dz));
+              const rawAngleRad = Math.atan2(dz, dx);
+              let rawAngleDeg = (rawAngleRad * 180) / Math.PI;
+              if (rawAngleDeg < 0) rawAngleDeg += 360;
+
+              // Preview calculation for snap & fixture coupling
+              const snapCalc = GeometryService.calculateAnchorAndRotation(
+                anchor,
+                { x: anchor.x + len * Math.cos(rawAngleRad), z: anchor.z + len * Math.sin(rawAngleRad) },
+                { x: curLocalX, z: curLocalZ },
+                { x: curLocalX, z: curLocalZ },
+                6.0,
+                realObjectsRef.current
+              );
+
+              const freeRotPt: PolygonPoint = {
+                x: anchor.x + len * Math.cos(rawAngleRad),
+                z: anchor.z + len * Math.sin(rawAngleRad),
+              };
+
+              const curPoly = activePolygonRef.current || polygon;
+              const candidatePoly = curPoly.map((pt, i) =>
+                i === rotVertexIdx ? freeRotPt : pt
+              );
+
+              if (!GeometryService.isPolygonSelfIntersecting(candidatePoly)) {
+                setActivePolygon(candidatePoly);
+                activePolygonRef.current = candidatePoly;
+                const newInfo = {
+                  anchor,
+                  anchorIdx,
+                  rotVertexIdx,
+                  rotating: freeRotPt,
+                  angleDeg: rawAngleDeg,
+                  isSnapped: snapCalc.isSnapped,
+                  snappedAxis: snapCalc.snappedAxis,
+                  fixtureName: snapCalc.fixtureName,
+                };
+                setWallAnchorInfo(newInfo);
+                wallAnchorInfoRef.current = newInfo;
+                setHasUnsavedWallChanges(true);
+                hasUnsavedWallChangesRef.current = true;
+              }
+            }
+            // Strict lockout: room panning is never executed when wall is selected!
             return;
           }
 
+          // STATE 1: IDLE / NO WALL SELECTED (or 3D Orbit)
           if (lastTouchPosRef.current) {
             const dx = curX - lastTouchPosRef.current.x;
             const dy = curY - lastTouchPosRef.current.y;
@@ -311,53 +291,123 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
             }
           }
           lastTouchPosRef.current = { x: curX, y: curY };
-          lastPinchDistRef.current = null;
         }
       },
       onPanResponderRelease: () => {
-        // Release-Triggered Snapping (Story 2)
-        if (isRotatingWallRef.current && wallAnchorInfoRef.current) {
-          isRotatingWallRef.current = false;
-          const { anchor, rotVertexIdx, anchorIdx, rotating } = wallAnchorInfoRef.current;
+        const startPos = touchStartPosRef.current;
+        const wasDragging = isDraggingRef.current;
+        touchStartPosRef.current = null;
+        isDraggingRef.current = false;
+        isRotatingWallRef.current = false;
+        lastTouchPosRef.current = null;
+        lastPinchDistRef.current = null;
 
-          const snapCalc = GeometryService.calculateAnchorAndRotation(
-            anchor,
-            rotating,
-            rotating,
-            rotating,
-            6.0,
-            realObjectsRef.current
-          );
-
-          if (snapCalc.isSnapped) {
+        if (viewModeRef.current === '2d') {
+          // CASE A: TAP (< 10px travel)
+          if (!wasDragging && startPos) {
+            const tapX = startPos.x;
+            const tapY = startPos.y;
+            const curLocalX = (tapX - offset2DXRef.current) / scale2DRef.current;
+            const curLocalZ = (tapY - offset2DZRef.current) / scale2DRef.current;
             const curPoly = activePolygonRef.current || polygon;
-            const snappedPoly = curPoly.map((pt, i) =>
-              i === rotVertexIdx ? snapCalc.rotating : pt
+            const n = curPoly.length;
+
+            let closestWallIdx = -1;
+            let closestDist = Infinity;
+            for (let i = 0; i < n; i++) {
+              const p1 = curPoly[i];
+              const p2 = curPoly[(i + 1) % n];
+              const { dist } = GeometryService.distanceToSegment(
+                { x: curLocalX, z: curLocalZ },
+                p1,
+                p2
+              );
+              if (dist < closestDist) {
+                closestDist = dist;
+                closestWallIdx = i;
+              }
+            }
+
+            const hitThresholdFt = 35 / scale2DRef.current;
+            if (closestDist <= hitThresholdFt && closestWallIdx >= 0) {
+              // Tapped on a wall segment -> Select wall!
+              handleSelectWall(closestWallIdx, {
+                nativeEvent: { locationX: tapX, locationY: tapY },
+              });
+              return;
+            } else {
+              // Tapped on empty canvas / background -> Deselect wall and unlock room pan!
+              if (selectedWallIdxRef.current !== null) {
+                setSelectedWallIdx(null);
+                selectedWallIdxRef.current = null;
+                setWallAnchorInfo(null);
+                wallAnchorInfoRef.current = null;
+                return;
+              }
+            }
+          }
+
+          // CASE B: DRAG (Release-Triggered Snapping)
+          if (wasDragging && selectedWallIdxRef.current !== null && wallAnchorInfoRef.current) {
+            const { anchor, rotVertexIdx, anchorIdx, rotating } = wallAnchorInfoRef.current;
+
+            const snapCalc = GeometryService.calculateAnchorAndRotation(
+              anchor,
+              rotating,
+              rotating,
+              rotating,
+              6.0,
+              realObjectsRef.current
             );
+
+            let finalRotatingPt = rotating;
+            let isSnapped = false;
+            let snappedAxis: any = null;
+            let fixtureName: string | undefined = undefined;
+
+            if (snapCalc.isSnapped) {
+              finalRotatingPt = snapCalc.rotating;
+              isSnapped = true;
+              snappedAxis = snapCalc.snappedAxis;
+              fixtureName = snapCalc.fixtureName;
+            }
+
+            const curPoly = activePolygonRef.current || polygon;
+            let snappedPoly = curPoly.map((pt, i) =>
+              i === rotVertexIdx ? finalRotatingPt : pt
+            );
+
+            // Spurious apex collinear dissolve check (User Story 6)
+            const dissolvedPoly = GeometryService.dissolveSpuriousApex(snappedPoly, 5.0);
+            if (dissolvedPoly.length >= 3 && !GeometryService.isPolygonSelfIntersecting(dissolvedPoly)) {
+              snappedPoly = dissolvedPoly;
+            }
 
             if (!GeometryService.isPolygonSelfIntersecting(snappedPoly)) {
               setActivePolygon(snappedPoly);
               activePolygonRef.current = snappedPoly;
-              setWallAnchorInfo({
+              const updatedInfo = {
                 anchor,
                 anchorIdx,
-                rotVertexIdx,
-                rotating: snapCalc.rotating,
+                rotVertexIdx: Math.min(rotVertexIdx, snappedPoly.length - 1),
+                rotating: finalRotatingPt,
                 angleDeg: snapCalc.angleDeg,
-                isSnapped: true,
-                snappedAxis: snapCalc.snappedAxis,
-                fixtureName: snapCalc.fixtureName,
-              });
+                isSnapped,
+                snappedAxis,
+                fixtureName,
+              };
+              setWallAnchorInfo(updatedInfo);
+              wallAnchorInfoRef.current = updatedInfo;
             }
+            setHasUnsavedWallChanges(true);
+            hasUnsavedWallChangesRef.current = true;
           }
-          setHasUnsavedWallChanges(true);
-          hasUnsavedWallChangesRef.current = true;
         }
-        lastTouchPosRef.current = null;
-        lastPinchDistRef.current = null;
       },
       onPanResponderTerminate: () => {
         isRotatingWallRef.current = false;
+        isDraggingRef.current = false;
+        touchStartPosRef.current = null;
         lastTouchPosRef.current = null;
         lastPinchDistRef.current = null;
       },
@@ -483,8 +533,9 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
   const handleSelectWall = (wallIdx: number, evt?: any) => {
     setSelectedAperture(null); // Close aperture capsule if open
     setSelectedWallIdx(wallIdx);
+    selectedWallIdxRef.current = wallIdx;
 
-    const curPoly = activePolygon || polygon;
+    const curPoly = activePolygonRef.current || activePolygon || polygon;
     const n = curPoly.length;
     const p1 = curPoly[wallIdx];
     const p2 = curPoly[(wallIdx + 1) % n];
@@ -493,8 +544,8 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
     let touchX = (p1.x + p2.x) / 2;
     let touchZ = (p1.z + p2.z) / 2;
     if (evt && evt.nativeEvent) {
-      touchX = (evt.nativeEvent.locationX - offset2DX) / scale2D;
-      touchZ = (evt.nativeEvent.locationY - offset2DZ) / scale2D;
+      touchX = (evt.nativeEvent.locationX - offset2DXRef.current) / scale2DRef.current;
+      touchZ = (evt.nativeEvent.locationY - offset2DZRef.current) / scale2DRef.current;
     }
 
     const d1 = Math.hypot(touchX - p1.x, touchZ - p1.z);
@@ -543,7 +594,9 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
     setHasUnsavedWallChanges(false);
     hasUnsavedWallChangesRef.current = false;
     setSelectedWallIdx(null);
+    selectedWallIdxRef.current = null;
     setWallAnchorInfo(null);
+    wallAnchorInfoRef.current = null;
   };
 
   const handleResetToOriginal = () => {
@@ -559,7 +612,9 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
             setActivePolygon(null);
             activePolygonRef.current = null;
             setSelectedWallIdx(null);
+            selectedWallIdxRef.current = null;
             setWallAnchorInfo(null);
+            wallAnchorInfoRef.current = null;
             setHasUnsavedWallChanges(false);
             hasUnsavedWallChangesRef.current = false;
             setPolygonHistory([]);
@@ -1084,17 +1139,6 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
   const ceilingProjected = polygon.map((p) =>
     toScreen3D(p.x * 0.3048, effectiveHeightM, p.z * 0.3048)
   );
-
-  // --- CAD-Grade 2D Floor Plan Scaled Geometry ---
-  const pad2D = 45;
-  const baseScale2D = Math.min((viewW - pad2D * 2) / spanX, (viewH - pad2D * 2) / spanZ);
-  const scale2D = baseScale2D * zoom;
-  const offset2DX = (viewW - spanX * scale2D) / 2 - minX * scale2D + panOffset.x;
-  const offset2DZ = (viewH - spanZ * scale2D) / 2 - minZ * scale2D + panOffset.y;
-
-  scale2DRef.current = scale2D;
-  offset2DXRef.current = offset2DX;
-  offset2DZRef.current = offset2DZ;
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -1669,7 +1713,13 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.freeformSegBtn, viewMode === '3d' && styles.freeformSegBtnActive]}
-                  onPress={() => setViewMode('3d')}
+                  onPress={() => {
+                    setSelectedWallIdx(null);
+                    selectedWallIdxRef.current = null;
+                    setWallAnchorInfo(null);
+                    wallAnchorInfoRef.current = null;
+                    setViewMode('3d');
+                  }}
                   activeOpacity={0.8}
                 >
                   <Text style={[styles.freeformSegText, viewMode === '3d' && styles.freeformSegTextActive]}>
