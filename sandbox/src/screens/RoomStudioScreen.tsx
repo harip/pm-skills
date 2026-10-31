@@ -59,6 +59,7 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
     anchorIdx: number;
     rotVertexIdx: number;
     rotating: PolygonPoint;
+    wallLengthFt?: number;
     angleDeg: number;
     isSnapped: boolean;
     snappedAxis: 'vertical' | 'horizontal' | 'fixture' | null;
@@ -227,11 +228,13 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
             if (isDraggingRef.current) {
               const curLocalX = (curX - offset2DXRef.current) / scale2DRef.current;
               const curLocalZ = (curY - offset2DZRef.current) / scale2DRef.current;
-              const { anchor, rotVertexIdx, anchorIdx } = wallAnchorInfoRef.current;
+              const { anchor, rotVertexIdx, anchorIdx, rotating, wallLengthFt } = wallAnchorInfoRef.current;
 
               const dx = curLocalX - anchor.x;
               const dz = curLocalZ - anchor.z;
-              const len = Math.max(1.0, Math.hypot(dx, dz));
+              // RIGID LENGTH GUARD: Wall length NEVER tracks finger touch distance!
+              const defaultWallLen = Math.hypot(rotating.x - anchor.x, rotating.z - anchor.z);
+              const len = Math.min(22.0, Math.max(1.0, wallLengthFt || defaultWallLen));
               const rawAngleRad = Math.atan2(dz, dx);
               let rawAngleDeg = (rawAngleRad * 180) / Math.PI;
               if (rawAngleDeg < 0) rawAngleDeg += 360;
@@ -264,6 +267,7 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
                   anchorIdx,
                   rotVertexIdx,
                   rotating: freeRotPt,
+                  wallLengthFt: len,
                   angleDeg: rawAngleDeg,
                   isSnapped: snapCalc.isSnapped,
                   snappedAxis: snapCalc.snappedAxis,
@@ -378,10 +382,18 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
             );
 
             // 1. Triangular / Zig-Zag Perpendicular Straightening (Device-Fixture TDD Proven)
-            if (curPoly.length === 3 && snapCalc.isSnapped) {
+            if (curPoly.length === 3) {
               const orthoPoly = GeometryService.straightenWallPerpendicular(curPoly, rotVertexIdx);
-              if (orthoPoly.length >= 4 && !GeometryService.isPolygonSelfIntersecting(orthoPoly)) {
-                snappedPoly = orthoPoly;
+              if (orthoPoly.length >= 4) {
+                setActivePolygon(orthoPoly);
+                activePolygonRef.current = orthoPoly;
+                setSelectedWallIdx(null);
+                selectedWallIdxRef.current = null;
+                setWallAnchorInfo(null);
+                wallAnchorInfoRef.current = null;
+                setHasUnsavedWallChanges(true);
+                hasUnsavedWallChangesRef.current = true;
+                return;
               }
             } else {
               // 2. Spurious apex collinear dissolve check (User Story 6)
@@ -567,6 +579,7 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
 
     const dx = rotating.x - anchor.x;
     const dz = rotating.z - anchor.z;
+    const wallLengthFt = Math.hypot(dx, dz);
     let angleDeg = (Math.atan2(dz, dx) * 180) / Math.PI;
     if (angleDeg < 0) angleDeg += 360;
 
@@ -584,6 +597,7 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
       anchorIdx,
       rotVertexIdx,
       rotating,
+      wallLengthFt,
       angleDeg,
       isSnapped: snapCalc.isSnapped,
       snappedAxis: snapCalc.snappedAxis,

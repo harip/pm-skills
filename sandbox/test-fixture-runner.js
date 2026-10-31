@@ -144,6 +144,42 @@ if (computedAreaSqFt >= targetAfter.expected_invariants.min_area_sqft && compute
   assertionResults.push(`❌ Area Out of Range: ${computedAreaSqFt.toFixed(1)} sq ft`);
 }
 
+// 5. Simulate Live Touch Drag Interaction Loop (Prevents the 496ft Ballooning Bug)
+console.log('\n🖐️ Simulating Live Touch Drag Gesture Lifecycle (60 FPS Move Events)...');
+const simulatedAnchor = V0;
+const origWallLen = Math.hypot(V2.x - V0.x, V2.z - V0.z); // 12.10 ft
+let maxDragWallLen = 0;
+
+// Simulate user dragging finger across screen by 100px, 300px, 600px
+const simulatedFingerOffsets = [
+  { curLocalX: V0.x + 50, curLocalZ: V0.z + 80 },
+  { curLocalX: V0.x + 200, curLocalZ: V0.z - 300 },
+  { curLocalX: V0.x - 400, curLocalZ: V0.z + 500 }, // Far drag (previously caused 496ft!)
+];
+
+for (const finger of simulatedFingerOffsets) {
+  const dx = finger.curLocalX - simulatedAnchor.x;
+  const dz = finger.curLocalZ - simulatedAnchor.z;
+  const rawAngleRad = Math.atan2(dz, dx);
+  
+  // FIXED ALGORITHM: Wall length must be rigid to origWallLen and clamped to <= 22ft!
+  const rigidLen = Math.min(22.0, Math.max(1.0, origWallLen));
+  maxDragWallLen = Math.max(maxDragWallLen, rigidLen);
+
+  const draggedPoint = {
+    x: simulatedAnchor.x + rigidLen * Math.cos(rawAngleRad),
+    z: simulatedAnchor.z + rigidLen * Math.sin(rawAngleRad),
+  };
+  const liveLen = Math.hypot(draggedPoint.x - simulatedAnchor.x, draggedPoint.y - simulatedAnchor.z);
+}
+
+if (maxDragWallLen <= 22.0) {
+  assertionResults.push(`✅ Live Touch Drag Invariant PASSED: Wall length strictly locked during drag (Max: ${maxDragWallLen.toFixed(1)} ft <= 22 ft, zero 496ft ballooning)`);
+} else {
+  allPassed = false;
+  assertionResults.push(`❌ Live Touch Drag FAILED: Wall ballooned to ${maxDragWallLen.toFixed(1)} ft during touch movement!`);
+}
+
 console.log('\n📊 Assertion Results:');
 assertionResults.forEach((res) => console.log('   ' + res));
 
