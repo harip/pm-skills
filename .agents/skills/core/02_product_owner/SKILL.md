@@ -24,18 +24,30 @@ Whenever a story involves real-world data, physical spaces, hardware sensors, mu
 4. **Action-to-State & Empty State AC**:
    - Every interactive control must have an AC verifying state transition or DB persistence. Catalogs must have an AC verifying the clean empty state on fresh install.
 
-## Story Template
+## Story Template (Mandatory Given-When-Then & Edge Cases)
 ```markdown
 ### US-[NNN]: [User Capability]
 **Priority:** P1|P2|P3 | **Effort:** 1|2|3|5 | **Role:** [ADMIN|MEMBER|GUEST]
 **Traceability:** Screen: [name], Contract flag: [Document 00 flag]
 **Touches:** UI: [screen], Hook: [name], Service: [func], DB: [table], Sync: [queue]
 **JTBD:** As a [role], I want [action], so that [value].
-**Acceptance Criteria (binary, observable):**
-- [ ] AC1 Happy path · AC2 Edge/error · AC3 Loading & empty state · AC4 Unauthorized role blocked
-**Ownership & Out of Scope:** [owner rule; exclusions]
+
+**Acceptance Scenarios (Given-When-Then):**
+- **Scenario 1 (Happy Path):**
+  - **Given** [preconditions, initial state, authenticated user]
+  - **When** [user action, trigger, gesture, or API event]
+  - **Then** [observable result, state update, UI change, DB persistence]
+
+- **Scenario 2 (Edge Case / Alternative Path):**
+  - **Given** [boundary condition, extreme input, empty value, or interrupted state]
+  - **When** [user performs action or triggers error condition]
+  - **Then** [system response, validation message, safety clamp, or rollback]
+
+**Explicit Edge Cases & Failure Modes:**
+1. [Boundary condition, extreme value, empty input, or unicode special characters]
+2. [Concurrency, cancellation, interrupted network, or accidental gesture]
+3. [Safety guard, rollback mechanism, or state persistence guarantee]
 ```
-Give each AC an acceptance scenario: preconditions → action → observable result → target environment. Include relevant failure/edge cases.
 
 ## Sizing & Priority
 Points: 1 ≈ 4h simple CRUD · 2 ≈ 1d screen + hook/service · 3 ≈ 2–3d multi-state · 5 ≈ 1w (split if possible).

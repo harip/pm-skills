@@ -21,6 +21,13 @@ Every project runs with a single, predictable lifecycle:
 2. **Autonomous Build & Verification Pipeline (Phases 2 → 7)**: Once `docs/00_DISCOVERY_ANSWERS.json` is submitted, the swarm autonomously executes Phase 1 Contract/Brief (`00`, `01`) → Phase 2 Scope (`02`, `03`) → Phase 3 Tech Spec (`04`, `05`) → Phase 4 Schemas & Scaffolding → **Parallel [Phase 5 UI || Phase 6 Services]** → Phase 7 Automated QA + Mandatory Playwright WebKit Runtime Render Gate without stopping at intermediate phases.
 3. **Gate 2 — Phase 8 Live UAT (`08_uat`)**: The workflow **always stops at Phase 8 UAT**, presenting the verified live app (Browser URL + Expo Go QR code & `10_UAT_CHECKLIST.md`) for real stakeholder acceptance testing before Phase 9 Release.
 
+## Mandatory User Stories Norm (Given-When-Then & Edge Cases)
+Whenever any feature, capability, refactor, or planning task is requested:
+- The PM and engineering agents MUST ALWAYS generate User Stories written strictly in **Given-When-Then** (Gherkin) acceptance format.
+- Every User Story MUST explicitly enumerate all **Edge Cases & Failure Modes**.
+- These User Stories MUST be presented to the user upfront (in chat or as an artifact) **regardless of whether the user explicitly asks for them or not**.
+- When the user asks for a plan, User Stories with Given-When-Then and Edge Cases MUST be an integral part of that plan before implementation.
+
 ## Registry & Directory Architecture
 Paths are organized into **Core Governance** and **Platform-Specific Tracks**:
 

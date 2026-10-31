@@ -143,3 +143,9 @@ Derived from production mobile & hardware development, these core tenets apply u
    - **Step 3 (Automate & Iterate)**: Run local automated runner (`test-fixture-runner.js`) asserting 100% parity with the Target After State. Iterate code locally until the runner passes with 0 errors.
    - **Step 4 (Verify on Hardware)**: Re-bundle, install to the physical device, and verify via automated visual OCR.
    - Every physical device bug resolved through this loop remains a permanent automated regression test in `test-fixtures.sqlite`.
+7. **Mandatory Given-When-Then User Stories & Edge Cases (The Universal Standard)**:
+   - Whenever any feature, capability, enhancement, refactor, or plan is requested:
+   - The agent MUST ALWAYS formulate comprehensive User Stories using **Given-When-Then** (Gherkin format) acceptance criteria.
+   - Every user story MUST explicitly account for **Edge Cases & Failure Modes** (e.g. boundary conditions, network timeouts, empty inputs, duplicate records, concurrent deletions, extreme coordinates, accidental triggers, confirmation cancels).
+   - These User Stories MUST be presented to the user upfront (as a structured artifact or specification) **regardless of whether the user explicitly asks for them or not**.
+   - If the user asks for an implementation plan, User Stories in Given-When-Then format with Edge Cases MUST be an integral, mandatory component of that plan before code execution begins.
