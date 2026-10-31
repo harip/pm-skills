@@ -1346,7 +1346,12 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
           )}
 
           {/* SVG Multi-Touch Canvas */}
-          <Svg style={StyleSheet.absoluteFill}>
+          <Svg
+            width={viewW || '100%'}
+            height={viewH || '100%'}
+            viewBox={`0 0 ${viewW} ${viewH}`}
+            style={StyleSheet.absoluteFill}
+          >
             {viewMode === '2d' ? (
               // 2D Architectural Blueprint View (Closed Walls, Mitered Corners, Openings & Measurements)
               <>

@@ -10,9 +10,110 @@ import {
   StatusBar,
   Alert,
 } from 'react-native';
+import Svg, { Polygon, Line } from 'react-native-svg';
 import { Room } from '../types/room';
 import { Database } from '../db/database';
 import { GeometryService } from '../services/geometryService';
+
+const RoomBlueprintThumbnail: React.FC<{ room: Room; width?: number; height?: number }> = ({
+  room,
+  width = 100,
+  height = 80,
+}) => {
+  let parsedMesh: any = null;
+  try {
+    if (room.mesh_json) parsedMesh = JSON.parse(room.mesh_json);
+  } catch {}
+
+  const realWalls: any[] = parsedMesh?.walls || [];
+  const realDoors: any[] = parsedMesh?.doors || [];
+  const realWindows: any[] = parsedMesh?.windows || [];
+  const poly = GeometryService.buildRoomPolygon(realWalls, room.width_ft || 14, room.length_ft || 16);
+
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minZ = Infinity;
+  let maxZ = -Infinity;
+  for (const p of poly) {
+    minX = Math.min(minX, p.x);
+    maxX = Math.max(maxX, p.x);
+    minZ = Math.min(minZ, p.z);
+    maxZ = Math.max(maxZ, p.z);
+  }
+  const spanX = Math.max(2, maxX - minX);
+  const spanZ = Math.max(2, maxZ - minZ);
+
+  const pad = 10;
+  const scale = Math.min((width - pad * 2) / spanX, (height - pad * 2) / spanZ);
+  const cx = width / 2 - ((minX + maxX) / 2) * scale;
+  const cz = height / 2 - ((minZ + maxZ) / 2) * scale;
+
+  const pointsStr = poly
+    .map((p) => `${+(p.x * scale + cx).toFixed(1)},${+(p.z * scale + cz).toFixed(1)}`)
+    .join(' ');
+
+  return (
+    <View style={styles.thumbnailContainer}>
+      <Svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
+        <Line
+          x1={0}
+          y1={height / 2}
+          x2={width}
+          y2={height / 2}
+          stroke="#e2e8f0"
+          strokeWidth={0.75}
+          strokeDasharray="3,3"
+        />
+        <Line
+          x1={width / 2}
+          y1={0}
+          x2={width / 2}
+          y2={height}
+          stroke="#e2e8f0"
+          strokeWidth={0.75}
+          strokeDasharray="3,3"
+        />
+        <Polygon
+          points={pointsStr}
+          fill="#ffffff"
+          stroke="#0f172a"
+          strokeWidth={2}
+          strokeLinejoin="round"
+        />
+        {realDoors.map((d: any, idx: number) => {
+          const dx = (d.x ?? 0) * scale + cx;
+          const dz = (d.z ?? 0) * scale + cz;
+          return (
+            <Line
+              key={`d-${idx}`}
+              x1={dx - 4}
+              y1={dz}
+              x2={dx + 4}
+              y2={dz}
+              stroke="#f59e0b"
+              strokeWidth={3}
+            />
+          );
+        })}
+        {realWindows.map((w: any, idx: number) => {
+          const wx = (w.x ?? 0) * scale + cx;
+          const wz = (w.z ?? 0) * scale + cz;
+          return (
+            <Line
+              key={`w-${idx}`}
+              x1={wx - 4}
+              y1={wz}
+              x2={wx + 4}
+              y2={wz}
+              stroke="#06b6d4"
+              strokeWidth={3}
+            />
+          );
+        })}
+      </Svg>
+    </View>
+  );
+};
 
 interface Props {
   onNavigateToScan: () => void;
@@ -179,57 +280,69 @@ export const RoomsCatalogScreen: React.FC<Props> = ({
           >
             {displayedRooms.map((room) => (
               <View key={room.id} style={styles.roomCard}>
-                <TouchableOpacity
-                  onPress={() => onSelectRoom(room)}
-                  activeOpacity={0.85}
-                >
-                  <View style={styles.cardHeaderRow}>
-                    <View style={styles.cardTitleWrap}>
-                      <Text style={styles.cardRoomName}>{room.name}</Text>
-                      {room.floor_level && (
-                        <View style={[
+                <View style={styles.cardHeaderRow}>
+                  <TouchableOpacity
+                    style={styles.cardTitleWrap}
+                    onPress={() => onSelectRoom(room)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.cardRoomName}>{room.name}</Text>
+                    {room.floor_level && (
+                      <View
+                        style={[
                           styles.floorBadge,
                           room.floor_level === 'Basement' && styles.floorBadgeBasement,
-                        ]}>
-                          <Text style={[
+                        ]}
+                      >
+                        <Text
+                          style={[
                             styles.floorBadgeText,
                             room.floor_level === 'Basement' && styles.floorBadgeTextBasement,
-                          ]}>
-                            {room.floor_level === 'Basement' ? '🪜 Basement' : `🚪 ${room.floor_level}`}
-                          </Text>
-                        </View>
-                      )}
-                      {room.is_sample && (
-                        <View style={styles.sampleBadge}>
-                          <Text style={styles.sampleBadgeText}>Sample</Text>
-                        </View>
-                      )}
-                    </View>
-
-                    {/* Action buttons on user scans */}
-                    {!room.is_sample && (
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <TouchableOpacity
-                          style={styles.renamePill}
-                          onPress={() => handleRenameRoom(room)}
-                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                          accessibilityLabel={`Rename ${room.name}`}
+                          ]}
                         >
-                          <Text style={styles.renamePillText}>Rename</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={styles.deletePill}
-                          onPress={() => handleDeleteRoom(room)}
-                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                          accessibilityLabel={`Delete ${room.name}`}
-                        >
-                          <Text style={styles.deletePillText}>Delete</Text>
-                        </TouchableOpacity>
+                          {room.floor_level === 'Basement' ? '🪜 Basement' : `🚪 ${room.floor_level}`}
+                        </Text>
                       </View>
                     )}
-                  </View>
+                    {room.is_sample && (
+                      <View style={styles.sampleBadge}>
+                        <Text style={styles.sampleBadgeText}>Sample</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
 
-                  <View style={styles.cardMetricsRow}>
+                  {/* Action buttons on user scans */}
+                  {!room.is_sample && (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <TouchableOpacity
+                        style={styles.renamePill}
+                        onPress={() => handleRenameRoom(room)}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        accessibilityLabel={`Rename ${room.name}`}
+                      >
+                        <Text style={styles.renamePillText}>Rename</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.deletePill}
+                        onPress={() => handleDeleteRoom(room)}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        accessibilityLabel={`Delete ${room.name}`}
+                      >
+                        <Text style={styles.deletePillText}>Delete</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </View>
+
+                {/* Body Row: 2D Floor Plan Blueprint Thumbnail + Key Metrics */}
+                <TouchableOpacity
+                  style={styles.cardBodyRow}
+                  onPress={() => onSelectRoom(room)}
+                  activeOpacity={0.8}
+                >
+                  <RoomBlueprintThumbnail room={room} width={100} height={80} />
+
+                  <View style={styles.cardMetricsCol}>
                     <View style={styles.cardMetricItem}>
                       <Text style={styles.cardMetricValue}>
                         {GeometryService.formatFeetInches(room.length_ft)} ×{' '}
@@ -237,17 +350,19 @@ export const RoomsCatalogScreen: React.FC<Props> = ({
                       </Text>
                       <Text style={styles.cardMetricLabel}>Dimensions</Text>
                     </View>
-                    <View style={styles.cardMetricItem}>
-                      <Text style={styles.cardMetricValue}>
-                        {GeometryService.formatAreaSqFt(room.area_sqft)}
-                      </Text>
-                      <Text style={styles.cardMetricLabel}>Floor Area</Text>
-                    </View>
-                    <View style={styles.cardMetricItem}>
-                      <Text style={styles.cardMetricValue}>
-                        {GeometryService.formatFeetInches(room.height_ft)}
-                      </Text>
-                      <Text style={styles.cardMetricLabel}>Ceiling</Text>
+                    <View style={styles.cardMetricsSubRow}>
+                      <View style={styles.cardMetricItem}>
+                        <Text style={styles.cardMetricValue}>
+                          {GeometryService.formatAreaSqFt(room.area_sqft)}
+                        </Text>
+                        <Text style={styles.cardMetricLabel}>Floor Area</Text>
+                      </View>
+                      <View style={styles.cardMetricItem}>
+                        <Text style={styles.cardMetricValue}>
+                          {GeometryService.formatFeetInches(room.height_ft)}
+                        </Text>
+                        <Text style={styles.cardMetricLabel}>Ceiling</Text>
+                      </View>
                     </View>
                   </View>
                 </TouchableOpacity>
@@ -507,6 +622,36 @@ const styles = StyleSheet.create({
   },
   floorBadgeTextBasement: {
     color: '#ea580c',
+  },
+  thumbnailContainer: {
+    width: 100,
+    height: 80,
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    overflow: 'hidden',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cardBodyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    backgroundColor: '#f8fafd',
+    borderRadius: 14,
+    padding: 10,
+    borderWidth: 0.5,
+    borderColor: '#e2e8f0',
+  },
+  cardMetricsCol: {
+    flex: 1,
+    gap: 6,
+  },
+  cardMetricsSubRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingRight: 6,
   },
   cardMetricsRow: {
     flexDirection: 'row',

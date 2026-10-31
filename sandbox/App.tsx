@@ -1,6 +1,6 @@
 // sandbox/App.tsx
 import React, { useState } from 'react';
-import { View, StyleSheet, TouchableOpacity, Text, SafeAreaView } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, Text, SafeAreaView, Platform, LogBox } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Room } from './src/types/room';
 import { RoomsCatalogScreen } from './src/screens/RoomsCatalogScreen';
@@ -10,6 +10,41 @@ import { HouseAssemblyScreen } from './src/screens/HouseAssemblyScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
 import { GeometryService } from './src/services/geometryService';
 import { Database } from './src/db/database';
+
+LogBox.ignoreLogs([
+  'Unknown event handler property',
+  '"shadow*" style props are deprecated',
+  'props.pointerEvents is deprecated',
+  'TouchableMixin is deprecated',
+]);
+
+if (Platform.OS === 'web' && typeof window !== 'undefined') {
+  const originalError = console.error;
+  console.error = (...args: any[]) => {
+    if (
+      typeof args[0] === 'string' &&
+      (args[0].includes('Unknown event handler property') ||
+       args[0].includes('props.pointerEvents is deprecated') ||
+       args[0].includes('"shadow*" style props are deprecated'))
+    ) {
+      return;
+    }
+    originalError(...args);
+  };
+
+  const originalWarn = console.warn;
+  console.warn = (...args: any[]) => {
+    if (
+      typeof args[0] === 'string' &&
+      (args[0].includes('"shadow*" style props are deprecated') ||
+       args[0].includes('props.pointerEvents is deprecated') ||
+       args[0].includes('TouchableMixin is deprecated'))
+    ) {
+      return;
+    }
+    originalWarn(...args);
+  };
+}
 
 type Tab = 'catalog' | 'scanner' | 'studio' | 'assembly' | 'settings';
 

@@ -1278,7 +1278,7 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
         >
           {/* Layer 1: Gesture Surface for SVG Canvas */}
           <View style={StyleSheet.absoluteFill} {...panResponder.panHandlers}>
-            <Svg width={viewW} height={viewH} pointerEvents="none" style={styles.cadCanvas}>
+            <Svg width={viewW} height={viewH} viewBox={`0 0 ${viewW} ${viewH}`} pointerEvents="none" style={styles.cadCanvas}>
               {/* Background architectural grid */}
               <Rect x="0" y="0" width={viewW} height={viewH} fill="#ffffff" />
               {[-120, -60, 0, 60, 120].map((step, idx) => (
