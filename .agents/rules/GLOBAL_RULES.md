@@ -149,3 +149,9 @@ Derived from production mobile & hardware development, these core tenets apply u
    - Every user story MUST explicitly account for **Edge Cases & Failure Modes** (e.g. boundary conditions, network timeouts, empty inputs, duplicate records, concurrent deletions, extreme coordinates, accidental triggers, confirmation cancels).
    - These User Stories MUST be presented to the user upfront (as a structured artifact or specification) **regardless of whether the user explicitly asks for them or not**.
    - If the user asks for an implementation plan, User Stories in Given-When-Then format with Edge Cases MUST be an integral, mandatory component of that plan before code execution begins.
+8. **Parallel Hardware Deployment on 'commit' Trigger**:
+   - Whenever the user issues a 'commit' request (or says 'commit'):
+   - The main agent immediately creates the git commit and pushes to the current branch.
+   - The main agent simultaneously delegates hardware installation to the parallel `device-deployer` background subagent (`invoke_subagent`).
+   - The main agent remains 100% responsive and unblocked for continued local development without waiting on hardware I/O.
+   - The `device-deployer` subagent executes `npm run deploy:phone`, codesigns, installs to the physical iPhone 17 Pro Max, launches the process, captures a live verification screenshot, and reports status asynchronously.

@@ -74,10 +74,10 @@ recognizedLines.slice(0, 8).forEach(l => console.log(`      • "${l}"`));
 // 5. Assertions
 console.log('\n🔎 Step 5: Asserting App Title & Primary Navigation Presence...');
 
-// Assertion A: App Title ("LiDAR Studio" or "Studio")
-const hasTitle = recognizedLines.some(l => /LiDAR Studio|Rooms|House Assembly/i.test(l));
-assert.ok(hasTitle, `Expected App Title 'LiDAR Studio' or 'Rooms' on screen, recognized: ${recognizedLines.slice(0, 10).join(', ')}`);
-console.log('   ✅ PASS: App Title found on device screen ("LiDAR Studio")');
+// Assertion A: App Title ("RoomOS", "LiDAR Studio" or "Studio")
+const hasTitle = recognizedLines.some(l => /RoomOS|LiDAR Studio|Rooms|House Assembly/i.test(l));
+assert.ok(hasTitle, `Expected App Title 'RoomOS', 'LiDAR Studio' or 'Rooms' on screen, recognized: ${recognizedLines.slice(0, 10).join(', ')}`);
+console.log('   ✅ PASS: App Title found on device screen ("RoomOS" / "LiDAR Studio")');
 
 // Assertion B: Primary Tab Bar Presence
 const hasTabs = recognizedLines.some(l => /Rooms|Scan|Studio|Whole House/i.test(l));

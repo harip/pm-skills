@@ -115,6 +115,17 @@ const RoomBlueprintThumbnail: React.FC<{ room: Room; width?: number; height?: nu
   );
 };
 
+const cleanRoomName = (name: string): string => {
+  return name.replace(/\s*\(\d+['"].*?\)$/, '').trim() || name;
+};
+
+const formatDimensionsTag = (room: Room): string => {
+  const lStr = GeometryService.formatFeetInches(room.length_ft);
+  const wStr = GeometryService.formatFeetInches(room.width_ft);
+  const hStr = GeometryService.formatFeetInches(room.height_ft || 8.1);
+  return `l${lStr} × w${wStr} × h${hStr}`;
+};
+
 interface Props {
   onNavigateToScan: () => void;
   onSelectRoom: (room: Room) => void;
@@ -215,27 +226,18 @@ export const RoomsCatalogScreen: React.FC<Props> = ({
         {/* Header */}
         <View style={styles.header}>
           <View>
-            <Text style={styles.headerTitle}>LiDAR Studio</Text>
-            <Text style={styles.headerSubtitle}>Apple HIG Light Mode Precision</Text>
+            <Text style={styles.headerTitle}>RoomOS</Text>
+            <Text style={styles.headerSubtitle}>
+              {rooms.length} {rooms.length === 1 ? 'Scan' : 'Scans'} • Whole House Project
+            </Text>
           </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            {onNavigateToSettings && (
-              <TouchableOpacity
-                style={styles.settingsHeaderBtn}
-                onPress={onNavigateToSettings}
-                accessibilityLabel="Open Settings"
-              >
-                <Text style={{ fontSize: 20 }}>⚙️</Text>
-              </TouchableOpacity>
-            )}
-            <TouchableOpacity
-              style={styles.scanPrimaryPill}
-              onPress={onNavigateToScan}
-              accessibilityLabel="Start new scan"
-            >
-              <Text style={styles.scanPillText}>+ New Scan</Text>
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity
+            style={styles.scanPrimaryPill}
+            onPress={onNavigateToScan}
+            accessibilityLabel="Start new scan"
+          >
+            <Text style={styles.scanPillText}>+ New Scan</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Sub-header row for My Scans management */}
@@ -278,96 +280,91 @@ export const RoomsCatalogScreen: React.FC<Props> = ({
             contentContainerStyle={styles.cardsContent}
             showsVerticalScrollIndicator={false}
           >
-            {displayedRooms.map((room) => (
-              <View key={room.id} style={styles.roomCard}>
-                <View style={styles.cardHeaderRow}>
+            {displayedRooms.map((room) => {
+              const displayName = cleanRoomName(room.name);
+              return (
+                <View key={room.id} style={styles.roomCard}>
                   <TouchableOpacity
-                    style={styles.cardTitleWrap}
+                    style={styles.cardMainTouch}
                     onPress={() => onSelectRoom(room)}
-                    activeOpacity={0.7}
+                    activeOpacity={0.82}
                   >
-                    <Text style={styles.cardRoomName}>{room.name}</Text>
-                    {room.floor_level && (
-                      <View
-                        style={[
-                          styles.floorBadge,
-                          room.floor_level === 'Basement' && styles.floorBadgeBasement,
-                        ]}
-                      >
-                        <Text
+                    {/* Left: 2D Floor Plan Blueprint Thumbnail */}
+                    <RoomBlueprintThumbnail room={room} width={86} height={74} />
+
+                    {/* Middle: Clean Room Name, Floor Badge & Minimalist Apple Action Icons */}
+                    <View style={styles.cardMiddleCol}>
+                      <View style={styles.cardTitleRow}>
+                        <Text style={styles.cardRoomName} numberOfLines={1}>
+                          {displayName}
+                        </Text>
+                        {room.is_sample && (
+                          <View style={styles.sampleBadge}>
+                            <Text style={styles.sampleBadgeText}>Sample</Text>
+                          </View>
+                        )}
+                      </View>
+
+                      {room.floor_level && (
+                        <View
                           style={[
-                            styles.floorBadgeText,
-                            room.floor_level === 'Basement' && styles.floorBadgeTextBasement,
+                            styles.floorBadge,
+                            room.floor_level === 'Basement' && styles.floorBadgeBasement,
                           ]}
                         >
-                          {room.floor_level === 'Basement' ? '🪜 Basement' : `🚪 ${room.floor_level}`}
-                        </Text>
-                      </View>
-                    )}
-                    {room.is_sample && (
-                      <View style={styles.sampleBadge}>
-                        <Text style={styles.sampleBadgeText}>Sample</Text>
-                      </View>
-                    )}
-                  </TouchableOpacity>
+                          <Text
+                            style={[
+                              styles.floorBadgeText,
+                              room.floor_level === 'Basement' && styles.floorBadgeTextBasement,
+                            ]}
+                          >
+                            {room.floor_level === 'Basement' ? '🪜 Basement' : `🚪 ${room.floor_level}`}
+                          </Text>
+                        </View>
+                      )}
 
-                  {/* Action buttons on user scans */}
-                  {!room.is_sample && (
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <TouchableOpacity
-                        style={styles.renamePill}
-                        onPress={() => handleRenameRoom(room)}
-                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                        accessibilityLabel={`Rename ${room.name}`}
-                      >
-                        <Text style={styles.renamePillText}>Rename</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={styles.deletePill}
-                        onPress={() => handleDeleteRoom(room)}
-                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                        accessibilityLabel={`Delete ${room.name}`}
-                      >
-                        <Text style={styles.deletePillText}>Delete</Text>
-                      </TouchableOpacity>
+                      {/* Minimalist Apple Action Icons (✎ and 🗑) */}
+                      {!room.is_sample && (
+                        <View style={styles.appleIconsRow}>
+                          <TouchableOpacity
+                            style={styles.appleIconBtn}
+                            onPress={(e) => {
+                              e.stopPropagation?.();
+                              handleRenameRoom(room);
+                            }}
+                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                            accessibilityLabel={`Rename ${displayName}`}
+                          >
+                            <Text style={styles.appleIconText}>✎</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[styles.appleIconBtn, styles.appleDeleteIconBtn]}
+                            onPress={(e) => {
+                              e.stopPropagation?.();
+                              handleDeleteRoom(room);
+                            }}
+                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                            accessibilityLabel={`Delete ${displayName}`}
+                          >
+                            <Text style={[styles.appleIconText, styles.appleDeleteIconText]}>🗑</Text>
+                          </TouchableOpacity>
+                        </View>
+                      )}
                     </View>
-                  )}
-                </View>
 
-                {/* Body Row: 2D Floor Plan Blueprint Thumbnail + Key Metrics */}
-                <TouchableOpacity
-                  style={styles.cardBodyRow}
-                  onPress={() => onSelectRoom(room)}
-                  activeOpacity={0.8}
-                >
-                  <RoomBlueprintThumbnail room={room} width={100} height={80} />
-
-                  <View style={styles.cardMetricsCol}>
-                    <View style={styles.cardMetricItem}>
-                      <Text style={styles.cardMetricValue}>
-                        {GeometryService.formatFeetInches(room.length_ft)} ×{' '}
-                        {GeometryService.formatFeetInches(room.width_ft)}
+                    {/* Right Corner: Dimensions L×W×H and sq ft underneath */}
+                    <View style={styles.cardDimensionsRightWrap}>
+                      <Text style={styles.dimensionsValueText}>
+                        {formatDimensionsTag(room)}
                       </Text>
-                      <Text style={styles.cardMetricLabel}>Dimensions</Text>
+                      <Text style={styles.areaSqFtText}>
+                        {GeometryService.formatAreaSqFt(room.area_sqft)}
+                      </Text>
                     </View>
-                    <View style={styles.cardMetricsSubRow}>
-                      <View style={styles.cardMetricItem}>
-                        <Text style={styles.cardMetricValue}>
-                          {GeometryService.formatAreaSqFt(room.area_sqft)}
-                        </Text>
-                        <Text style={styles.cardMetricLabel}>Floor Area</Text>
-                      </View>
-                      <View style={styles.cardMetricItem}>
-                        <Text style={styles.cardMetricValue}>
-                          {GeometryService.formatFeetInches(room.height_ft)}
-                        </Text>
-                        <Text style={styles.cardMetricLabel}>Ceiling</Text>
-                      </View>
-                    </View>
-                  </View>
-                </TouchableOpacity>
-              </View>
-            ))}
+                  </TouchableOpacity>
+                </View>
+              );
+            })}
           </ScrollView>
         )}
       </View>
@@ -534,7 +531,7 @@ const styles = StyleSheet.create({
   roomCard: {
     backgroundColor: '#ffffff',
     borderRadius: 18,
-    padding: 16,
+    padding: 12,
     borderWidth: 0.5,
     borderColor: '#e5e5ea',
     shadowColor: '#000',
@@ -542,77 +539,74 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.04,
     shadowRadius: 6,
   },
-  cardHeaderRow: {
+  cardMainTouch: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    gap: 12,
   },
-  cardTitleWrap: {
+  cardMiddleCol: {
+    flex: 1,
+    justifyContent: 'center',
+    gap: 4,
+  },
+  cardTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    flex: 1,
+    gap: 6,
   },
   cardRoomName: {
     fontSize: 16,
     fontWeight: '600',
     color: '#1c1c1e',
+    letterSpacing: -0.3,
   },
-  settingsHeaderBtn: {
-    padding: 6,
-    borderRadius: 8,
-    backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: '#e5e5ea',
+  appleIconsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 2,
   },
-  renamePill: {
-    backgroundColor: '#f0f9ff',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    borderWidth: 0.5,
-    borderColor: '#bae6fd',
+  appleIconBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#f2f2f7',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  renamePillText: {
-    fontSize: 12,
+  appleIconText: {
+    fontSize: 13,
+    color: '#007aff',
     fontWeight: '600',
-    color: '#0284c7',
   },
-  deletePill: {
+  appleDeleteIconBtn: {
     backgroundColor: '#fff1f0',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    borderWidth: 0.5,
-    borderColor: '#ffccc7',
   },
-  deletePillText: {
+  appleDeleteIconText: {
     fontSize: 12,
-    fontWeight: '600',
     color: '#ff3b30',
   },
   sampleBadge: {
     backgroundColor: '#eef2f7',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 5,
   },
   sampleBadgeText: {
-    fontSize: 11,
+    fontSize: 10,
     color: '#007aff',
     fontWeight: '600',
   },
   floorBadge: {
     backgroundColor: '#f2f2f7',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    marginRight: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 5,
+    alignSelf: 'flex-start',
   },
   floorBadgeBasement: {
     backgroundColor: '#fff7ed',
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: '#fed7aa',
   },
   floorBadgeText: {
@@ -624,8 +618,8 @@ const styles = StyleSheet.create({
     color: '#ea580c',
   },
   thumbnailContainer: {
-    width: 100,
-    height: 80,
+    width: 86,
+    height: 74,
     backgroundColor: '#f8fafc',
     borderRadius: 12,
     borderWidth: 1,
@@ -634,44 +628,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  cardBodyRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    backgroundColor: '#f8fafd',
-    borderRadius: 14,
-    padding: 10,
-    borderWidth: 0.5,
-    borderColor: '#e2e8f0',
+  cardDimensionsRightWrap: {
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    paddingLeft: 4,
   },
-  cardMetricsCol: {
-    flex: 1,
-    gap: 6,
-  },
-  cardMetricsSubRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingRight: 6,
-  },
-  cardMetricsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    backgroundColor: '#f8fafd',
-    borderRadius: 12,
-    padding: 10,
-  },
-  cardMetricItem: {
-    alignItems: 'center',
-  },
-  cardMetricValue: {
+  dimensionsValueText: {
     fontSize: 13,
     fontWeight: '700',
     color: '#1c1c1e',
+    fontVariant: ['tabular-nums'],
+    letterSpacing: -0.2,
   },
-  cardMetricLabel: {
-    fontSize: 10,
-    color: '#8e8e93',
-    marginTop: 2,
+  areaSqFtText: {
+    fontSize: 12,
     fontWeight: '500',
+    color: '#8e8e93',
+    marginTop: 3,
   },
 });
