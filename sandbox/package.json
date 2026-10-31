@@ -9,8 +9,11 @@
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
     "test": "node test-runner.js",
+    "test:fixture": "node test-fixture-runner.js",
     "test:launch": "node test-app-launch.js",
-    "test:visual": "node test-app-visual-title.js"
+    "test:visual": "node test-app-visual-title.js",
+    "dump:device": "bash scripts/dump-device-data.sh",
+    "deploy:phone": "bash scripts/deploy-to-device.sh"
   },
   "dependencies": {
     "@expo/metro-runtime": "~4.0.1",

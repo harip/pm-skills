@@ -37,3 +37,4 @@ yarn-error.log*
 .nyc_output/
 sandbox/rooms.db
 sandbox/database.sqlite
+sandbox/data/device_dump/Documents/

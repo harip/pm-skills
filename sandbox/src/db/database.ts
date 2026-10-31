@@ -43,6 +43,37 @@ async function ensureLoaded(): Promise<void> {
       } catch (err) {
         console.warn('Failed to load persisted rooms from disk:', err);
       }
+    } else {
+      // Local Fast Loop: Hydrate from real device dump for Web / Node / Desktop development
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const bundled = require('../../data/device_dump/bundled_rooms.json');
+        if (Array.isArray(bundled) && bundled.length > 0) {
+          for (const item of bundled) {
+            if (item.isDeleted) continue;
+            const rawId = item.id || (item.usdzPath ? 'room-' + item.usdzPath.split('_').pop()?.replace('.usdz', '') : 'room-' + Date.now());
+            const roomId = String(rawId);
+            if (!inMemoryRooms.some((r) => r.id === roomId)) {
+              inMemoryRooms.push({
+                id: roomId,
+                name: item.roomName || 'Living Room',
+                length_ft: item.lengthFt || 14.7,
+                width_ft: item.widthFt || 14.1,
+                height_ft: item.heightFt || 8.1,
+                area_sqft: item.areaSqFt || 206.0,
+                mesh_json: JSON.stringify(item),
+                floor_level: item.floorLevel || 'Ground Floor',
+                elevation_ft: item.elevationFt ?? 0,
+                is_sample: false,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              });
+            }
+          }
+        }
+      } catch (e) {
+        // Gracefully ignore if running in environment where bundled_rooms is omitted
+      }
     }
     hasLoadedFromDisk = true;
     loadPromise = null;
