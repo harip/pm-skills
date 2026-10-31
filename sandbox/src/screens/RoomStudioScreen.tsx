@@ -743,23 +743,70 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
     if (Platform.OS === 'ios') {
       ActionSheetIOS.showActionSheetWithOptions(
         {
-          options: ['Cancel', 'Assign Floor Level', 'Revert Wall Edits', 'Delete Room'],
-          destructiveButtonIndex: 3,
+          options: ['Cancel', 'Rename Room', 'Assign Floor Level', 'Revert Wall Edits', 'Delete Room'],
+          destructiveButtonIndex: 4,
           cancelButtonIndex: 0,
         },
         (buttonIndex) => {
-          if (buttonIndex === 1) handleAdjustFloorLevel();
-          else if (buttonIndex === 2) handleResetToOriginal();
-          else if (buttonIndex === 3) handleDeleteRoom();
+          if (buttonIndex === 1) handleRenameRoom();
+          else if (buttonIndex === 2) handleAdjustFloorLevel();
+          else if (buttonIndex === 3) handleResetToOriginal();
+          else if (buttonIndex === 4) handleDeleteRoom();
         }
       );
     } else {
       Alert.alert('Options', undefined, [
+        { text: 'Rename Room', onPress: handleRenameRoom },
         { text: 'Assign Floor Level', onPress: handleAdjustFloorLevel },
         { text: 'Revert Wall Edits', onPress: handleResetToOriginal },
         { text: 'Delete Room', style: 'destructive', onPress: handleDeleteRoom },
         { text: 'Cancel', style: 'cancel' },
       ]);
+    }
+  };
+
+  const handleRenameRoom = () => {
+    if (Platform.OS === 'ios') {
+      Alert.prompt(
+        'Rename Room',
+        'Enter new room name (e.g. Master Bedroom, Kitchen):',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Save',
+            onPress: async (newName?: string) => {
+              const trimmed = newName?.trim();
+              if (!trimmed) {
+                Alert.alert('Invalid Name', 'Room name cannot be empty.');
+                return;
+              }
+              const clamped = trimmed.slice(0, 40);
+              const updated = {
+                ...room,
+                name: clamped,
+                updated_at: new Date().toISOString(),
+              };
+              setRoom(updated);
+              await Database.saveRoom(updated);
+            },
+          },
+        ],
+        'plain-text',
+        room.name
+      );
+    } else {
+      const input = prompt('Enter new room name:', room.name);
+      const trimmed = input?.trim();
+      if (trimmed) {
+        const clamped = trimmed.slice(0, 40);
+        const updated = {
+          ...room,
+          name: clamped,
+          updated_at: new Date().toISOString(),
+        };
+        setRoom(updated);
+        Database.saveRoom(updated);
+      }
     }
   };
 
@@ -1194,9 +1241,19 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
           <TouchableOpacity style={styles.navBackBtn} onPress={onBack}>
             <Text style={styles.navBackText}>‹ Rooms</Text>
           </TouchableOpacity>
-          <View style={styles.navTitleGroup}>
-            <Text style={styles.navTitle} numberOfLines={1}>{room.name.split('(')[0]}</Text>
-          </View>
+          <TouchableOpacity
+            style={styles.navTitleGroup}
+            onPress={handleRenameRoom}
+            activeOpacity={0.7}
+            accessibilityLabel={`Rename room ${room.name}`}
+          >
+            <Text style={styles.navTitle} numberOfLines={1}>
+              {room.name.split('(')[0]}
+            </Text>
+            <Text style={{ fontSize: 10, color: '#007aff', textAlign: 'center', marginTop: -2 }}>
+              ✎ tap to rename
+            </Text>
+          </TouchableOpacity>
           <View style={styles.navRightGroup}>
             <TouchableOpacity style={styles.unitBtn} onPress={toggleUnits}>
               <Text style={styles.unitBtnText}>{isMetric ? 'm' : 'ft'}</Text>

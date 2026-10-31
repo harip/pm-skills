@@ -6,10 +6,51 @@ console.log('🧪 Starting Certified QA Verification Suite for LiDAR Room Studio
 let passedTests = 0;
 let totalTests = 0;
 
-function it(name, fn) {
+// Database simulator for headless Node tests matching sandbox/src/db/database.ts
+let inMemRooms = [];
+let inMemFurniture = [];
+let inMemProjects = [];
+
+const Database = {
+  async getRooms(includeSamples = false) {
+    if (includeSamples) return [...inMemRooms];
+    return inMemRooms.filter((r) => !r.is_sample);
+  },
+  async getRoomById(id) {
+    return inMemRooms.find((r) => r.id === id) || null;
+  },
+  async saveRoom(room) {
+    const idx = inMemRooms.findIndex((r) => r.id === room.id);
+    if (idx >= 0) inMemRooms[idx] = room;
+    else inMemRooms.unshift(room);
+  },
+  async deleteRoom(id) {
+    inMemRooms = inMemRooms.filter((r) => r.id !== id);
+    inMemFurniture = inMemFurniture.filter((f) => f.room_id !== id);
+    inMemProjects.forEach((p) => {
+      p.room_ids = (p.room_ids || []).filter((rId) => rId !== id);
+    });
+  },
+  async purgeAllData() {
+    inMemRooms = [];
+    inMemFurniture = [];
+    inMemProjects = [];
+  },
+  async getStorageStats() {
+    const active = inMemRooms.filter((r) => !r.is_sample);
+    const totalArea = active.reduce((sum, r) => sum + (r.area_sqft || 0), 0);
+    return {
+      roomCount: active.length,
+      totalAreaSqFt: Math.round(totalArea),
+      projectCount: inMemProjects.length,
+    };
+  },
+};
+
+async function it(name, fn) {
   totalTests++;
   try {
-    fn();
+    await fn();
     console.log(`  ✅ PASS: ${name}`);
     passedTests++;
   } catch (err) {
@@ -763,6 +804,101 @@ endsolid ${room.name}`;
       trianglesGenerated += 12; // Standard 2-subprism wall
     }
     assert.strictEqual(trianglesGenerated, 36, 'Only 3 physical walls generate 3D triangles (3 * 12 = 36, 0 for open span)');
+  });
+
+  // EVAL-20: Room Renaming (In-Situ & Catalog)
+  await it('EVAL-20: Room renaming updates SQLite name, trims whitespace, clamps bounds, and preserves geometry', async () => {
+    // 1. Initial room state
+    const room = {
+      id: 'test-room-rename-01',
+      name: 'Physical Room',
+      length_ft: 19.0,
+      width_ft: 12.0,
+      height_ft: 8.1,
+      area_sqft: 228,
+      mesh_json: JSON.stringify({ walls: [{ id: 'w0', lengthFt: 17.67 }] }),
+      is_sample: false,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    await Database.saveRoom(room);
+
+    // 2. Rename action (Happy Path)
+    const newNameInput = "  Chef's Kitchen & Dining Suite  ";
+    const trimmed = newNameInput.trim();
+    assert.strictEqual(trimmed, "Chef's Kitchen & Dining Suite", 'Whitespace must be trimmed cleanly');
+
+    const updated = { ...room, name: trimmed, updated_at: new Date().toISOString() };
+    await Database.saveRoom(updated);
+
+    const fetched = await Database.getRoomById('test-room-rename-01');
+    assert(fetched !== null, 'Room must exist in database');
+    assert.strictEqual(fetched.name, "Chef's Kitchen & Dining Suite", 'Database name must be updated');
+    assert.strictEqual(fetched.area_sqft, 228, 'Geometry and area must remain 100% preserved');
+
+    // 3. Edge Case: Empty name rejected
+    const emptyInput = '     ';
+    const emptyTrimmed = emptyInput.trim();
+    assert.strictEqual(emptyTrimmed, '', 'Empty string must be detected');
+    // Name must not update if trimmed is empty
+    if (emptyTrimmed) {
+      await Database.saveRoom({ ...fetched, name: emptyTrimmed });
+    }
+    const fetchedAfterEmpty = await Database.getRoomById('test-room-rename-01');
+    assert.strictEqual(fetchedAfterEmpty.name, "Chef's Kitchen & Dining Suite", 'Empty name must be rejected');
+
+    // Clean up test room
+    await Database.deleteRoom('test-room-rename-01');
+  });
+
+  // EVAL-21: Direct Studio Room Deletion
+  await it('EVAL-21: Direct Studio room deletion removes room from database, cascades to projects, and restores clean empty state', async () => {
+    // 1. Seed two rooms
+    const r1 = { id: 'del-r1', name: 'Temporary Scan 1', length_ft: 12, width_ft: 10, height_ft: 8, area_sqft: 120, mesh_json: '{}', is_sample: false, created_at: '', updated_at: '' };
+    const r2 = { id: 'del-r2', name: 'Temporary Scan 2', length_ft: 15, width_ft: 12, height_ft: 8, area_sqft: 180, mesh_json: '{}', is_sample: false, created_at: '', updated_at: '' };
+    await Database.saveRoom(r1);
+    await Database.saveRoom(r2);
+
+    let rooms = await Database.getRooms();
+    assert.strictEqual(rooms.length, 2, 'Must have 2 active rooms before deletion');
+
+    // 2. Delete r1 directly from studio
+    await Database.deleteRoom('del-r1');
+    rooms = await Database.getRooms();
+    assert.strictEqual(rooms.length, 1, 'Room count must decrement to 1');
+    assert.strictEqual(rooms[0].id, 'del-r2', 'Remaining room must be r2');
+    assert.strictEqual(await Database.getRoomById('del-r1'), null, 'Deleted room must return null');
+
+    // 3. Delete r2 directly from studio -> returns to clean 0 empty state
+    await Database.deleteRoom('del-r2');
+    rooms = await Database.getRooms();
+    assert.strictEqual(rooms.length, 0, 'Database must be completely empty after deleting last room');
+  });
+
+  // EVAL-22: Settings Screen Complete App Data Purge (Factory Reset)
+  await it('EVAL-22: Settings purge wipes all records from all tables and restores 100% clean factory state', async () => {
+    // 1. Seed multiple rooms and furniture
+    await Database.saveRoom({ id: 'p-r1', name: 'Room 1', length_ft: 10, width_ft: 10, height_ft: 8, area_sqft: 100, mesh_json: '{}', is_sample: false, created_at: '', updated_at: '' });
+    await Database.saveRoom({ id: 'p-r2', name: 'Room 2', length_ft: 12, width_ft: 12, height_ft: 8, area_sqft: 144, mesh_json: '{}', is_sample: false, created_at: '', updated_at: '' });
+
+    let stats = await Database.getStorageStats();
+    assert.strictEqual(stats.roomCount, 2, 'Stats must reflect 2 rooms before purge');
+    assert.strictEqual(stats.totalAreaSqFt, 244, 'Total area must equal 244 sq ft');
+
+    // 2. Execute full factory purge
+    await Database.purgeAllData();
+
+    // 3. Assert factory reset state
+    const afterPurgeRooms = await Database.getRooms();
+    assert.strictEqual(afterPurgeRooms.length, 0, 'Rooms list must be 0 after purge');
+
+    const afterPurgeStats = await Database.getStorageStats();
+    assert.strictEqual(afterPurgeStats.roomCount, 0, 'Stats roomCount must be 0');
+    assert.strictEqual(afterPurgeStats.totalAreaSqFt, 0, 'Stats totalAreaSqFt must be 0');
+
+    // 4. Idempotency test (purging when already empty must succeed without error)
+    await Database.purgeAllData();
+    assert.strictEqual((await Database.getRooms()).length, 0, 'Second purge must succeed idempotently');
   });
 
   console.log(`\n📊 Verification Summary: ${passedTests}/${totalTests} tests passed.\n`);

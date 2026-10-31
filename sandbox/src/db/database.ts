@@ -19,6 +19,7 @@ async function ensureLoaded(): Promise<void> {
         const persisted = await NativeModules.RoomPlanModule.getPersistedRooms();
         if (Array.isArray(persisted) && persisted.length > 0) {
           for (const item of persisted) {
+            if (item.isDeleted) continue; // Skip deleted items
             const rawId = item.id || (item.usdzPath ? 'room-' + item.usdzPath.split('_').pop()?.replace('.usdz', '') : 'room-' + Date.now());
             const roomId = String(rawId);
             if (!inMemoryRooms.some((r) => r.id === roomId)) {
@@ -95,6 +96,59 @@ export const Database = {
   async deleteRoom(id: string): Promise<void> {
     inMemoryRooms = inMemoryRooms.filter((r) => r.id !== id);
     inMemoryFurniture = inMemoryFurniture.filter((f) => f.room_id !== id);
+    // Cascade removal from house projects
+    inMemoryProjects.forEach((proj) => {
+      proj.room_ids = proj.room_ids.filter((rId) => rId !== id);
+    });
+
+    if (Platform.OS === 'ios' && NativeModules?.RoomPlanModule?.saveRoomJson) {
+      try {
+        const filename = id.startsWith('scanned_room_') ? id : `scanned_room_${id}`;
+        await NativeModules.RoomPlanModule.saveRoomJson(
+          filename,
+          JSON.stringify({ id, isDeleted: true, deletedAt: new Date().toISOString() })
+        );
+      } catch (e) {
+        console.warn('Failed marking room deleted on disk:', e);
+      }
+    }
+  },
+
+  async purgeAllData(): Promise<void> {
+    const ids = inMemoryRooms.map((r) => r.id);
+    inMemoryRooms = [];
+    inMemoryFurniture = [];
+    inMemoryProjects = [];
+    hasLoadedFromDisk = true; // Lock cache so deleted rooms are never reloaded
+
+    if (Platform.OS === 'ios' && NativeModules?.RoomPlanModule?.saveRoomJson) {
+      try {
+        for (const id of ids) {
+          const filename = id.startsWith('scanned_room_') ? id : `scanned_room_${id}`;
+          await NativeModules.RoomPlanModule.saveRoomJson(
+            filename,
+            JSON.stringify({ id, isDeleted: true, deletedAt: new Date().toISOString() })
+          );
+        }
+        await NativeModules.RoomPlanModule.saveRoomJson(
+          'purge_manifest',
+          JSON.stringify({ purgedAt: new Date().toISOString(), status: 'clean_factory_state' })
+        );
+      } catch (e) {
+        console.warn('Failed recording purge manifest on disk:', e);
+      }
+    }
+  },
+
+  async getStorageStats(): Promise<{ roomCount: number; totalAreaSqFt: number; projectCount: number }> {
+    await ensureLoaded();
+    const activeRooms = inMemoryRooms.filter((r) => !r.is_sample);
+    const totalArea = activeRooms.reduce((sum, r) => sum + (r.area_sqft || 0), 0);
+    return {
+      roomCount: activeRooms.length,
+      totalAreaSqFt: Math.round(totalArea),
+      projectCount: inMemoryProjects.length,
+    };
   },
 
   async getFurniture(roomId: string): Promise<FurnitureItem[]> {
@@ -106,8 +160,6 @@ export const Database = {
   },
 
   async clearDatabase(): Promise<void> {
-    inMemoryRooms = [];
-    inMemoryFurniture = [];
-    inMemoryProjects = [];
+    await this.purgeAllData();
   },
 };

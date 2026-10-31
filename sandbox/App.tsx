@@ -7,10 +7,11 @@ import { RoomsCatalogScreen } from './src/screens/RoomsCatalogScreen';
 import { LidarScannerScreen } from './src/screens/LidarScannerScreen';
 import { RoomStudioScreen } from './src/screens/RoomStudioScreen';
 import { HouseAssemblyScreen } from './src/screens/HouseAssemblyScreen';
+import { SettingsScreen } from './src/screens/SettingsScreen';
 import { GeometryService } from './src/services/geometryService';
 import { Database } from './src/db/database';
 
-type Tab = 'catalog' | 'scanner' | 'studio' | 'assembly';
+type Tab = 'catalog' | 'scanner' | 'studio' | 'assembly' | 'settings';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>('catalog');
@@ -50,6 +51,7 @@ export default function App() {
             key={catalogRefreshKey}
             onNavigateToScan={() => setActiveTab('scanner')}
             onSelectRoom={handleSelectRoom}
+            onNavigateToSettings={() => setActiveTab('settings')}
           />
         )}
         {activeTab === 'scanner' && (
@@ -68,6 +70,15 @@ export default function App() {
           <HouseAssemblyScreen
             initialSelectedRoom={selectedRoom}
             onBack={handleBackToCatalog}
+          />
+        )}
+        {activeTab === 'settings' && (
+          <SettingsScreen
+            onBack={handleBackToCatalog}
+            onPurgeComplete={() => {
+              setCatalogRefreshKey((k) => k + 1);
+              setActiveTab('catalog');
+            }}
           />
         )}
       </View>
@@ -117,6 +128,16 @@ export default function App() {
           <Text style={[styles.tabIcon, activeTab === 'assembly' && styles.tabIconActive]}>🏡</Text>
           <Text style={[styles.tabLabel, activeTab === 'assembly' && styles.tabLabelActive]}>
             Whole House
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.tabItem}
+          onPress={() => setActiveTab('settings')}
+        >
+          <Text style={[styles.tabIcon, activeTab === 'settings' && styles.tabIconActive]}>⚙️</Text>
+          <Text style={[styles.tabLabel, activeTab === 'settings' && styles.tabLabelActive]}>
+            Settings
           </Text>
         </TouchableOpacity>
       </View>

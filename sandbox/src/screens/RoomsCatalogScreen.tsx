@@ -17,11 +17,13 @@ import { GeometryService } from '../services/geometryService';
 interface Props {
   onNavigateToScan: () => void;
   onSelectRoom: (room: Room) => void;
+  onNavigateToSettings?: () => void;
 }
 
 export const RoomsCatalogScreen: React.FC<Props> = ({
   onNavigateToScan,
   onSelectRoom,
+  onNavigateToSettings,
 }) => {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(true);
@@ -36,6 +38,36 @@ export const RoomsCatalogScreen: React.FC<Props> = ({
   useEffect(() => {
     loadData();
   }, []);
+
+  const handleRenameRoom = (room: Room) => {
+    Alert.prompt(
+      'Rename Room',
+      'Enter new name for this room:',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Save',
+          onPress: async (newName?: string) => {
+            const trimmed = newName?.trim();
+            if (!trimmed) {
+              Alert.alert('Invalid Name', 'Room name cannot be empty.');
+              return;
+            }
+            const clamped = trimmed.slice(0, 40);
+            const updated = {
+              ...room,
+              name: clamped,
+              updated_at: new Date().toISOString(),
+            };
+            await Database.saveRoom(updated);
+            await loadData();
+          },
+        },
+      ],
+      'plain-text',
+      room.name
+    );
+  };
 
   const handleDeleteRoom = (room: Room) => {
     Alert.alert(
@@ -85,13 +117,24 @@ export const RoomsCatalogScreen: React.FC<Props> = ({
             <Text style={styles.headerTitle}>LiDAR Studio</Text>
             <Text style={styles.headerSubtitle}>Apple HIG Light Mode Precision</Text>
           </View>
-          <TouchableOpacity
-            style={styles.scanPrimaryPill}
-            onPress={onNavigateToScan}
-            accessibilityLabel="Start new scan"
-          >
-            <Text style={styles.scanPillText}>+ New Scan</Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            {onNavigateToSettings && (
+              <TouchableOpacity
+                style={styles.settingsHeaderBtn}
+                onPress={onNavigateToSettings}
+                accessibilityLabel="Open Settings"
+              >
+                <Text style={{ fontSize: 20 }}>⚙️</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity
+              style={styles.scanPrimaryPill}
+              onPress={onNavigateToScan}
+              accessibilityLabel="Start new scan"
+            >
+              <Text style={styles.scanPillText}>+ New Scan</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Sub-header row for My Scans management */}
@@ -163,16 +206,26 @@ export const RoomsCatalogScreen: React.FC<Props> = ({
                       )}
                     </View>
 
-                    {/* Delete button on user scans */}
+                    {/* Action buttons on user scans */}
                     {!room.is_sample && (
-                      <TouchableOpacity
-                        style={styles.deletePill}
-                        onPress={() => handleDeleteRoom(room)}
-                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                        accessibilityLabel={`Delete ${room.name}`}
-                      >
-                        <Text style={styles.deletePillText}>Delete</Text>
-                      </TouchableOpacity>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <TouchableOpacity
+                          style={styles.renamePill}
+                          onPress={() => handleRenameRoom(room)}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                          accessibilityLabel={`Rename ${room.name}`}
+                        >
+                          <Text style={styles.renamePillText}>Rename</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.deletePill}
+                          onPress={() => handleDeleteRoom(room)}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                          accessibilityLabel={`Delete ${room.name}`}
+                        >
+                          <Text style={styles.deletePillText}>Delete</Text>
+                        </TouchableOpacity>
+                      </View>
                     )}
                   </View>
 
@@ -390,6 +443,26 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#1c1c1e',
+  },
+  settingsHeaderBtn: {
+    padding: 6,
+    borderRadius: 8,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#e5e5ea',
+  },
+  renamePill: {
+    backgroundColor: '#f0f9ff',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 0.5,
+    borderColor: '#bae6fd',
+  },
+  renamePillText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#0284c7',
   },
   deletePill: {
     backgroundColor: '#fff1f0',
