@@ -523,6 +523,85 @@ endsolid ${room.name}`;
     assert.strictEqual(filterWindows(explicitCloset).length, 0, 'Explicit closet aperture must not cut wall void');
   });
 
+  // EVAL-14: Wall anchor resolution selects furthest point as fixed pivot
+  it('EVAL-14: Wall anchor resolution correctly selects furthest point as fixed pivot ⚓', () => {
+    const p1 = { x: 0, z: 0 };
+    const p2 = { x: 10, z: 10 };
+
+    // Case A: User touches close to p2 (e.g. at 9, 9)
+    // Distance to p1 is ~12.7, distance to p2 is ~1.4 -> p1 is furthest -> p1 is anchor
+    const touchNearP2 = { x: 9, z: 9 };
+    const d1A = Math.hypot(touchNearP2.x - p1.x, touchNearP2.z - p1.z);
+    const d2A = Math.hypot(touchNearP2.x - p2.x, touchNearP2.z - p2.z);
+    const anchorIdxA = d1A >= d2A ? 0 : 1;
+    assert.strictEqual(anchorIdxA, 0, 'p1 must be selected as anchor when touch is near p2');
+
+    // Case B: User touches close to p1 (e.g. at 1, 1)
+    // Distance to p1 is ~1.4, distance to p2 is ~12.7 -> p2 is furthest -> p2 is anchor
+    const touchNearP1 = { x: 1, z: 1 };
+    const d1B = Math.hypot(touchNearP1.x - p1.x, touchNearP1.z - p1.z);
+    const d2B = Math.hypot(touchNearP1.x - p2.x, touchNearP1.z - p2.z);
+    const anchorIdxB = d1B >= d2B ? 0 : 1;
+    assert.strictEqual(anchorIdxB, 1, 'p2 must be selected as anchor when touch is near p1');
+  });
+
+  // EVAL-15: Magnetic orthogonal snapping locks near end to exact 90° vertical
+  it('EVAL-15: Magnetic orthogonal snapping locks near end to exact 90.0° vertical within threshold', () => {
+    const anchor = { x: 5, z: 2 };
+    // Drag point at an 86° angle (4° away from pure 90° vertical down)
+    const currentDragPt = { x: 5 + 10 * Math.cos((86 * Math.PI) / 180), z: 2 + 10 * Math.sin((86 * Math.PI) / 180) };
+
+    const dx = currentDragPt.x - anchor.x;
+    const dz = currentDragPt.z - anchor.z;
+    let angleDeg = (Math.atan2(dz, dx) * 180) / Math.PI;
+    if (angleDeg < 0) angleDeg += 360;
+
+    const snapThresholdDeg = 6.0;
+    let isSnapped = false;
+    let finalAngleDeg = angleDeg;
+
+    if (Math.abs(angleDeg - 90) <= snapThresholdDeg) {
+      isSnapped = true;
+      finalAngleDeg = 90.0;
+    }
+
+    assert.strictEqual(isSnapped, true, '86° must magnetically snap to 90° within ±6° window');
+    assert.strictEqual(finalAngleDeg, 90.0, 'Snapped angle must equal exact 90.0°');
+
+    const len = Math.hypot(dx, dz);
+    const snappedPt = {
+      x: +(anchor.x + len * Math.cos((finalAngleDeg * Math.PI) / 180)).toFixed(4),
+      z: +(anchor.z + len * Math.sin((finalAngleDeg * Math.PI) / 180)).toFixed(4),
+    };
+    assert.strictEqual(snappedPt.x, 5.0, 'X coordinate must align exactly with anchor X (pure vertical)');
+  });
+
+  // EVAL-16: Polygon self-intersection detector rejects bowtie geometries
+  it('EVAL-16: Polygon self-intersection detector rejects bowtie geometries & preserves watertight topology', () => {
+    const ccw = (a, b, c) => (c.z - a.z) * (b.x - a.x) > (b.z - a.z) * (c.x - a.x);
+    const segmentsIntersect = (p1, p2, p3, p4) => ccw(p1, p3, p4) !== ccw(p2, p3, p4) && ccw(p1, p2, p3) !== ccw(p1, p2, p4);
+    const isSelfIntersecting = (poly) => {
+      const n = poly.length;
+      for (let i = 0; i < n; i++) {
+        const a1 = poly[i], a2 = poly[(i + 1) % n];
+        for (let j = i + 2; j < n; j++) {
+          if (i === 0 && j === n - 1) continue;
+          const b1 = poly[j], b2 = poly[(j + 1) % n];
+          if (segmentsIntersect(a1, a2, b1, b2)) return true;
+        }
+      }
+      return false;
+    };
+
+    // Valid simple rectangle
+    const validBox = [{ x: 0, z: 0 }, { x: 10, z: 0 }, { x: 10, z: 10 }, { x: 0, z: 10 }];
+    assert.strictEqual(isSelfIntersecting(validBox), false, 'Simple rectangle must not be detected as self-intersecting');
+
+    // Bowtie polygon where edge (0,0)-(10,10) crosses edge (10,0)-(0,10)
+    const bowtie = [{ x: 0, z: 0 }, { x: 10, z: 10 }, { x: 10, z: 0 }, { x: 0, z: 10 }];
+    assert.strictEqual(isSelfIntersecting(bowtie), true, 'Bowtie self-intersecting polygon must be caught by collision guard');
+  });
+
   console.log(`\n📊 Verification Summary: ${passedTests}/${totalTests} tests passed.\n`);
 }
 

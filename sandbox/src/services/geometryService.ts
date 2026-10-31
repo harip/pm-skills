@@ -465,4 +465,180 @@ export const GeometryService = {
       },
     ];
   },
+
+  // Perpendicular distance from a point to a line segment
+  distanceToSegment(
+    p: PolygonPoint,
+    a: PolygonPoint,
+    b: PolygonPoint
+  ): { dist: number; t: number; proj: PolygonPoint } {
+    const dx = b.x - a.x;
+    const dz = b.z - a.z;
+    const lenSq = dx * dx + dz * dz;
+    if (lenSq === 0) {
+      const d = Math.hypot(p.x - a.x, p.z - a.z);
+      return { dist: d, t: 0, proj: { ...a } };
+    }
+    let t = ((p.x - a.x) * dx + (p.z - a.z) * dz) / lenSq;
+    t = Math.max(0, Math.min(1, t));
+    const proj = { x: a.x + t * dx, z: a.z + t * dz };
+    const dist = Math.hypot(p.x - proj.x, p.z - proj.z);
+    return { dist, t, proj };
+  },
+
+  // Calculate Anchor and Rotated Vertex with Magnetic Snap
+  calculateAnchorAndRotation(
+    p1: PolygonPoint,
+    p2: PolygonPoint,
+    touchPt: PolygonPoint,
+    currentPt: PolygonPoint,
+    snapThresholdDeg = 6.0
+  ): {
+    anchor: PolygonPoint;
+    anchorIdx: number; // 0 for p1, 1 for p2
+    rotating: PolygonPoint;
+    angleDeg: number;
+    isSnapped: boolean;
+    snappedAxis: 'vertical' | 'horizontal' | null;
+  } {
+    const d1 = Math.hypot(touchPt.x - p1.x, touchPt.z - p1.z);
+    const d2 = Math.hypot(touchPt.x - p2.x, touchPt.z - p2.z);
+
+    // Furthest endpoint from touch point is the anchor
+    const anchorIdx = d1 >= d2 ? 0 : 1;
+    const anchor = anchorIdx === 0 ? { ...p1 } : { ...p2 };
+
+    const dx = currentPt.x - anchor.x;
+    const dz = currentPt.z - anchor.z;
+    const dragDist = Math.hypot(dx, dz);
+    const minLength = 1.0; // Enforce minimum wall length 1.0 ft
+    const effectiveLength = Math.max(minLength, dragDist);
+
+    let angleRad = Math.atan2(dz, dx);
+    let angleDeg = (angleRad * 180) / Math.PI;
+    if (angleDeg < 0) angleDeg += 360;
+
+    let isSnapped = false;
+    let snappedAxis: 'vertical' | 'horizontal' | null = null;
+    let finalAngleRad = angleRad;
+
+    // Check snapping to cardinal directions: 0 (East), 90 (South/Down), 180 (West), 270 (North/Up)
+    const cardinalSnaps = [
+      { deg: 0, axis: 'horizontal' as const },
+      { deg: 90, axis: 'vertical' as const },
+      { deg: 180, axis: 'horizontal' as const },
+      { deg: 270, axis: 'vertical' as const },
+      { deg: 360, axis: 'horizontal' as const },
+    ];
+
+    for (const snap of cardinalSnaps) {
+      if (Math.abs(angleDeg - snap.deg) <= snapThresholdDeg) {
+        isSnapped = true;
+        snappedAxis = snap.axis;
+        finalAngleRad = (snap.deg % 360) * (Math.PI / 180);
+        angleDeg = snap.deg % 360;
+        break;
+      }
+    }
+
+    const rotating: PolygonPoint = {
+      x: anchor.x + effectiveLength * Math.cos(finalAngleRad),
+      z: anchor.z + effectiveLength * Math.sin(finalAngleRad),
+    };
+
+    return {
+      anchor,
+      anchorIdx,
+      rotating,
+      angleDeg,
+      isSnapped,
+      snappedAxis,
+    };
+  },
+
+  // Check if polygon self-intersects
+  isPolygonSelfIntersecting(polygon: PolygonPoint[]): boolean {
+    const n = polygon.length;
+    if (n < 4) return false;
+
+    const ccw = (a: PolygonPoint, b: PolygonPoint, c: PolygonPoint) => {
+      return (c.z - a.z) * (b.x - a.x) > (b.z - a.z) * (c.x - a.x);
+    };
+
+    const segmentsIntersect = (p1: PolygonPoint, p2: PolygonPoint, p3: PolygonPoint, p4: PolygonPoint) => {
+      return ccw(p1, p3, p4) !== ccw(p2, p3, p4) && ccw(p1, p2, p3) !== ccw(p1, p2, p4);
+    };
+
+    for (let i = 0; i < n; i++) {
+      const a1 = polygon[i];
+      const a2 = polygon[(i + 1) % n];
+      for (let j = i + 2; j < n; j++) {
+        if (i === 0 && j === n - 1) continue; // Adjacent wrap-around segments
+        const b1 = polygon[j];
+        const b2 = polygon[(j + 1) % n];
+        if (segmentsIntersect(a1, a2, b1, b2)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  },
+
+  // Convert a closed polygon to the standard RoomCapture mesh walls array
+  polygonToWalls(polygon: PolygonPoint[], originalWalls?: any[], wallHeightFt = 8.1): any[] {
+    const n = polygon.length;
+    const newWalls: any[] = [];
+    for (let i = 0; i < n; i++) {
+      const p1 = polygon[i];
+      const p2 = polygon[(i + 1) % n];
+      const lenFt = Math.hypot(p2.x - p1.x, p2.z - p1.z);
+      const midX = (p1.x + p2.x) / 2;
+      const midZ = (p1.z + p2.z) / 2;
+      const yaw = Math.atan2(p2.z - p1.z, p2.x - p1.x) * (180 / Math.PI);
+      const orig = originalWalls && originalWalls[i] ? originalWalls[i] : {};
+
+      newWalls.push({
+        ...orig,
+        id: orig.id || `wall-${i}`,
+        x: +midX.toFixed(2),
+        y: orig.y ?? 0,
+        z: +midZ.toFixed(2),
+        x1: +p1.x.toFixed(2),
+        z1: +p1.z.toFixed(2),
+        x2: +p2.x.toFixed(2),
+        z2: +p2.z.toFixed(2),
+        lengthFt: +lenFt.toFixed(2),
+        heightFt: orig.heightFt || wallHeightFt,
+        thicknessFt: orig.thicknessFt || 0.54,
+        yawDeg: Math.round(yaw),
+      });
+    }
+    return newWalls;
+  },
+
+  // Dissolve a spurious acute apex vertex into a clean rectangular corner
+  dissolveSpuriousApex(polygon: PolygonPoint[], apexIdx: number): PolygonPoint[] {
+    const n = polygon.length;
+    if (n <= 3) return polygon;
+
+    const prevIdx = (apexIdx - 1 + n) % n;
+    const nextIdx = (apexIdx + 1) % n;
+    const prevPt = polygon[prevIdx];
+    const apexPt = polygon[apexIdx];
+    const nextPt = polygon[nextIdx];
+
+    const dx1 = Math.abs(apexPt.x - prevPt.x);
+    const dz1 = Math.abs(apexPt.z - prevPt.z);
+
+    let newCorner: PolygonPoint;
+    if (dx1 >= dz1) {
+      newCorner = { x: nextPt.x, z: prevPt.z };
+    } else {
+      newCorner = { x: prevPt.x, z: nextPt.z };
+    }
+
+    const updated = [...polygon];
+    updated[apexIdx] = newCorner;
+    return updated;
+  },
 };

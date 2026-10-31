@@ -50,6 +50,20 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
     widthFt: number;
   } | null>(null);
 
+  // Wall Alignment & Snapping State
+  const [activePolygon, setActivePolygon] = useState<PolygonPoint[] | null>(null);
+  const [selectedWallIdx, setSelectedWallIdx] = useState<number | null>(null);
+  const [wallAnchorInfo, setWallAnchorInfo] = useState<{
+    anchor: PolygonPoint;
+    anchorIdx: number;
+    rotVertexIdx: number;
+    rotating: PolygonPoint;
+    angleDeg: number;
+    isSnapped: boolean;
+    snappedAxis: 'vertical' | 'horizontal' | null;
+  } | null>(null);
+  const [polygonHistory, setPolygonHistory] = useState<PolygonPoint[][]>([]);
+
   // 360° Drag Orbit State (Azimuth & Elevation)
   const [angleX, setAngleX] = useState(0.52);
   const [angleY, setAngleY] = useState(-0.35);
@@ -63,6 +77,16 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
   // High-frequency delta tracking refs for 60fps ultra-responsive gestures
   const lastTouchPosRef = useRef<{ x: number; y: number } | null>(null);
   const lastPinchDistRef = useRef<number | null>(null);
+
+  // Synchronized refs to eliminate stale closure bugs inside panResponder
+  const isRotatingWallRef = useRef<boolean>(false);
+  const selectedWallIdxRef = useRef<number | null>(null);
+  const wallAnchorInfoRef = useRef<typeof wallAnchorInfo>(null);
+  const activePolygonRef = useRef<PolygonPoint[] | null>(null);
+  const scale2DRef = useRef<number>(20);
+  const offset2DXRef = useRef<number>(0);
+  const offset2DZRef = useRef<number>(0);
+  const viewModeRef = useRef<'2d' | '3d'>('2d');
 
   // Viewport dimensions
   const [canvasLayout, setCanvasLayout] = useState({ width: 360, height: 480 });
@@ -87,7 +111,7 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
   const currentFloor = room.floor_level || parsedMesh?.floorLevel || 'Ground Floor';
 
   // Build the continuous closed boundary polygon from LiDAR wall segments
-  const polygon: PolygonPoint[] = GeometryService.buildRoomPolygon(
+  const polygon: PolygonPoint[] = activePolygon || GeometryService.buildRoomPolygon(
     realWalls,
     room.width_ft || 14,
     room.length_ft || 16
@@ -111,6 +135,12 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
   const spanX = Math.max(1, maxX - minX);
   const spanZ = Math.max(1, maxZ - minZ);
 
+  // Sync refs on each render
+  selectedWallIdxRef.current = selectedWallIdx;
+  wallAnchorInfoRef.current = wallAnchorInfo;
+  activePolygonRef.current = activePolygon;
+  viewModeRef.current = viewMode;
+
   // Ultra-Responsive Multi-Touch PanResponder (Instant Delta Tracking)
   const panResponder = useRef(
     PanResponder.create({
@@ -123,8 +153,36 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
           const dy = touches[0].pageY - touches[1].pageY;
           lastPinchDistRef.current = Math.hypot(dx, dy);
           lastTouchPosRef.current = null;
+          isRotatingWallRef.current = false;
         } else if (touches.length === 1) {
-          lastTouchPosRef.current = { x: touches[0].pageX, y: touches[0].pageY };
+          const curX = touches[0].pageX;
+          const curY = touches[0].pageY;
+
+          // Check if touch is near the active rotation handle in 2D mode
+          if (
+            viewModeRef.current === '2d' &&
+            selectedWallIdxRef.current !== null &&
+            wallAnchorInfoRef.current
+          ) {
+            const rotScreenX =
+              wallAnchorInfoRef.current.rotating.x * scale2DRef.current + offset2DXRef.current;
+            const rotScreenY =
+              wallAnchorInfoRef.current.rotating.z * scale2DRef.current + offset2DZRef.current;
+            const distToHandle = Math.hypot(curX - rotScreenX, curY - rotScreenY);
+            if (distToHandle < 50) {
+              isRotatingWallRef.current = true;
+              setPolygonHistory((prev) => [
+                ...prev,
+                [...(activePolygonRef.current || polygon)],
+              ]);
+              lastTouchPosRef.current = null;
+              lastPinchDistRef.current = null;
+              return;
+            }
+          }
+
+          isRotatingWallRef.current = false;
+          lastTouchPosRef.current = { x: curX, y: curY };
           lastPinchDistRef.current = null;
         }
       },
@@ -145,14 +203,53 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
           }
           lastTouchPosRef.current = null;
         }
-        // 1-Finger Drag: 360° Orbit in 3D, 1:1 Pan in 2D
+        // 1-Finger Drag: Active Wall Rotation or 360° Orbit / 1:1 Pan
         else if (touches.length === 1) {
           const curX = touches[0].pageX;
           const curY = touches[0].pageY;
+
+          // Interactive Anchor-Pivot Wall Rotation with Magnetic Snapping
+          if (isRotatingWallRef.current && wallAnchorInfoRef.current) {
+            const curLocalX = (curX - offset2DXRef.current) / scale2DRef.current;
+            const curLocalZ = (curY - offset2DZRef.current) / scale2DRef.current;
+            const { anchor, rotVertexIdx, anchorIdx } = wallAnchorInfoRef.current;
+
+            const result = GeometryService.calculateAnchorAndRotation(
+              anchor,
+              wallAnchorInfoRef.current.rotating,
+              { x: curLocalX, z: curLocalZ },
+              { x: curLocalX, z: curLocalZ },
+              6.0
+            );
+
+            const curPoly = activePolygonRef.current || polygon;
+            const candidatePoly = curPoly.map((pt, i) =>
+              i === rotVertexIdx ? result.rotating : pt
+            );
+
+            // Guard against self-intersection
+            if (!GeometryService.isPolygonSelfIntersecting(candidatePoly)) {
+              setActivePolygon(candidatePoly);
+              activePolygonRef.current = candidatePoly;
+              const newInfo = {
+                anchor,
+                anchorIdx,
+                rotVertexIdx,
+                rotating: result.rotating,
+                angleDeg: result.angleDeg,
+                isSnapped: result.isSnapped,
+                snappedAxis: result.snappedAxis,
+              };
+              setWallAnchorInfo(newInfo);
+              wallAnchorInfoRef.current = newInfo;
+            }
+            return;
+          }
+
           if (lastTouchPosRef.current) {
             const dx = curX - lastTouchPosRef.current.x;
             const dy = curY - lastTouchPosRef.current.y;
-            if (viewMode === '3d') {
+            if (viewModeRef.current === '3d') {
               setAngleY((prev) => prev + dx * 0.008);
               setAngleX((prev) => Math.max(0.15, Math.min(1.45, prev - dy * 0.008)));
             } else {
@@ -164,10 +261,17 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
         }
       },
       onPanResponderRelease: () => {
+        if (isRotatingWallRef.current) {
+          isRotatingWallRef.current = false;
+          if (activePolygonRef.current) {
+            handleSaveUpdatedPolygon(activePolygonRef.current);
+          }
+        }
         lastTouchPosRef.current = null;
         lastPinchDistRef.current = null;
       },
       onPanResponderTerminate: () => {
+        isRotatingWallRef.current = false;
         lastTouchPosRef.current = null;
         lastPinchDistRef.current = null;
       },
@@ -256,6 +360,177 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
     await Database.saveRoom(updatedRoom);
   };
 
+  const handleSaveUpdatedPolygon = async (finalPoly: PolygonPoint[]) => {
+    if (!finalPoly || finalPoly.length < 3) return;
+
+    let mesh = parsedMesh ? JSON.parse(JSON.stringify(parsedMesh)) : {};
+    const updatedWalls = GeometryService.polygonToWalls(finalPoly, mesh.walls);
+    mesh.walls = updatedWalls;
+    mesh.polygon = finalPoly;
+
+    // Recalculate room dimensions and area
+    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    for (const p of finalPoly) {
+      minX = Math.min(minX, p.x);
+      maxX = Math.max(maxX, p.x);
+      minZ = Math.min(minZ, p.z);
+      maxZ = Math.max(maxZ, p.z);
+    }
+    const newWidthFt = +(maxX - minX).toFixed(1);
+    const newLengthFt = +(maxZ - minZ).toFixed(1);
+    const newAreaSqFt = Math.round(newWidthFt * newLengthFt);
+
+    const newMeshJson = JSON.stringify(mesh);
+    const updatedRoom: Room = {
+      ...room,
+      width_ft: newWidthFt,
+      length_ft: newLengthFt,
+      area_sqft: newAreaSqFt,
+      mesh_json: newMeshJson,
+      updated_at: new Date().toISOString(),
+    };
+
+    setRoom(updatedRoom);
+    await Database.saveRoom(updatedRoom);
+  };
+
+  const handleSelectWall = (wallIdx: number, evt?: any) => {
+    setSelectedAperture(null); // Close aperture capsule if open
+    setSelectedWallIdx(wallIdx);
+
+    const curPoly = activePolygon || polygon;
+    const n = curPoly.length;
+    const p1 = curPoly[wallIdx];
+    const p2 = curPoly[(wallIdx + 1) % n];
+
+    // Determine Anchor vs Rotating based on touch position if available
+    let touchX = (p1.x + p2.x) / 2;
+    let touchZ = (p1.z + p2.z) / 2;
+    if (evt && evt.nativeEvent) {
+      touchX = (evt.nativeEvent.locationX - offset2DX) / scale2D;
+      touchZ = (evt.nativeEvent.locationY - offset2DZ) / scale2D;
+    }
+
+    const d1 = Math.hypot(touchX - p1.x, touchZ - p1.z);
+    const d2 = Math.hypot(touchX - p2.x, touchZ - p2.z);
+
+    // Furthest endpoint from touch is the Anchor (Fixed Pin)
+    const anchorIdx = d1 >= d2 ? 0 : 1;
+    const anchor = anchorIdx === 0 ? { ...p1 } : { ...p2 };
+    const rotVertexIdx = anchorIdx === 0 ? (wallIdx + 1) % n : wallIdx;
+    const rotating = { ...curPoly[rotVertexIdx] };
+
+    const dx = rotating.x - anchor.x;
+    const dz = rotating.z - anchor.z;
+    let angleDeg = (Math.atan2(dz, dx) * 180) / Math.PI;
+    if (angleDeg < 0) angleDeg += 360;
+
+    const snapDiffV = Math.min(Math.abs(angleDeg - 90), Math.abs(angleDeg - 270));
+    const isSnapped = snapDiffV <= 6.0;
+
+    const info = {
+      anchor,
+      anchorIdx,
+      rotVertexIdx,
+      rotating,
+      angleDeg,
+      isSnapped,
+      snappedAxis: (isSnapped ? 'vertical' : null) as 'vertical' | 'horizontal' | null,
+    };
+
+    setWallAnchorInfo(info);
+    wallAnchorInfoRef.current = info;
+  };
+
+  const handleSnapVertical = async () => {
+    if (!wallAnchorInfo) return;
+    const { anchor, rotVertexIdx } = wallAnchorInfo;
+    const curPoly = activePolygon || polygon;
+    setPolygonHistory((prev) => [...prev, [...curPoly]]);
+
+    // Preserve length while making pure vertical
+    const origRot = wallAnchorInfo.rotating;
+    const len = Math.hypot(origRot.x - anchor.x, origRot.z - anchor.z);
+    const signZ = origRot.z >= anchor.z ? 1 : -1;
+    const newRot: PolygonPoint = {
+      x: anchor.x,
+      z: anchor.z + len * signZ,
+    };
+
+    const candidatePoly = curPoly.map((pt, i) => (i === rotVertexIdx ? newRot : pt));
+    setActivePolygon(candidatePoly);
+    activePolygonRef.current = candidatePoly;
+    setWallAnchorInfo({
+      ...wallAnchorInfo,
+      rotating: newRot,
+      angleDeg: signZ > 0 ? 90.0 : 270.0,
+      isSnapped: true,
+      snappedAxis: 'vertical',
+    });
+    await handleSaveUpdatedPolygon(candidatePoly);
+  };
+
+  const handleSquareCorner = async () => {
+    if (!wallAnchorInfo) return;
+    const curPoly = activePolygon || polygon;
+    setPolygonHistory((prev) => [...prev, [...curPoly]]);
+
+    const updatedPoly = GeometryService.dissolveSpuriousApex(curPoly, wallAnchorInfo.rotVertexIdx);
+    setActivePolygon(updatedPoly);
+    activePolygonRef.current = updatedPoly;
+    setSelectedWallIdx(null);
+    setWallAnchorInfo(null);
+    await handleSaveUpdatedPolygon(updatedPoly);
+  };
+
+  const handleUndoWallEdit = async () => {
+    if (polygonHistory.length === 0) return;
+    const prev = [...polygonHistory];
+    const restored = prev.pop()!;
+    setPolygonHistory(prev);
+    setActivePolygon(restored);
+    activePolygonRef.current = restored;
+    setSelectedWallIdx(null);
+    setWallAnchorInfo(null);
+    await handleSaveUpdatedPolygon(restored);
+  };
+
+  const handleCommitWallEdit = () => {
+    setSelectedWallIdx(null);
+    setWallAnchorInfo(null);
+  };
+
+  const handleRevertOriginalScan = async () => {
+    Alert.alert(
+      'Revert Wall Edits',
+      'Restore the original scanned wall layout from LiDAR? Any manual wall adjustments will be reset.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Revert',
+          style: 'destructive',
+          onPress: async () => {
+            setActivePolygon(null);
+            activePolygonRef.current = null;
+            setSelectedWallIdx(null);
+            setWallAnchorInfo(null);
+            setPolygonHistory([]);
+
+            let mesh = parsedMesh ? JSON.parse(JSON.stringify(parsedMesh)) : {};
+            delete mesh.polygon;
+            const updatedRoom: Room = {
+              ...room,
+              mesh_json: JSON.stringify(mesh),
+              updated_at: new Date().toISOString(),
+            };
+            setRoom(updatedRoom);
+            await Database.saveRoom(updatedRoom);
+          },
+        },
+      ]
+    );
+  };
+
   const doExportStl = async (withRoof: boolean, includeFurniture: boolean) => {
     const stl = StlExporterService.generateAsciiStl(room, { withRoof, includeFurniture });
     const suffix = withRoof
@@ -324,18 +599,20 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
     if (Platform.OS === 'ios') {
       ActionSheetIOS.showActionSheetWithOptions(
         {
-          options: ['Cancel', 'Assign Floor Level', 'Delete Room'],
-          destructiveButtonIndex: 2,
+          options: ['Cancel', 'Assign Floor Level', 'Revert Wall Edits', 'Delete Room'],
+          destructiveButtonIndex: 3,
           cancelButtonIndex: 0,
         },
         (buttonIndex) => {
           if (buttonIndex === 1) handleAdjustFloorLevel();
-          else if (buttonIndex === 2) handleDeleteRoom();
+          else if (buttonIndex === 2) handleRevertOriginalScan();
+          else if (buttonIndex === 3) handleDeleteRoom();
         }
       );
     } else {
       Alert.alert('Options', undefined, [
         { text: 'Assign Floor Level', onPress: handleAdjustFloorLevel },
+        { text: 'Revert Wall Edits', onPress: handleRevertOriginalScan },
         { text: 'Delete Room', style: 'destructive', onPress: handleDeleteRoom },
         { text: 'Cancel', style: 'cancel' },
       ]);
@@ -767,6 +1044,10 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
   const offset2DX = (viewW - spanX * scale2D) / 2 - minX * scale2D + panOffset.x;
   const offset2DZ = (viewH - spanZ * scale2D) / 2 - minZ * scale2D + panOffset.y;
 
+  scale2DRef.current = scale2D;
+  offset2DXRef.current = offset2DX;
+  offset2DZRef.current = offset2DZ;
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor="#f5f5f7" />
@@ -800,8 +1081,60 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
           }}
           {...panResponder.panHandlers}
         >
-          {/* Minimal Floating HUD Capsule at Top (or Contextual Aperture Editor Capsule when opening is tapped) */}
-          {selectedAperture && viewMode === '2d' ? (
+          {/* Minimal Floating HUD Capsule at Top (or Contextual Wall / Aperture Editor Capsule) */}
+          {selectedWallIdx !== null && viewMode === '2d' ? (
+            <View style={styles.floatingWallCapsuleWrap} pointerEvents="box-none">
+              <View style={styles.floatingWallCapsule}>
+                <View style={styles.wallBadge}>
+                  <Text style={styles.wallBadgeText}>
+                    {wallAnchorInfo?.isSnapped
+                      ? `🧲 ${wallAnchorInfo.angleDeg.toFixed(0)}° SNAP`
+                      : `Wall ${selectedWallIdx + 1}`}
+                  </Text>
+                </View>
+
+                <TouchableOpacity
+                  style={[styles.wallActionBtn, styles.wallActionBtnPrimary]}
+                  onPress={handleSnapVertical}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.wallActionBtnText, styles.wallActionBtnTextLight]}>
+                    90° Vertical
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.wallActionBtn, styles.wallActionBtnSuccess]}
+                  onPress={handleSquareCorner}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.wallActionBtnText, styles.wallActionBtnTextLight]}>
+                    📐 Square Corner
+                  </Text>
+                </TouchableOpacity>
+
+                {polygonHistory.length > 0 && (
+                  <TouchableOpacity
+                    style={styles.wallActionBtn}
+                    onPress={handleUndoWallEdit}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.wallActionBtnText}>
+                      ↩ Undo
+                    </Text>
+                  </TouchableOpacity>
+                )}
+
+                <TouchableOpacity
+                  style={styles.wallCloseBtn}
+                  onPress={handleCommitWallEdit}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.wallActionBtnText, { color: '#8e8e93' }]}>✕ Done</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : selectedAperture && viewMode === '2d' ? (
             <View style={styles.floatingApertureCapsuleWrap} pointerEvents="box-none">
               <View style={styles.floatingApertureCapsule}>
                 <TouchableOpacity
@@ -915,6 +1248,108 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
                   stroke="#64748b"
                   strokeWidth={Math.max(2, 3 * zoom)}
                 />
+
+                {/* Wall Segments with Interactive Touch Selection */}
+                {polygon.map((p1, idx) => {
+                  const p2 = polygon[(idx + 1) % N];
+                  const x1 = p1.x * scale2D + offset2DX;
+                  const y1 = p1.z * scale2D + offset2DZ;
+                  const x2 = p2.x * scale2D + offset2DX;
+                  const y2 = p2.z * scale2D + offset2DZ;
+                  const isSelected = selectedWallIdx === idx;
+
+                  return (
+                    <G key={`wall-interactive-${idx}`}>
+                      {isSelected && (
+                        <Line
+                          x1={x1}
+                          y1={y1}
+                          x2={x2}
+                          y2={y2}
+                          stroke="#007aff"
+                          strokeWidth={Math.max(10, 12 * zoom)}
+                          strokeLinecap="round"
+                        />
+                      )}
+                      {/* Fat invisible hit target for finger touch */}
+                      <Line
+                        x1={x1}
+                        y1={y1}
+                        x2={x2}
+                        y2={y2}
+                        stroke="transparent"
+                        strokeWidth={36}
+                        onPress={(evt) => handleSelectWall(idx, evt)}
+                      />
+                    </G>
+                  );
+                })}
+
+                {/* Wall Anchor Pin & Rotate Handle Visualizer */}
+                {wallAnchorInfo && (
+                  <G key="wall-anchor-overlay">
+                    {/* Magnetic Orthogonal Guideline */}
+                    {wallAnchorInfo.isSnapped && (
+                      <Line
+                        x1={wallAnchorInfo.rotating.x * scale2D + offset2DX}
+                        y1={0}
+                        x2={wallAnchorInfo.rotating.x * scale2D + offset2DX}
+                        y2={viewH}
+                        stroke="#34c759"
+                        strokeWidth={1.5}
+                        strokeDasharray="4,4"
+                      />
+                    )}
+
+                    {/* Anchor Pin ⚓ (Far End) */}
+                    <Circle
+                      cx={wallAnchorInfo.anchor.x * scale2D + offset2DX}
+                      cy={wallAnchorInfo.anchor.z * scale2D + offset2DZ}
+                      r={11}
+                      fill="#007aff"
+                    />
+                    <Circle
+                      cx={wallAnchorInfo.anchor.x * scale2D + offset2DX}
+                      cy={wallAnchorInfo.anchor.z * scale2D + offset2DZ}
+                      r={4}
+                      fill="#ffffff"
+                    />
+                    <SvgText
+                      x={wallAnchorInfo.anchor.x * scale2D + offset2DX}
+                      y={wallAnchorInfo.anchor.z * scale2D + offset2DZ - 15}
+                      fill="#007aff"
+                      fontSize={11}
+                      fontWeight="bold"
+                      textAnchor="middle"
+                    >
+                      ⚓ ANCHOR
+                    </SvgText>
+
+                    {/* Rotating Handle 🟢 (Near End) */}
+                    <Circle
+                      cx={wallAnchorInfo.rotating.x * scale2D + offset2DX}
+                      cy={wallAnchorInfo.rotating.z * scale2D + offset2DZ}
+                      r={14}
+                      fill={wallAnchorInfo.isSnapped ? '#34c759' : '#007aff'}
+                    />
+                    <Circle
+                      cx={wallAnchorInfo.rotating.x * scale2D + offset2DX}
+                      cy={wallAnchorInfo.rotating.z * scale2D + offset2DZ}
+                      r={5}
+                      fill="#ffffff"
+                    />
+                    <SvgText
+                      x={wallAnchorInfo.rotating.x * scale2D + offset2DX}
+                      y={wallAnchorInfo.rotating.z * scale2D + offset2DZ + 24}
+                      fill={wallAnchorInfo.isSnapped ? '#34c759' : '#1c1c1e'}
+                      fontSize={12}
+                      fontWeight="bold"
+                      textAnchor="middle"
+                    >
+                      {`${wallAnchorInfo.angleDeg.toFixed(1)}°${wallAnchorInfo.isSnapped ? ' SNAP' : ''}`}
+                    </SvgText>
+                  </G>
+                )}
 
                 {/* Accurate Wall Measurement Callouts along each perimeter segment */}
                 {polygon.map((p1, idx) => {
@@ -1445,6 +1880,70 @@ const styles = StyleSheet.create({
   },
 
   // Contextual Floating Aperture Capsule (Option 1: Minimalist, visible only on tap)
+  floatingWallCapsuleWrap: {
+    position: 'absolute',
+    top: 10,
+    alignSelf: 'center',
+    zIndex: 50,
+  },
+  floatingWallCapsule: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.96)',
+    borderRadius: 20,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    borderWidth: 0.5,
+    borderColor: 'rgba(0, 0, 0, 0.15)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 6,
+    gap: 4,
+  },
+  wallBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0, 122, 255, 0.12)',
+    marginRight: 2,
+  },
+  wallBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#007aff',
+  },
+  wallActionBtn: {
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 14,
+    backgroundColor: '#f2f2f7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  wallActionBtnPrimary: {
+    backgroundColor: '#007aff',
+  },
+  wallActionBtnSuccess: {
+    backgroundColor: '#34c759',
+  },
+  wallActionBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#1c1c1e',
+  },
+  wallActionBtnTextLight: {
+    color: '#ffffff',
+  },
+  wallCloseBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
   floatingApertureCapsuleWrap: {
     position: 'absolute',
     top: 10,
