@@ -602,6 +602,48 @@ endsolid ${room.name}`;
     assert.strictEqual(isSelfIntersecting(bowtie), true, 'Bowtie self-intersecting polygon must be caught by collision guard');
   });
 
+  // EVAL-17: Fixture & furniture magnetic coupling (Story 4)
+  it('EVAL-17: Fixture & furniture magnetic coupling locks wall angle parallel or perpendicular to nearby objects', () => {
+    const sofa = { id: 'sofa-1', category: 'Sofa', x: 5, z: 5, widthFt: 7.0, lengthFt: 3.5, yawDeg: 45.0 };
+    const fixtures = [sofa];
+
+    function findFixtureCoupling(anchor, rotating, fixList, thresholdDeg = 5.0) {
+      const dx = rotating.x - anchor.x;
+      const dz = rotating.z - anchor.z;
+      let wallAngleDeg = (Math.atan2(dz, dx) * 180) / Math.PI;
+      if (wallAngleDeg < 0) wallAngleDeg += 360;
+
+      for (const fix of fixList) {
+        const fixYaw = ((fix.yawDeg ?? 0) % 360 + 360) % 360;
+        const targetAngles = [fixYaw, (fixYaw + 90) % 360, (fixYaw + 180) % 360, (fixYaw + 270) % 360];
+        for (const targetDeg of targetAngles) {
+          let diff = Math.abs(wallAngleDeg - targetDeg);
+          if (diff > 180) diff = 360 - diff;
+          if (diff <= thresholdDeg) {
+            return { isCoupled: true, coupledAngleDeg: targetDeg, fixtureCategory: fix.category };
+          }
+        }
+      }
+      return null;
+    }
+
+    const anchor = { x: 0, z: 0 };
+    // Wall dragged to 47° (within 2° of sofa's 45° angle)
+    const rotatingNearSofa = { x: 10 * Math.cos((47 * Math.PI) / 180), z: 10 * Math.sin((47 * Math.PI) / 180) };
+
+    const coupling = findFixtureCoupling(anchor, rotatingNearSofa, fixtures, 5.0);
+    assert.ok(coupling !== null, 'Coupling must trigger within ±5° of sofa yaw');
+    assert.strictEqual(coupling.isCoupled, true, 'Magnetic coupling must be engaged');
+    assert.strictEqual(coupling.coupledAngleDeg, 45.0, 'Wall angle must snap parallel to sofa (45.0°)');
+    assert.strictEqual(coupling.fixtureCategory, 'Sofa');
+
+    // Wall dragged to 134° (within 1° of perpendicular 135°)
+    const rotatingPerpSofa = { x: 10 * Math.cos((134 * Math.PI) / 180), z: 10 * Math.sin((134 * Math.PI) / 180) };
+    const perpCoupling = findFixtureCoupling(anchor, rotatingPerpSofa, fixtures, 5.0);
+    assert.ok(perpCoupling !== null, 'Perpendicular coupling must trigger');
+    assert.strictEqual(perpCoupling.coupledAngleDeg, 135.0, 'Wall angle must snap perpendicular to sofa (135.0°)');
+  });
+
   console.log(`\n📊 Verification Summary: ${passedTests}/${totalTests} tests passed.\n`);
 }
 

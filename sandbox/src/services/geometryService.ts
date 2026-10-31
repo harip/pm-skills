@@ -486,20 +486,95 @@ export const GeometryService = {
     return { dist, t, proj };
   },
 
+  // Mathematical Fixture & Furniture Magnetic Coupling Engine (Story 4)
+  findFixtureCoupling(
+    anchor: PolygonPoint,
+    rotating: PolygonPoint,
+    fixtures: any[],
+    angleThresholdDeg = 5.0
+  ): {
+    isCoupled: boolean;
+    coupledAngleDeg: number;
+    fixtureId?: string;
+    fixtureCategory?: string;
+  } | null {
+    if (!fixtures || fixtures.length === 0) return null;
+
+    const dx = rotating.x - anchor.x;
+    const dz = rotating.z - anchor.z;
+    const wallLen = Math.hypot(dx, dz);
+    if (wallLen < 0.1) return null;
+
+    let wallAngleDeg = (Math.atan2(dz, dx) * 180) / Math.PI;
+    if (wallAngleDeg < 0) wallAngleDeg += 360;
+
+    let bestCoupling: {
+      isCoupled: boolean;
+      coupledAngleDeg: number;
+      fixtureId?: string;
+      fixtureCategory?: string;
+      diffDeg: number;
+    } | null = null;
+
+    for (const fix of fixtures) {
+      const fixX = fix.x ?? 0;
+      const fixZ = fix.z ?? 0;
+      const fixW = fix.widthFt || 3.0;
+      const fixL = fix.lengthFt || 3.0;
+      const fixYaw = ((fix.yawDeg ?? 0) % 360 + 360) % 360;
+
+      // Distance from fixture center to wall line segment
+      const { dist } = this.distanceToSegment({ x: fixX, z: fixZ }, anchor, rotating);
+      const fixtureRadius = Math.max(fixW, fixL) / 2;
+
+      // Proximity check: only evaluate fixtures near the wall (radius + 2.5 ft)
+      if (dist > fixtureRadius + 2.5) continue;
+
+      // Fixture principal alignment angles: parallel and perpendicular
+      const targetAngles = [
+        fixYaw,
+        (fixYaw + 90) % 360,
+        (fixYaw + 180) % 360,
+        (fixYaw + 270) % 360,
+      ];
+
+      for (const targetDeg of targetAngles) {
+        let diff = Math.abs(wallAngleDeg - targetDeg);
+        if (diff > 180) diff = 360 - diff;
+
+        if (diff <= angleThresholdDeg) {
+          if (!bestCoupling || diff < bestCoupling.diffDeg) {
+            bestCoupling = {
+              isCoupled: true,
+              coupledAngleDeg: targetDeg,
+              fixtureId: fix.id || fix.category,
+              fixtureCategory: fix.category || 'Fixture',
+              diffDeg: diff,
+            };
+          }
+        }
+      }
+    }
+
+    return bestCoupling;
+  },
+
   // Calculate Anchor and Rotated Vertex with Magnetic Snap
   calculateAnchorAndRotation(
     p1: PolygonPoint,
     p2: PolygonPoint,
     touchPt: PolygonPoint,
     currentPt: PolygonPoint,
-    snapThresholdDeg = 6.0
+    snapThresholdDeg = 6.0,
+    fixtures?: any[]
   ): {
     anchor: PolygonPoint;
     anchorIdx: number; // 0 for p1, 1 for p2
     rotating: PolygonPoint;
     angleDeg: number;
     isSnapped: boolean;
-    snappedAxis: 'vertical' | 'horizontal' | null;
+    snappedAxis: 'vertical' | 'horizontal' | 'fixture' | null;
+    fixtureName?: string;
   } {
     const d1 = Math.hypot(touchPt.x - p1.x, touchPt.z - p1.z);
     const d2 = Math.hypot(touchPt.x - p2.x, touchPt.z - p2.z);
@@ -519,10 +594,11 @@ export const GeometryService = {
     if (angleDeg < 0) angleDeg += 360;
 
     let isSnapped = false;
-    let snappedAxis: 'vertical' | 'horizontal' | null = null;
+    let snappedAxis: 'vertical' | 'horizontal' | 'fixture' | null = null;
     let finalAngleRad = angleRad;
+    let fixtureName: string | undefined = undefined;
 
-    // Check snapping to cardinal directions: 0 (East), 90 (South/Down), 180 (West), 270 (North/Up)
+    // 1. Check snapping to cardinal directions: 0 (East), 90 (South/Down), 180 (West), 270 (North/Up)
     const cardinalSnaps = [
       { deg: 0, axis: 'horizontal' as const },
       { deg: 90, axis: 'vertical' as const },
@@ -541,6 +617,22 @@ export const GeometryService = {
       }
     }
 
+    // 2. Check Magnetic Coupling with nearby furniture & fixtures (Story 4)
+    if (!isSnapped && fixtures && fixtures.length > 0) {
+      const candidateRot = {
+        x: anchor.x + effectiveLength * Math.cos(angleRad),
+        z: anchor.z + effectiveLength * Math.sin(angleRad),
+      };
+      const coupling = this.findFixtureCoupling(anchor, candidateRot, fixtures, snapThresholdDeg);
+      if (coupling && coupling.isCoupled) {
+        isSnapped = true;
+        snappedAxis = 'fixture';
+        fixtureName = coupling.fixtureCategory;
+        finalAngleRad = coupling.coupledAngleDeg * (Math.PI / 180);
+        angleDeg = coupling.coupledAngleDeg;
+      }
+    }
+
     const rotating: PolygonPoint = {
       x: anchor.x + effectiveLength * Math.cos(finalAngleRad),
       z: anchor.z + effectiveLength * Math.sin(finalAngleRad),
@@ -553,6 +645,7 @@ export const GeometryService = {
       angleDeg,
       isSnapped,
       snappedAxis,
+      fixtureName,
     };
   },
 

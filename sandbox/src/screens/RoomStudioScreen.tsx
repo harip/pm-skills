@@ -53,6 +53,7 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
   // Wall Alignment & Snapping State
   const [activePolygon, setActivePolygon] = useState<PolygonPoint[] | null>(null);
   const [selectedWallIdx, setSelectedWallIdx] = useState<number | null>(null);
+  const [hasUnsavedWallChanges, setHasUnsavedWallChanges] = useState<boolean>(false);
   const [wallAnchorInfo, setWallAnchorInfo] = useState<{
     anchor: PolygonPoint;
     anchorIdx: number;
@@ -60,7 +61,8 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
     rotating: PolygonPoint;
     angleDeg: number;
     isSnapped: boolean;
-    snappedAxis: 'vertical' | 'horizontal' | null;
+    snappedAxis: 'vertical' | 'horizontal' | 'fixture' | null;
+    fixtureName?: string;
   } | null>(null);
   const [polygonHistory, setPolygonHistory] = useState<PolygonPoint[][]>([]);
 
@@ -87,6 +89,8 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
   const offset2DXRef = useRef<number>(0);
   const offset2DZRef = useRef<number>(0);
   const viewModeRef = useRef<'2d' | '3d'>('2d');
+  const hasUnsavedWallChangesRef = useRef<boolean>(false);
+  const realObjectsRef = useRef<any[]>([]);
 
   // Viewport dimensions
   const [canvasLayout, setCanvasLayout] = useState({ width: 360, height: 480 });
@@ -140,6 +144,8 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
   wallAnchorInfoRef.current = wallAnchorInfo;
   activePolygonRef.current = activePolygon;
   viewModeRef.current = viewMode;
+  hasUnsavedWallChangesRef.current = hasUnsavedWallChanges;
+  realObjectsRef.current = realObjects;
 
   // Ultra-Responsive Multi-Touch PanResponder (Instant Delta Tracking)
   const panResponder = useRef(
@@ -158,23 +164,55 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
           const curX = touches[0].pageX;
           const curY = touches[0].pageY;
 
-          // Check if touch is near the active rotation handle in 2D mode
-          if (
-            viewModeRef.current === '2d' &&
-            selectedWallIdxRef.current !== null &&
-            wallAnchorInfoRef.current
-          ) {
-            const rotScreenX =
-              wallAnchorInfoRef.current.rotating.x * scale2DRef.current + offset2DXRef.current;
-            const rotScreenY =
-              wallAnchorInfoRef.current.rotating.z * scale2DRef.current + offset2DZRef.current;
-            const distToHandle = Math.hypot(curX - rotScreenX, curY - rotScreenY);
-            if (distToHandle < 50) {
+          // In 2D mode, check if user touched directly near the rotating handle or a wall line
+          if (viewModeRef.current === '2d') {
+            const curLocalX = (curX - offset2DXRef.current) / scale2DRef.current;
+            const curLocalZ = (curY - offset2DZRef.current) / scale2DRef.current;
+            const curPoly = activePolygonRef.current || polygon;
+            const n = curPoly.length;
+
+            // 1. Check rotating handle first
+            if (selectedWallIdxRef.current !== null && wallAnchorInfoRef.current) {
+              const rotScreenX =
+                wallAnchorInfoRef.current.rotating.x * scale2DRef.current + offset2DXRef.current;
+              const rotScreenY =
+                wallAnchorInfoRef.current.rotating.z * scale2DRef.current + offset2DZRef.current;
+              const distToHandle = Math.hypot(curX - rotScreenX, curY - rotScreenY);
+              if (distToHandle < 50) {
+                isRotatingWallRef.current = true;
+                setHasUnsavedWallChanges(true);
+                hasUnsavedWallChangesRef.current = true;
+                lastTouchPosRef.current = null;
+                lastPinchDistRef.current = null;
+                return;
+              }
+            }
+
+            // 2. Direct touch on any wall segment
+            let closestWallIdx = -1;
+            let closestDist = Infinity;
+            for (let i = 0; i < n; i++) {
+              const p1 = curPoly[i];
+              const p2 = curPoly[(i + 1) % n];
+              const { dist } = GeometryService.distanceToSegment(
+                { x: curLocalX, z: curLocalZ },
+                p1,
+                p2
+              );
+              if (dist < closestDist) {
+                closestDist = dist;
+                closestWallIdx = i;
+              }
+            }
+
+            const hitThresholdFt = 26 / scale2DRef.current;
+            if (closestDist <= hitThresholdFt && closestWallIdx >= 0) {
+              handleSelectWall(closestWallIdx, {
+                nativeEvent: { locationX: curX, locationY: curY },
+              });
               isRotatingWallRef.current = true;
-              setPolygonHistory((prev) => [
-                ...prev,
-                [...(activePolygonRef.current || polygon)],
-              ]);
+              setHasUnsavedWallChanges(true);
+              hasUnsavedWallChangesRef.current = true;
               lastTouchPosRef.current = null;
               lastPinchDistRef.current = null;
               return;
@@ -208,26 +246,39 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
           const curX = touches[0].pageX;
           const curY = touches[0].pageY;
 
-          // Interactive Anchor-Pivot Wall Rotation with Magnetic Snapping
+          // Manual finger rotation (smooth 1:1 drag with preview)
           if (isRotatingWallRef.current && wallAnchorInfoRef.current) {
             const curLocalX = (curX - offset2DXRef.current) / scale2DRef.current;
             const curLocalZ = (curY - offset2DZRef.current) / scale2DRef.current;
             const { anchor, rotVertexIdx, anchorIdx } = wallAnchorInfoRef.current;
 
-            const result = GeometryService.calculateAnchorAndRotation(
+            const dx = curLocalX - anchor.x;
+            const dz = curLocalZ - anchor.z;
+            const len = Math.max(1.0, Math.hypot(dx, dz));
+            const rawAngleRad = Math.atan2(dz, dx);
+            let rawAngleDeg = (rawAngleRad * 180) / Math.PI;
+            if (rawAngleDeg < 0) rawAngleDeg += 360;
+
+            // Preview calculation for snap & fixture coupling
+            const snapCalc = GeometryService.calculateAnchorAndRotation(
               anchor,
-              wallAnchorInfoRef.current.rotating,
+              { x: anchor.x + len * Math.cos(rawAngleRad), z: anchor.z + len * Math.sin(rawAngleRad) },
               { x: curLocalX, z: curLocalZ },
               { x: curLocalX, z: curLocalZ },
-              6.0
+              6.0,
+              realObjectsRef.current
             );
+
+            const freeRotPt: PolygonPoint = {
+              x: anchor.x + len * Math.cos(rawAngleRad),
+              z: anchor.z + len * Math.sin(rawAngleRad),
+            };
 
             const curPoly = activePolygonRef.current || polygon;
             const candidatePoly = curPoly.map((pt, i) =>
-              i === rotVertexIdx ? result.rotating : pt
+              i === rotVertexIdx ? freeRotPt : pt
             );
 
-            // Guard against self-intersection
             if (!GeometryService.isPolygonSelfIntersecting(candidatePoly)) {
               setActivePolygon(candidatePoly);
               activePolygonRef.current = candidatePoly;
@@ -235,13 +286,16 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
                 anchor,
                 anchorIdx,
                 rotVertexIdx,
-                rotating: result.rotating,
-                angleDeg: result.angleDeg,
-                isSnapped: result.isSnapped,
-                snappedAxis: result.snappedAxis,
+                rotating: freeRotPt,
+                angleDeg: rawAngleDeg,
+                isSnapped: snapCalc.isSnapped,
+                snappedAxis: snapCalc.snappedAxis,
+                fixtureName: snapCalc.fixtureName,
               };
               setWallAnchorInfo(newInfo);
               wallAnchorInfoRef.current = newInfo;
+              setHasUnsavedWallChanges(true);
+              hasUnsavedWallChangesRef.current = true;
             }
             return;
           }
@@ -261,11 +315,43 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
         }
       },
       onPanResponderRelease: () => {
-        if (isRotatingWallRef.current) {
+        // Release-Triggered Snapping (Story 2)
+        if (isRotatingWallRef.current && wallAnchorInfoRef.current) {
           isRotatingWallRef.current = false;
-          if (activePolygonRef.current) {
-            handleSaveUpdatedPolygon(activePolygonRef.current);
+          const { anchor, rotVertexIdx, anchorIdx, rotating } = wallAnchorInfoRef.current;
+
+          const snapCalc = GeometryService.calculateAnchorAndRotation(
+            anchor,
+            rotating,
+            rotating,
+            rotating,
+            6.0,
+            realObjectsRef.current
+          );
+
+          if (snapCalc.isSnapped) {
+            const curPoly = activePolygonRef.current || polygon;
+            const snappedPoly = curPoly.map((pt, i) =>
+              i === rotVertexIdx ? snapCalc.rotating : pt
+            );
+
+            if (!GeometryService.isPolygonSelfIntersecting(snappedPoly)) {
+              setActivePolygon(snappedPoly);
+              activePolygonRef.current = snappedPoly;
+              setWallAnchorInfo({
+                anchor,
+                anchorIdx,
+                rotVertexIdx,
+                rotating: snapCalc.rotating,
+                angleDeg: snapCalc.angleDeg,
+                isSnapped: true,
+                snappedAxis: snapCalc.snappedAxis,
+                fixtureName: snapCalc.fixtureName,
+              });
+            }
           }
+          setHasUnsavedWallChanges(true);
+          hasUnsavedWallChangesRef.current = true;
         }
         lastTouchPosRef.current = null;
         lastPinchDistRef.current = null;
@@ -425,8 +511,14 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
     let angleDeg = (Math.atan2(dz, dx) * 180) / Math.PI;
     if (angleDeg < 0) angleDeg += 360;
 
-    const snapDiffV = Math.min(Math.abs(angleDeg - 90), Math.abs(angleDeg - 270));
-    const isSnapped = snapDiffV <= 6.0;
+    const snapCalc = GeometryService.calculateAnchorAndRotation(
+      anchor,
+      rotating,
+      rotating,
+      rotating,
+      6.0,
+      realObjectsRef.current
+    );
 
     const info = {
       anchor,
@@ -434,86 +526,42 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
       rotVertexIdx,
       rotating,
       angleDeg,
-      isSnapped,
-      snappedAxis: (isSnapped ? 'vertical' : null) as 'vertical' | 'horizontal' | null,
+      isSnapped: snapCalc.isSnapped,
+      snappedAxis: snapCalc.snappedAxis,
+      fixtureName: snapCalc.fixtureName,
     };
 
     setWallAnchorInfo(info);
     wallAnchorInfoRef.current = info;
   };
 
-  const handleSnapVertical = async () => {
-    if (!wallAnchorInfo) return;
-    const { anchor, rotVertexIdx } = wallAnchorInfo;
-    const curPoly = activePolygon || polygon;
-    setPolygonHistory((prev) => [...prev, [...curPoly]]);
-
-    // Preserve length while making pure vertical
-    const origRot = wallAnchorInfo.rotating;
-    const len = Math.hypot(origRot.x - anchor.x, origRot.z - anchor.z);
-    const signZ = origRot.z >= anchor.z ? 1 : -1;
-    const newRot: PolygonPoint = {
-      x: anchor.x,
-      z: anchor.z + len * signZ,
-    };
-
-    const candidatePoly = curPoly.map((pt, i) => (i === rotVertexIdx ? newRot : pt));
-    setActivePolygon(candidatePoly);
-    activePolygonRef.current = candidatePoly;
-    setWallAnchorInfo({
-      ...wallAnchorInfo,
-      rotating: newRot,
-      angleDeg: signZ > 0 ? 90.0 : 270.0,
-      isSnapped: true,
-      snappedAxis: 'vertical',
-    });
-    await handleSaveUpdatedPolygon(candidatePoly);
-  };
-
-  const handleSquareCorner = async () => {
-    if (!wallAnchorInfo) return;
-    const curPoly = activePolygon || polygon;
-    setPolygonHistory((prev) => [...prev, [...curPoly]]);
-
-    const updatedPoly = GeometryService.dissolveSpuriousApex(curPoly, wallAnchorInfo.rotVertexIdx);
-    setActivePolygon(updatedPoly);
-    activePolygonRef.current = updatedPoly;
-    setSelectedWallIdx(null);
-    setWallAnchorInfo(null);
-    await handleSaveUpdatedPolygon(updatedPoly);
-  };
-
-  const handleUndoWallEdit = async () => {
-    if (polygonHistory.length === 0) return;
-    const prev = [...polygonHistory];
-    const restored = prev.pop()!;
-    setPolygonHistory(prev);
-    setActivePolygon(restored);
-    activePolygonRef.current = restored;
-    setSelectedWallIdx(null);
-    setWallAnchorInfo(null);
-    await handleSaveUpdatedPolygon(restored);
-  };
-
-  const handleCommitWallEdit = () => {
+  const handleSaveWallChanges = async () => {
+    const finalPoly = activePolygonRef.current || activePolygon;
+    if (finalPoly && finalPoly.length >= 3) {
+      await handleSaveUpdatedPolygon(finalPoly);
+    }
+    setHasUnsavedWallChanges(false);
+    hasUnsavedWallChangesRef.current = false;
     setSelectedWallIdx(null);
     setWallAnchorInfo(null);
   };
 
-  const handleRevertOriginalScan = async () => {
+  const handleResetToOriginal = () => {
     Alert.alert(
-      'Revert Wall Edits',
-      'Restore the original scanned wall layout from LiDAR? Any manual wall adjustments will be reset.',
+      'Reset to Original Scan',
+      'Revert all manual wall adjustments and restore the original LiDAR room layout?',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Revert',
+          text: 'Reset',
           style: 'destructive',
           onPress: async () => {
             setActivePolygon(null);
             activePolygonRef.current = null;
             setSelectedWallIdx(null);
             setWallAnchorInfo(null);
+            setHasUnsavedWallChanges(false);
+            hasUnsavedWallChangesRef.current = false;
             setPolygonHistory([]);
 
             let mesh = parsedMesh ? JSON.parse(JSON.stringify(parsedMesh)) : {};
@@ -605,14 +653,14 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
         },
         (buttonIndex) => {
           if (buttonIndex === 1) handleAdjustFloorLevel();
-          else if (buttonIndex === 2) handleRevertOriginalScan();
+          else if (buttonIndex === 2) handleResetToOriginal();
           else if (buttonIndex === 3) handleDeleteRoom();
         }
       );
     } else {
       Alert.alert('Options', undefined, [
         { text: 'Assign Floor Level', onPress: handleAdjustFloorLevel },
-        { text: 'Revert Wall Edits', onPress: handleRevertOriginalScan },
+        { text: 'Revert Wall Edits', onPress: handleResetToOriginal },
         { text: 'Delete Room', style: 'destructive', onPress: handleDeleteRoom },
         { text: 'Cancel', style: 'cancel' },
       ]);
@@ -1081,60 +1129,8 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
           }}
           {...panResponder.panHandlers}
         >
-          {/* Minimal Floating HUD Capsule at Top (or Contextual Wall / Aperture Editor Capsule) */}
-          {selectedWallIdx !== null && viewMode === '2d' ? (
-            <View style={styles.floatingWallCapsuleWrap} pointerEvents="box-none">
-              <View style={styles.floatingWallCapsule}>
-                <View style={styles.wallBadge}>
-                  <Text style={styles.wallBadgeText}>
-                    {wallAnchorInfo?.isSnapped
-                      ? `🧲 ${wallAnchorInfo.angleDeg.toFixed(0)}° SNAP`
-                      : `Wall ${selectedWallIdx + 1}`}
-                  </Text>
-                </View>
-
-                <TouchableOpacity
-                  style={[styles.wallActionBtn, styles.wallActionBtnPrimary]}
-                  onPress={handleSnapVertical}
-                  activeOpacity={0.8}
-                >
-                  <Text style={[styles.wallActionBtnText, styles.wallActionBtnTextLight]}>
-                    90° Vertical
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.wallActionBtn, styles.wallActionBtnSuccess]}
-                  onPress={handleSquareCorner}
-                  activeOpacity={0.8}
-                >
-                  <Text style={[styles.wallActionBtnText, styles.wallActionBtnTextLight]}>
-                    📐 Square Corner
-                  </Text>
-                </TouchableOpacity>
-
-                {polygonHistory.length > 0 && (
-                  <TouchableOpacity
-                    style={styles.wallActionBtn}
-                    onPress={handleUndoWallEdit}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={styles.wallActionBtnText}>
-                      ↩ Undo
-                    </Text>
-                  </TouchableOpacity>
-                )}
-
-                <TouchableOpacity
-                  style={styles.wallCloseBtn}
-                  onPress={handleCommitWallEdit}
-                  activeOpacity={0.8}
-                >
-                  <Text style={[styles.wallActionBtnText, { color: '#8e8e93' }]}>✕ Done</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          ) : selectedAperture && viewMode === '2d' ? (
+          {/* Minimal Floating HUD Capsule at Top (or Contextual Aperture Editor Capsule when opening is tapped) */}
+          {selectedAperture && viewMode === '2d' ? (
             <View style={styles.floatingApertureCapsuleWrap} pointerEvents="box-none">
               <View style={styles.floatingApertureCapsule}>
                 <TouchableOpacity
@@ -1288,16 +1284,16 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
                 {/* Wall Anchor Pin & Rotate Handle Visualizer */}
                 {wallAnchorInfo && (
                   <G key="wall-anchor-overlay">
-                    {/* Magnetic Orthogonal Guideline */}
+                    {/* Magnetic Orthogonal or Fixture Coupling Guideline */}
                     {wallAnchorInfo.isSnapped && (
                       <Line
                         x1={wallAnchorInfo.rotating.x * scale2D + offset2DX}
                         y1={0}
                         x2={wallAnchorInfo.rotating.x * scale2D + offset2DX}
                         y2={viewH}
-                        stroke="#34c759"
-                        strokeWidth={1.5}
-                        strokeDasharray="4,4"
+                        stroke={wallAnchorInfo.snappedAxis === 'fixture' ? '#06b6d4' : '#34c759'}
+                        strokeWidth={1.8}
+                        strokeDasharray={wallAnchorInfo.snappedAxis === 'fixture' ? '6,3' : '4,4'}
                       />
                     )}
 
@@ -1305,20 +1301,20 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
                     <Circle
                       cx={wallAnchorInfo.anchor.x * scale2D + offset2DX}
                       cy={wallAnchorInfo.anchor.z * scale2D + offset2DZ}
-                      r={11}
+                      r={10}
                       fill="#007aff"
                     />
                     <Circle
                       cx={wallAnchorInfo.anchor.x * scale2D + offset2DX}
                       cy={wallAnchorInfo.anchor.z * scale2D + offset2DZ}
-                      r={4}
+                      r={3.5}
                       fill="#ffffff"
                     />
                     <SvgText
                       x={wallAnchorInfo.anchor.x * scale2D + offset2DX}
-                      y={wallAnchorInfo.anchor.z * scale2D + offset2DZ - 15}
+                      y={wallAnchorInfo.anchor.z * scale2D + offset2DZ - 14}
                       fill="#007aff"
-                      fontSize={11}
+                      fontSize={10}
                       fontWeight="bold"
                       textAnchor="middle"
                     >
@@ -1329,24 +1325,26 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
                     <Circle
                       cx={wallAnchorInfo.rotating.x * scale2D + offset2DX}
                       cy={wallAnchorInfo.rotating.z * scale2D + offset2DZ}
-                      r={14}
-                      fill={wallAnchorInfo.isSnapped ? '#34c759' : '#007aff'}
+                      r={13}
+                      fill={wallAnchorInfo.isSnapped ? (wallAnchorInfo.snappedAxis === 'fixture' ? '#06b6d4' : '#34c759') : '#007aff'}
                     />
                     <Circle
                       cx={wallAnchorInfo.rotating.x * scale2D + offset2DX}
                       cy={wallAnchorInfo.rotating.z * scale2D + offset2DZ}
-                      r={5}
+                      r={4.5}
                       fill="#ffffff"
                     />
                     <SvgText
                       x={wallAnchorInfo.rotating.x * scale2D + offset2DX}
-                      y={wallAnchorInfo.rotating.z * scale2D + offset2DZ + 24}
-                      fill={wallAnchorInfo.isSnapped ? '#34c759' : '#1c1c1e'}
-                      fontSize={12}
+                      y={wallAnchorInfo.rotating.z * scale2D + offset2DZ + 22}
+                      fill={wallAnchorInfo.isSnapped ? (wallAnchorInfo.snappedAxis === 'fixture' ? '#06b6d4' : '#34c759') : '#1c1c1e'}
+                      fontSize={11}
                       fontWeight="bold"
                       textAnchor="middle"
                     >
-                      {`${wallAnchorInfo.angleDeg.toFixed(1)}°${wallAnchorInfo.isSnapped ? ' SNAP' : ''}`}
+                      {wallAnchorInfo.snappedAxis === 'fixture'
+                        ? `🧲 ${wallAnchorInfo.fixtureName || 'Fixture'} (${wallAnchorInfo.angleDeg.toFixed(0)}°)`
+                        : `${wallAnchorInfo.angleDeg.toFixed(1)}°${wallAnchorInfo.isSnapped ? ' SNAP' : ''}`}
                     </SvgText>
                   </G>
                 )}
@@ -1682,6 +1680,35 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
             </View>
           </View>
 
+          {/* Lower-Left Floating Action Bar: Reset Icon & Dynamic Save Icon (Story 3) */}
+          {viewMode === '2d' && (
+            <View style={styles.lowerLeftActionWrap} pointerEvents="box-none">
+              {/* Reset Icon Button (Reverts to original LiDAR scan) */}
+              <TouchableOpacity
+                style={styles.lowerLeftIconBtn}
+                onPress={handleResetToOriginal}
+                activeOpacity={0.8}
+                accessibilityLabel="Reset to original LiDAR scan"
+                accessibilityRole="button"
+              >
+                <Text style={styles.resetIconText}>↺</Text>
+              </TouchableOpacity>
+
+              {/* Dynamic Save Icon Button (Appears as soon as user starts moving a wall) */}
+              {hasUnsavedWallChanges && (
+                <TouchableOpacity
+                  style={[styles.lowerLeftIconBtn, styles.saveIconBtnActive]}
+                  onPress={handleSaveWallChanges}
+                  activeOpacity={0.8}
+                  accessibilityLabel="Save wall adjustments"
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.saveIconText}>💾</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+
           {/* Style 2: Floating Lower-Right Satellite Export Button (Contextual STL in 3D / PDF in 2D) */}
           <View style={styles.floatingExportBtnWrap} pointerEvents="box-none">
             <TouchableOpacity
@@ -1880,68 +1907,46 @@ const styles = StyleSheet.create({
   },
 
   // Contextual Floating Aperture Capsule (Option 1: Minimalist, visible only on tap)
-  floatingWallCapsuleWrap: {
+  // Lower-Left Floating Action Bar (Reset and Dynamic Save Icons - Story 3)
+  lowerLeftActionWrap: {
     position: 'absolute',
-    top: 10,
-    alignSelf: 'center',
-    zIndex: 50,
-  },
-  floatingWallCapsule: {
+    bottom: 16,
+    left: 14,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.96)',
-    borderRadius: 20,
-    paddingHorizontal: 6,
-    paddingVertical: 4,
+    gap: 8,
+    zIndex: 40,
+  },
+  lowerLeftIconBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderWidth: 0.5,
-    borderColor: 'rgba(0, 0, 0, 0.15)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 10,
-    elevation: 6,
-    gap: 4,
-  },
-  wallBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    backgroundColor: 'rgba(0, 122, 255, 0.12)',
-    marginRight: 2,
-  },
-  wallBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#007aff',
-  },
-  wallActionBtn: {
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-    borderRadius: 14,
-    backgroundColor: '#f2f2f7',
+    borderColor: '#d1d1d6',
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  wallActionBtnPrimary: {
+  saveIconBtnActive: {
     backgroundColor: '#007aff',
+    borderColor: '#007aff',
+    shadowColor: '#007aff',
+    shadowOpacity: 0.35,
   },
-  wallActionBtnSuccess: {
-    backgroundColor: '#34c759',
-  },
-  wallActionBtnText: {
-    fontSize: 12,
+  resetIconText: {
+    fontSize: 20,
     fontWeight: '600',
     color: '#1c1c1e',
+    lineHeight: 22,
   },
-  wallActionBtnTextLight: {
+  saveIconText: {
+    fontSize: 16,
     color: '#ffffff',
-  },
-  wallCloseBtn: {
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
 
   floatingApertureCapsuleWrap: {
