@@ -254,30 +254,24 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
                 z: anchor.z + len * Math.sin(rawAngleRad),
               };
 
-              const curPoly = activePolygonRef.current || polygon;
-              const candidatePoly = curPoly.map((pt, i) =>
-                i === rotVertexIdx ? freeRotPt : pt
-              );
-
-              if (!GeometryService.isPolygonSelfIntersecting(candidatePoly)) {
-                setActivePolygon(candidatePoly);
-                activePolygonRef.current = candidatePoly;
-                const newInfo = {
-                  anchor,
-                  anchorIdx,
-                  rotVertexIdx,
-                  rotating: freeRotPt,
-                  wallLengthFt: len,
-                  angleDeg: rawAngleDeg,
-                  isSnapped: snapCalc.isSnapped,
-                  snappedAxis: snapCalc.snappedAxis,
-                  fixtureName: snapCalc.fixtureName,
-                };
-                setWallAnchorInfo(newInfo);
-                wallAnchorInfoRef.current = newInfo;
-                setHasUnsavedWallChanges(true);
-                hasUnsavedWallChangesRef.current = true;
-              }
+              // DECOUPLED INDEPENDENT WALL ROTATION (Zero Rubber-Banding)
+              // We update only wallAnchorInfo for the active wall.
+              // We do NOT mutate activePolygon during drag, keeping adjacent walls 100% frozen!
+              const newInfo = {
+                anchor,
+                anchorIdx,
+                rotVertexIdx,
+                rotating: freeRotPt,
+                wallLengthFt: len,
+                angleDeg: rawAngleDeg,
+                isSnapped: snapCalc.isSnapped,
+                snappedAxis: snapCalc.snappedAxis,
+                fixtureName: snapCalc.fixtureName,
+              };
+              setWallAnchorInfo(newInfo);
+              wallAnchorInfoRef.current = newInfo;
+              setHasUnsavedWallChanges(true);
+              hasUnsavedWallChangesRef.current = true;
             }
             // Strict lockout: room panning is never executed when wall is selected!
             return;
@@ -1322,7 +1316,17 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
 
                   return (
                     <G key={`wall-interactive-${idx}`}>
-                      {isSelected && (
+                      {isSelected && wallAnchorInfo ? (
+                        <Line
+                          x1={wallAnchorInfo.anchor.x * scale2D + offset2DX}
+                          y1={wallAnchorInfo.anchor.z * scale2D + offset2DZ}
+                          x2={wallAnchorInfo.rotating.x * scale2D + offset2DX}
+                          y2={wallAnchorInfo.rotating.z * scale2D + offset2DZ}
+                          stroke="#007aff"
+                          strokeWidth={Math.max(10, 12 * zoom)}
+                          strokeLinecap="round"
+                        />
+                      ) : isSelected ? (
                         <Line
                           x1={x1}
                           y1={y1}
@@ -1332,7 +1336,7 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
                           strokeWidth={Math.max(10, 12 * zoom)}
                           strokeLinecap="round"
                         />
-                      )}
+                      ) : null}
                       {/* Fat invisible hit target for finger touch */}
                       <Line
                         x1={x1}

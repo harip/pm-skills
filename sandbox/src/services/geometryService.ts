@@ -799,4 +799,47 @@ export const GeometryService = {
 
     return [c0, c1, c2, c3];
   },
+
+  // CAD 2D Wall Ray Intersection with Parallel, Divergence, and Span Guards
+  intersectWallRays(
+    p1: { x: number; z: number },
+    dir1: { x: number; z: number },
+    p2: { x: number; z: number },
+    dir2: { x: number; z: number },
+    maxSpanFt = 24.0
+  ): { intersection: { x: number; z: number } | null; isParallel: boolean; isDiverging: boolean } {
+    // Determinant: u1 × u2 = dir1.x * dir2.z - dir1.z * dir2.x
+    const det = dir1.x * dir2.z - dir1.z * dir2.x;
+
+    // Guard 1: Parallel or Near-Parallel (|sin(Δθ)| < sin(15°))
+    if (Math.abs(det) < Math.sin((15 * Math.PI) / 180)) {
+      return { intersection: null, isParallel: true, isDiverging: false };
+    }
+
+    // Solve: P1 + t * dir1 = P2 + s * dir2
+    const dx = p2.x - p1.x;
+    const dz = p2.z - p1.z;
+
+    const t = (dx * dir2.z - dz * dir2.x) / det;
+    const s = (dx * dir1.z - dz * dir1.x) / det;
+
+    // Guard 2: Diverging / Backward rays (t < 0 or s < 0)
+    if (t < -0.1 || s < -0.1) {
+      return { intersection: null, isParallel: false, isDiverging: true };
+    }
+
+    // Guard 3: Finite Span Limit (Never extrapolate beyond maxSpanFt)
+    if (t > maxSpanFt || s > maxSpanFt) {
+      return { intersection: null, isParallel: false, isDiverging: true };
+    }
+
+    return {
+      intersection: {
+        x: +(p1.x + t * dir1.x).toFixed(3),
+        z: +(p1.z + t * dir1.z).toFixed(3),
+      },
+      isParallel: false,
+      isDiverging: false,
+    };
+  },
 };
