@@ -183,3 +183,14 @@ The AI agent must **NEVER simulate, fabricate, or bypass live stakeholder UAT**.
    - Call NO further tools.
    - Do NOT execute Phase 9 (`09_deployment`).
    - Yield control and wait for the user's explicit reply.
+
+---
+
+## 4. Handling User-Reported Defects via Device-to-Fixture TDD
+When a user reports a bug, unexpected calculation, or visual layout defect during UAT on a physical device:
+1. **Never guess or experiment with ad-hoc code edits**.
+2. **Execute Device-to-Fixture TDD** (`platforms/ios/13_device_fixture_tdd`):
+   - Extract the physical device's container data using `xcrun devicectl device copy from --domain-type appDataContainer`.
+   - Seed the extracted payload into `sandbox/test-fixtures.sqlite` as the `before_state_json`.
+   - Define the mathematically/relationally sound `target_after_state_json`.
+   - Run the automated test runner locally until 100% PASS before re-installing to the user's phone.

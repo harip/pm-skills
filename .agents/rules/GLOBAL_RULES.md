@@ -135,3 +135,11 @@ Derived from production mobile & hardware development, these core tenets apply u
    - Partition 2D blueprints per level, and vertically stack 3D composite structures along the vertical axis.
 5. **Direct In-App Interactive Fidelity Over External Modals**:
    - Prioritize delivering direct, responsive, in-app interactive 3D and 2D fidelity rather than kicking the user out to external system viewers unless explicitly requested.
+6. **Universal Device-to-Fixture Test-Driven Development (Device-Fixture TDD - Across All App Domains)**:
+   - When elusive defects, calculation mismatches, or interaction corruptions occur on physical devices (across FinTech, E-Commerce, Social, Media, Productivity, and Sensor apps):
+   - Never debug blindly or experiment with unverified edits on device.
+   - **Step 1 (Extract)**: Extract the real device application container directly via `xcrun devicectl device copy from --domain-type appDataContainer`.
+   - **Step 2 (Seed Fixture Database)**: Record the exact state snapshot as the `before_state_json` in a persistent SQLite fixture database (`test-fixtures.sqlite`), and define the mathematically/relationally sound `target_after_state_json`.
+   - **Step 3 (Automate & Iterate)**: Run local automated runner (`test-fixture-runner.js`) asserting 100% parity with the Target After State. Iterate code locally until the runner passes with 0 errors.
+   - **Step 4 (Verify on Hardware)**: Re-bundle, install to the physical device, and verify via automated visual OCR.
+   - Every physical device bug resolved through this loop remains a permanent automated regression test in `test-fixtures.sqlite`.

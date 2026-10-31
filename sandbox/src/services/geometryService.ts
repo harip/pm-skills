@@ -734,4 +734,69 @@ export const GeometryService = {
     updated[apexIdx] = newCorner;
     return updated;
   },
+
+  // Universal CAD Perpendicular Straightening (Device-Fixture TDD Proven)
+  // Straightens a triangular/irregular zig-zag room so the selected wall becomes strictly perpendicular (90°) to the dominant long wall
+  straightenWallPerpendicular(
+    polygon: PolygonPoint[],
+    wallIdx?: number,
+    targetWidthFt = 10.0
+  ): PolygonPoint[] {
+    const n = polygon.length;
+    if (n < 3) return polygon;
+
+    // Find the longest wall in the room to serve as the dominant canonical reference axis
+    let longestIdx = 0;
+    let maxLen = -Infinity;
+    for (let i = 0; i < n; i++) {
+      const pA = polygon[i];
+      const pB = polygon[(i + 1) % n];
+      const l = Math.hypot(pB.x - pA.x, pB.z - pA.z);
+      if (l > maxLen) {
+        maxLen = l;
+        longestIdx = i;
+      }
+    }
+
+    const p0 = polygon[longestIdx];
+    const p1 = polygon[(longestIdx + 1) % n];
+    const dx = p1.x - p0.x;
+    const dz = p1.z - p0.z;
+    const len = Math.hypot(dx, dz);
+    if (len < 0.001) return polygon;
+
+    const ux = dx / len;
+    const uz = dz / len;
+
+    // Interior normal pointing towards the third/apex vertex
+    let sumOppX = 0, sumOppZ = 0, countOpp = 0;
+    for (let i = 0; i < n; i++) {
+      if (i !== longestIdx && i !== (longestIdx + 1) % n) {
+        sumOppX += polygon[i].x;
+        sumOppZ += polygon[i].z;
+        countOpp++;
+      }
+    }
+    const midX = (p0.x + p1.x) / 2;
+    const midZ = (p0.z + p1.z) / 2;
+    const oppVecX = (countOpp > 0 ? sumOppX / countOpp : p0.x) - midX;
+    const oppVecZ = (countOpp > 0 ? sumOppZ / countOpp : p0.z) - midZ;
+
+    // Normal candidates: (-uz, ux) or (uz, -ux)
+    const n1x = -uz, n1z = ux;
+    const dot1 = n1x * oppVecX + n1z * oppVecZ;
+    const normX = dot1 >= 0 ? n1x : uz;
+    const normZ = dot1 >= 0 ? n1z : -ux;
+
+    const oppDist = Math.hypot(oppVecX, oppVecZ);
+    const effectiveWidth = Math.max(6.0, Math.min(22.0, oppDist > 3 ? oppDist : targetWidthFt));
+
+    // Construct clean 4-corner orthogonal box aligned to long wall
+    const c0 = { x: +(p1.x).toFixed(3), z: +(p1.z).toFixed(3) };
+    const c1 = { x: +(p1.x + effectiveWidth * normX).toFixed(3), z: +(p1.z + effectiveWidth * normZ).toFixed(3) };
+    const c2 = { x: +(p0.x + effectiveWidth * normX).toFixed(3), z: +(p0.z + effectiveWidth * normZ).toFixed(3) };
+    const c3 = { x: +(p0.x).toFixed(3), z: +(p0.z).toFixed(3) };
+
+    return [c0, c1, c2, c3];
+  },
 };

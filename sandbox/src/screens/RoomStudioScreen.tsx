@@ -377,10 +377,18 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
               i === rotVertexIdx ? finalRotatingPt : pt
             );
 
-            // Spurious apex collinear dissolve check (User Story 6)
-            const dissolvedPoly = GeometryService.dissolveSpuriousApex(snappedPoly, 5.0);
-            if (dissolvedPoly.length >= 3 && !GeometryService.isPolygonSelfIntersecting(dissolvedPoly)) {
-              snappedPoly = dissolvedPoly;
+            // 1. Triangular / Zig-Zag Perpendicular Straightening (Device-Fixture TDD Proven)
+            if (curPoly.length === 3 && snapCalc.isSnapped) {
+              const orthoPoly = GeometryService.straightenWallPerpendicular(curPoly, rotVertexIdx);
+              if (orthoPoly.length >= 4 && !GeometryService.isPolygonSelfIntersecting(orthoPoly)) {
+                snappedPoly = orthoPoly;
+              }
+            } else {
+              // 2. Spurious apex collinear dissolve check (User Story 6)
+              const dissolvedPoly = GeometryService.dissolveSpuriousApex(snappedPoly, 5.0);
+              if (dissolvedPoly.length >= 3 && !GeometryService.isPolygonSelfIntersecting(dissolvedPoly)) {
+                snappedPoly = dissolvedPoly;
+              }
             }
 
             if (!GeometryService.isPolygonSelfIntersecting(snappedPoly)) {

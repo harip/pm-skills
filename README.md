@@ -122,7 +122,20 @@ flowchart TB
     │   └── 11_architecture_reviewer/ # Cross-phase zero-trust auditor
     │
     └── platforms/              # Platform Implementation Tracks
-        ├── ios/                # React Native/Expo, Apple HIG, Skia, TestFlight
+        ├── ios/                # React Native/Expo, Apple HIG, Skia, TestFlight, Device-Fixture TDD
         ├── android/            # React Native/Expo, Material 3, Google Play
         └── web/                # Next.js App Router, Tailwind, IndexedDB, Vercel
 ```
+
+---
+
+## 📱 Universal Device-to-Fixture Test-Driven Development (Device-Fixture TDD)
+
+When subtle bugs, state corruptions, or visual anomalies occur during physical hardware testing on iOS, the swarm uses **Device-Fixture TDD** (`.agents/skills/platforms/ios/13_device_fixture_tdd/SKILL.md`) across **all application kinds** (FinTech, E-Commerce, Social, Media, Productivity, Sensors):
+
+1. **Extract Physical State**: Run `xcrun devicectl device copy from --domain-type appDataContainer` to pull real device SQLite databases, JSON documents, or sensor caches directly from the connected iPhone.
+2. **Seed Persistent Fixture Database**: Record the exact state snapshot as `before_state_json` in `sandbox/test-fixtures.sqlite` and define the mathematically/relationally sound `target_after_state_json`.
+3. **High-Speed Test-Driven Iteration Loop**: Author/run `sandbox/test-fixture-runner.js` locally. Iterate code with sub-second feedback until the runner achieves 100% PASS across all assertions.
+4. **Deploy & Confirm on Device**: Install the verified build to the physical iPhone and assert correct rendering using native Vision OCR.
+
+Every physical device bug resolved through this loop remains a **permanent automated regression test** in `test-fixtures.sqlite`.

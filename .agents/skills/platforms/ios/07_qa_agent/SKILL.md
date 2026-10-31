@@ -42,3 +42,11 @@ description: Phase 7 lead for iOS. Writes and runs automated tests, enforces 100
      - **Real Geometry Assertions**: Verify visual components render individual measured wall segments $(x_1, z_1) \to (x_2, z_2)$ and openings, rather than a generic bounding box.
      - **Multi-Story Elevation Assertions**: Verify that entities at distinct altitudes (e.g. Basement at $Y < -1.2\text{m}$ vs Ground Floor at $Y \approx 0$) are partitioned into separate level groups, rendered on dedicated 2D floor plans, and vertically stacked in 3D views without overlapping.
      - **Watertight Export Assertions**: Verify that exported STL strings contain valid `facet normal` vectors, complete `outer loop` vertex sets, and closed surface topology.
+
+## Universal Device-to-Fixture Test-Driven Development (Device-Fixture TDD)
+Whenever a complex state bug, data corruption, or edge-case failure occurs during hardware device testing (across all application domains: FinTech, E-Commerce, Social, Media, Productivity, Sensors):
+1. **Physical Reality Extraction**: Never debug on device by guessing or modifying live code ad-hoc. Immediately copy the app's data container from the connected hardware iPhone (`xcrun devicectl device copy from --domain-type appDataContainer`).
+2. **Persistent Fixture Seeding**: Seed the extracted snapshot into `sandbox/test-fixtures.sqlite` as the `before_state_json`. Define the exact, mathematically or relationally verified `target_after_state_json` with strict invariant assertions.
+3. **Local Test-Driven Iteration Loop**: Author/run `sandbox/test-fixture-runner.js` to simulate the user action against the Before State and assert against the Target After State. Iterate code locally until the runner achieves 100% PASS.
+4. **Hardware Verification Gate**: Once verified locally in the fixture runner, rebuild, re-sign, and deploy the updated application to the physical iPhone, verifying the screen layout with automated OCR.
+5. Refer to `.agents/skills/platforms/ios/13_device_fixture_tdd/SKILL.md` for the complete enterprise protocol and domain-specific templates.
