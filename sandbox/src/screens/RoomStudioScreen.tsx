@@ -95,6 +95,23 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
   const hasUnsavedWallChangesRef = useRef<boolean>(false);
   const realObjectsRef = useRef<any[]>([]);
 
+  // Open Concept / Open Boundary Management (Option A: Dashed CAD Guide with [Length] OPEN)
+  const [openWallIndices, setOpenWallIndices] = useState<number[]>(() => {
+    let pm: any = null;
+    try {
+      if (initialRoom.mesh_json) pm = JSON.parse(initialRoom.mesh_json);
+    } catch {}
+    if (pm?.openWallIndices && Array.isArray(pm.openWallIndices)) {
+      return pm.openWallIndices;
+    }
+    if (pm?.walls?.length === 3) {
+      return [1];
+    }
+    return [];
+  });
+  const openWallIndicesRef = useRef<number[]>(openWallIndices);
+  openWallIndicesRef.current = openWallIndices;
+
   // Viewport dimensions
   const [canvasLayout, setCanvasLayout] = useState({ width: 360, height: 480 });
   const viewW = canvasLayout.width;
@@ -381,6 +398,8 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
               if (orthoPoly.length >= 4) {
                 setActivePolygon(orthoPoly);
                 activePolygonRef.current = orthoPoly;
+                setOpenWallIndices([1]);
+                openWallIndicesRef.current = [1];
                 setSelectedWallIdx(null);
                 selectedWallIdxRef.current = null;
                 setWallAnchorInfo(null);
@@ -514,9 +533,15 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
     if (!finalPoly || finalPoly.length < 3) return;
 
     let mesh = parsedMesh ? JSON.parse(JSON.stringify(parsedMesh)) : {};
-    const updatedWalls = GeometryService.polygonToWalls(finalPoly, mesh.walls);
+    const updatedWalls = GeometryService.polygonToWalls(
+      finalPoly,
+      mesh.walls,
+      8.1,
+      openWallIndicesRef.current
+    );
     mesh.walls = updatedWalls;
     mesh.polygon = finalPoly;
+    mesh.openWallIndices = openWallIndicesRef.current;
 
     // Recalculate room dimensions and area
     let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
@@ -883,6 +908,10 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
 
   // 2. Parametric Watertight Wall Sub-Prisms with Real Cutouts
   for (let i = 0; i < N; i++) {
+    if (openWallIndices.includes(i)) {
+      // Open concept boundary: zero 3D wall prisms extruded!
+      continue;
+    }
     const w = wallSegmentsM[i];
     const dx = w.p2.x - w.p1.x;
     const dz = w.p2.z - w.p1.z;
@@ -1288,24 +1317,14 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
                   </React.Fragment>
                 ))}
 
-                {/* Outer Wall Boundary */}
+                {/* Floor Plate Fill (Watertight solid floor) */}
                 <Polygon
                   points={polygon.map((p) => `${p.x * scale2D + offset2DX},${p.z * scale2D + offset2DZ}`).join(' ')}
                   fill="#ffffff"
-                  stroke="#1c1c1e"
-                  strokeWidth={Math.max(6, 8 * zoom)}
-                  strokeLinejoin="miter"
+                  stroke="none"
                 />
 
-                {/* Inner Core Wall Line */}
-                <Polygon
-                  points={polygon.map((p) => `${p.x * scale2D + offset2DX},${p.z * scale2D + offset2DZ}`).join(' ')}
-                  fill="none"
-                  stroke="#64748b"
-                  strokeWidth={Math.max(2, 3 * zoom)}
-                />
-
-                {/* Wall Segments with Interactive Touch Selection */}
+                {/* Wall Segments with Interactive Touch Selection & Option A Dashed Open Boundary */}
                 {polygon.map((p1, idx) => {
                   const p2 = polygon[(idx + 1) % N];
                   const x1 = p1.x * scale2D + offset2DX;
@@ -1313,9 +1332,101 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
                   const x2 = p2.x * scale2D + offset2DX;
                   const y2 = p2.z * scale2D + offset2DZ;
                   const isSelected = selectedWallIdx === idx;
+                  const isOpen = openWallIndices.includes(idx);
+                  const segLenFt = Math.hypot(p2.x - p1.x, p2.z - p1.z);
 
+                  if (isOpen) {
+                    // OPTION A: Subtle dashed CAD guide with centered badge "[Length] OPEN"
+                    const midX = (x1 + x2) / 2;
+                    const midY = (y1 + y2) / 2;
+                    const openLabel = `${isMetric ? GeometryService.formatMetric(segLenFt) : GeometryService.formatFeetInches(segLenFt)} OPEN`;
+                    return (
+                      <G key={`wall-open-${idx}`}>
+                        <Line
+                          x1={x1}
+                          y1={y1}
+                          x2={x2}
+                          y2={y2}
+                          stroke="#94a3b8"
+                          strokeWidth={Math.max(2, 2.5 * zoom)}
+                          strokeDasharray="6,4"
+                        />
+                        <G transform={`translate(${midX}, ${midY})`}>
+                          <Rect
+                            x={-42}
+                            y={-10}
+                            width={84}
+                            height={20}
+                            rx={5}
+                            fill="#f8fafc"
+                            stroke="#94a3b8"
+                            strokeWidth={1}
+                          />
+                          <SvgText
+                            x={0}
+                            y={4}
+                            fill="#334155"
+                            fontSize="9"
+                            fontWeight="700"
+                            textAnchor="middle"
+                          >
+                            {openLabel}
+                          </SvgText>
+                        </G>
+                        {/* Interactive touch target to configure open boundary */}
+                        <Line
+                          x1={x1}
+                          y1={y1}
+                          x2={x2}
+                          y2={y2}
+                          stroke="transparent"
+                          strokeWidth={36}
+                          onPress={() => {
+                            Alert.alert(
+                              'Open Concept Boundary',
+                              `This side is open to the adjoining living/dining area (${openLabel}).`,
+                              [
+                                { text: 'Keep Open', style: 'cancel' },
+                                {
+                                  text: 'Enclose with Wall',
+                                  onPress: () => {
+                                    setOpenWallIndices((prev) => prev.filter((i) => i !== idx));
+                                    openWallIndicesRef.current = openWallIndicesRef.current.filter((i) => i !== idx);
+                                    setHasUnsavedWallChanges(true);
+                                    hasUnsavedWallChangesRef.current = true;
+                                  },
+                                },
+                              ]
+                            );
+                          }}
+                        />
+                      </G>
+                    );
+                  }
+
+                  // Physical Solid Structural Wall
                   return (
                     <G key={`wall-interactive-${idx}`}>
+                      {/* Base Structural Wall */}
+                      <Line
+                        x1={x1}
+                        y1={y1}
+                        x2={x2}
+                        y2={y2}
+                        stroke="#1c1c1e"
+                        strokeWidth={Math.max(6, 8 * zoom)}
+                        strokeLinecap="round"
+                      />
+                      <Line
+                        x1={x1}
+                        y1={y1}
+                        x2={x2}
+                        y2={y2}
+                        stroke="#64748b"
+                        strokeWidth={Math.max(2, 3 * zoom)}
+                      />
+
+                      {/* Blue Active Drag Line if selected */}
                       {isSelected && wallAnchorInfo ? (
                         <Line
                           x1={wallAnchorInfo.anchor.x * scale2D + offset2DX}
@@ -1337,6 +1448,7 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
                           strokeLinecap="round"
                         />
                       ) : null}
+
                       {/* Fat invisible hit target for finger touch */}
                       <Line
                         x1={x1}
@@ -1421,6 +1533,10 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
 
                 {/* Accurate Wall Measurement Callouts along each perimeter segment */}
                 {polygon.map((p1, idx) => {
+                  if (openWallIndices.includes(idx)) {
+                    // Open boundary already displays Option A centered badge "[Length] OPEN"
+                    return null;
+                  }
                   const p2 = polygon[(idx + 1) % N];
                   const x1 = p1.x * scale2D + offset2DX;
                   const y1 = p1.z * scale2D + offset2DZ;
@@ -1684,14 +1800,25 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
                   />
                 ))}
 
-                {/* Ceiling Wireframe Canopy */}
-                <Polygon
-                  points={ceilingProjected.map((p) => `${p.x},${p.y}`).join(' ')}
-                  fill="none"
-                  stroke="#3b82f6"
-                  strokeWidth="1.5"
-                  strokeDasharray="4,4"
-                />
+                {/* Ceiling Wireframe Canopy (Excludes Open Boundary) */}
+                {polygon.map((_, i) => {
+                  if (openWallIndices.includes(i)) return null;
+                  const cp1 = ceilingProjected[i];
+                  const cp2 = ceilingProjected[(i + 1) % N];
+                  if (!cp1 || !cp2) return null;
+                  return (
+                    <Line
+                      key={`ceiling-wire-${i}`}
+                      x1={cp1.x}
+                      y1={cp1.y}
+                      x2={cp2.x}
+                      y2={cp2.y}
+                      stroke="#3b82f6"
+                      strokeWidth="1.5"
+                      strokeDasharray="4,4"
+                    />
+                  );
+                })}
               </>
             )}
           </Svg>

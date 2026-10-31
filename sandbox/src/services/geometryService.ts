@@ -678,7 +678,12 @@ export const GeometryService = {
   },
 
   // Convert a closed polygon to the standard RoomCapture mesh walls array
-  polygonToWalls(polygon: PolygonPoint[], originalWalls?: any[], wallHeightFt = 8.1): any[] {
+  polygonToWalls(
+    polygon: PolygonPoint[],
+    originalWalls?: any[],
+    wallHeightFt = 8.1,
+    openWallIndices: number[] = []
+  ): any[] {
     const n = polygon.length;
     const newWalls: any[] = [];
     for (let i = 0; i < n; i++) {
@@ -704,6 +709,7 @@ export const GeometryService = {
         heightFt: orig.heightFt || wallHeightFt,
         thicknessFt: orig.thicknessFt || 0.54,
         yawDeg: Math.round(yaw),
+        isOpenBoundary: openWallIndices.includes(i),
       });
     }
     return newWalls;

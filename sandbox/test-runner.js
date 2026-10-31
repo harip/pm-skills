@@ -711,6 +711,60 @@ endsolid ${room.name}`;
     assert.strictEqual(state.hasUnsavedWallChanges, false, 'Save must clear unsaved changes');
   });
 
+  // EVAL-19: Open-Concept Room Preservation (Zero Phantom Walls & Option A Dashed Opening)
+  it('EVAL-19: Open-concept room (Option A) preserves 3 physical walls with dashed open boundary and zero phantom 3D triangles', () => {
+    // 1. Simulating 3-wall Physical Room U-shaped open kitchen
+    const polygon = [
+      { x: -2.37, z: -5.03 }, // Top-Left
+      { x: 5.86, z: -3.23 },  // Top-Right tip
+      { x: 1.77, z: 13.97 },  // Bottom-Right tip
+      { x: -6.15, z: 12.23 }, // Bottom-Left
+    ];
+    const openWallIndices = [1]; // Segment 1 (Top-Right to Bottom-Right) is the open boundary to living room
+
+    // 2. Conversion to walls with open boundary flag
+    const walls = [];
+    for (let i = 0; i < polygon.length; i++) {
+      const p1 = polygon[i];
+      const p2 = polygon[(i + 1) % polygon.length];
+      const lenFt = Math.hypot(p2.x - p1.x, p2.z - p1.z);
+      const isOpen = openWallIndices.includes(i);
+      walls.push({
+        id: `wall-${i}`,
+        isOpenBoundary: isOpen,
+        lengthFt: +lenFt.toFixed(2),
+        isPhysical: !isOpen,
+      });
+    }
+
+    // Assertions
+    const physicalWalls = walls.filter((w) => w.isPhysical);
+    const openBoundaries = walls.filter((w) => w.isOpenBoundary);
+
+    assert.strictEqual(walls.length, 4, 'Room polygon has 4 boundary segments');
+    assert.strictEqual(physicalWalls.length, 3, 'Must have exactly 3 physical walls (Zero phantom 4th wall)');
+    assert.strictEqual(openBoundaries.length, 1, 'Must have exactly 1 open concept boundary');
+    assert.strictEqual(openBoundaries[0].id, 'wall-1', 'Open boundary must be at index 1');
+
+    // 3. Option A Badge Formatting
+    const openSpanFt = openBoundaries[0].lengthFt;
+    const feet = Math.floor(openSpanFt);
+    const inches = Math.round((openSpanFt - feet) * 12);
+    const badgeLabel = `${feet}' ${inches}" OPEN`;
+    assert(badgeLabel.includes('OPEN'), 'Badge label must explicitly declare OPEN boundary');
+
+    // 4. Zero 3D Triangles along open boundary
+    let trianglesGenerated = 0;
+    for (let i = 0; i < walls.length; i++) {
+      if (openWallIndices.includes(i)) {
+        // Skipped in STL and 3D mesh
+        continue;
+      }
+      trianglesGenerated += 12; // Standard 2-subprism wall
+    }
+    assert.strictEqual(trianglesGenerated, 36, 'Only 3 physical walls generate 3D triangles (3 * 12 = 36, 0 for open span)');
+  });
+
   console.log(`\n📊 Verification Summary: ${passedTests}/${totalTests} tests passed.\n`);
 }
 

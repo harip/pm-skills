@@ -42,6 +42,7 @@ export const StlExporterService = {
     const heightM = (room.height_ft || 8.1) * 0.3048;
     const floorSlabM = 0.08; // 8cm solid floor slab
     const roofSlabM = 0.10;  // 10cm solid roof slab
+    const openWallIndices: number[] = parsedMesh?.openWallIndices || (walls.length === 3 ? [1] : []);
 
     let stl = `solid ${safeName}\n`;
 
@@ -189,6 +190,10 @@ export const StlExporterService = {
 
     // --- 2. Watertight Parametric Wall Assemblies with Real Aperture Cutouts ---
     for (let i = 0; i < N; i++) {
+      if (openWallIndices.includes(i)) {
+        // Open concept boundary: 0 vertical wall facets extruded (preserves walk-through opening)
+        continue;
+      }
       const p1 = ptsM[i];
       const p2 = ptsM[(i + 1) % N];
 
@@ -458,6 +463,7 @@ export const StlExporterService = {
       const polygon = GeometryService.buildRoomPolygon(walls, node.w, node.l);
       const N = polygon.length;
       if (N < 3) return;
+      const openWallIndices: number[] = parsedMesh?.openWallIndices || (walls.length === 3 ? [1] : []);
 
       const fullHeightM = (node.h || room.height_ft || 8.1) * 0.3048;
       const effectiveHeightM =
@@ -613,6 +619,7 @@ export const StlExporterService = {
 
       // 2. Watertight Parametric Wall Assemblies with Real Aperture Cutouts
       for (let i = 0; i < N; i++) {
+        if (openWallIndices.includes(i)) continue;
         const p1 = ptsM[i];
         const p2 = ptsM[(i + 1) % N];
 
