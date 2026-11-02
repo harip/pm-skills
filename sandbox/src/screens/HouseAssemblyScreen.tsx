@@ -16,9 +16,11 @@ import {
   ScrollView,
   Switch,
   Modal,
+  TextInput,
+  KeyboardAvoidingView,
 } from 'react-native';
 import Svg, { Polygon, Line, Rect, Circle, Text as SvgText, G, Path } from 'react-native-svg';
-import { Room } from '../types/room';
+import { Room, HouseBuild, PlacedRoomNodeData } from '../types/room';
 import { GeometryService, ProjectedPoint } from '../services/geometryService';
 import { StlExporterService } from '../services/stlExporterService';
 import { Database } from '../db/database';
@@ -68,8 +70,130 @@ interface LayersConfig {
   furniture: boolean;
 }
 
+const BuildBlueprintThumbnail: React.FC<{
+  build: HouseBuild;
+  allRooms: Room[];
+  width?: number;
+  height?: number;
+}> = ({ build, allRooms, width = 86, height = 74 }) => {
+  let placedNodes: any[] = [];
+  try {
+    if (build.placed_nodes_json) placedNodes = JSON.parse(build.placed_nodes_json);
+  } catch {}
+
+  if (!placedNodes.length) {
+    return (
+      <View style={styles.thumbnailContainer}>
+        <Text style={{ fontSize: 24 }}>🏡</Text>
+      </View>
+    );
+  }
+
+  const polygons: { points: { x: number; z: number }[] }[] = [];
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minZ = Infinity;
+  let maxZ = -Infinity;
+
+  for (const node of placedNodes) {
+    const room = allRooms.find((r) => r.id === node.roomId);
+    if (!room) continue;
+
+    let parsedMesh: any = null;
+    try {
+      if (room.mesh_json) parsedMesh = JSON.parse(room.mesh_json);
+    } catch {}
+
+    const realWalls = parsedMesh?.walls || [];
+    const poly = GeometryService.buildRoomPolygon(realWalls, room.width_ft || 16, room.length_ft || 14);
+    const N = poly.length;
+    const centerPoly = {
+      x: poly.reduce((acc, p) => acc + p.x, 0) / N,
+      z: poly.reduce((acc, p) => acc + p.z, 0) / N,
+    };
+
+    const totalRad = ((node.rotation || 0) * Math.PI) / 180 + (node.orthoAngle || 0);
+    const cosR = Math.cos(totalRad);
+    const sinR = Math.sin(totalRad);
+
+    const worldPoly = poly.map((pt) => {
+      const relX = pt.x - centerPoly.x;
+      const relZ = pt.z - centerPoly.z;
+      const wx = (node.x || 0) + (relX * cosR - relZ * sinR);
+      const wz = (node.z || 0) + (relX * sinR + relZ * cosR);
+      minX = Math.min(minX, wx);
+      maxX = Math.max(maxX, wx);
+      minZ = Math.min(minZ, wz);
+      maxZ = Math.max(maxZ, wz);
+      return { x: wx, z: wz };
+    });
+
+    polygons.push({ points: worldPoly });
+  }
+
+  if (!polygons.length) {
+    return (
+      <View style={styles.thumbnailContainer}>
+        <Text style={{ fontSize: 24 }}>🏡</Text>
+      </View>
+    );
+  }
+
+  const spanX = Math.max(4, maxX - minX);
+  const spanZ = Math.max(4, maxZ - minZ);
+  const pad = 8;
+  const scale = Math.min((width - pad * 2) / spanX, (height - pad * 2) / spanZ);
+  const cx = width / 2 - ((minX + maxX) / 2) * scale;
+  const cz = height / 2 - ((minZ + maxZ) / 2) * scale;
+
+  return (
+    <View style={styles.thumbnailContainer}>
+      <Svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
+        <Line
+          x1={0}
+          y1={height / 2}
+          x2={width}
+          y2={height / 2}
+          stroke="#e2e8f0"
+          strokeWidth={0.75}
+          strokeDasharray="3,3"
+        />
+        <Line
+          x1={width / 2}
+          y1={0}
+          x2={width / 2}
+          y2={height}
+          stroke="#e2e8f0"
+          strokeWidth={0.75}
+          strokeDasharray="3,3"
+        />
+        {polygons.map((polyItem, pIdx) => {
+          const pointsStr = polyItem.points
+            .map((pt) => `${+(pt.x * scale + cx).toFixed(1)},${+(pt.z * scale + cz).toFixed(1)}`)
+            .join(' ');
+          return (
+            <Polygon
+              key={`poly-${pIdx}`}
+              points={pointsStr}
+              fill="#ffffff"
+              stroke="#0f172a"
+              strokeWidth={1.75}
+              strokeLinejoin="round"
+            />
+          );
+        })}
+      </Svg>
+    </View>
+  );
+};
+
 export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBack }) => {
   const [allRooms, setAllRooms] = useState<Room[]>([]);
+  const [screenMode, setScreenMode] = useState<'catalog' | 'editor'>('catalog');
+  const [savedBuilds, setSavedBuilds] = useState<HouseBuild[]>([]);
+  const [currentBuild, setCurrentBuild] = useState<HouseBuild | null>(null);
+  const [showSaveModal, setShowSaveModal] = useState<boolean>(false);
+  const [saveBuildName, setSaveBuildName] = useState<string>('');
   const [activeTab, setActiveTab] = useState<'studio' | 'dollhouse'>('studio');
   const [viewMode, setViewMode] = useState<'2d' | '3d'>('2d');
   const [threeDHeightMode, setThreeDHeightMode] = useState<'4ft' | 'ceil'>('4ft');
@@ -158,37 +282,196 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
     }
   };
 
-  // Load rooms from DB or sample
+  const loadBuilds = async () => {
+    const b = await Database.getHouseBuilds();
+    setSavedBuilds(b);
+  };
+
+  // Load rooms and saved builds from DB
   useEffect(() => {
     (async () => {
       const userRooms = await Database.getRooms();
       const samples = GeometryService.getSampleRooms();
       const available = userRooms.length > 0 ? userRooms : samples;
       setAllRooms(available);
+      await loadBuilds();
 
-      const targetRoom = initialSelectedRoom || available[0];
-      if (targetRoom) {
-        const rw = targetRoom.width_ft || 16;
-        const rl = targetRoom.length_ft || 14;
-        const rh = targetRoom.height_ft || 9;
-        const orthoAngle = computeOrthoAlignment(targetRoom.mesh_json);
+      if (initialSelectedRoom) {
+        const rw = initialSelectedRoom.width_ft || 16;
+        const rl = initialSelectedRoom.length_ft || 14;
+        const rh = initialSelectedRoom.height_ft || 9;
+        const orthoAngle = computeOrthoAlignment(initialSelectedRoom.mesh_json);
         const initialNode: RoomNode = {
-          room: targetRoom,
+          room: initialSelectedRoom,
           x: 0,
           z: 0,
           w: rw,
           l: rl,
           h: rh,
           rotation: 0,
-          floorLevel: targetRoom.floor_level || 'Ground Floor',
+          floorLevel: initialSelectedRoom.floor_level || 'Ground Floor',
           color: palette[0],
           orthoAngle,
         };
         setPlacedRoomNodes([initialNode]);
-        setSelectedRoomId(targetRoom.id);
+        setSelectedRoomId(initialSelectedRoom.id);
+        setScreenMode('editor');
       }
     })();
   }, [initialSelectedRoom]);
+
+  const handleStartNewBuild = () => {
+    setCurrentBuild(null);
+    setPlacedRoomNodes([]);
+    setSelectedRoomId(null);
+    setScreenMode('editor');
+  };
+
+  const handleOpenBuild = (build: HouseBuild) => {
+    setCurrentBuild(build);
+    let placedData: PlacedRoomNodeData[] = [];
+    try {
+      if (build.placed_nodes_json) placedData = JSON.parse(build.placed_nodes_json);
+    } catch {}
+
+    const reconstructed: RoomNode[] = placedData.map((d, idx) => {
+      const r = allRooms.find((room) => room.id === d.roomId) || {
+        id: d.roomId,
+        name: 'Room',
+        length_ft: 14,
+        width_ft: 16,
+        height_ft: 9,
+        area_sqft: 224,
+        mesh_json: '',
+        floor_level: d.floorLevel,
+        is_sample: false,
+        created_at: '',
+        updated_at: '',
+      };
+      return {
+        room: r,
+        x: d.x,
+        z: d.z,
+        w: r.width_ft || 16,
+        l: r.length_ft || 14,
+        h: r.height_ft || 9,
+        rotation: d.rotation || 0,
+        floorLevel: d.floorLevel || r.floor_level || 'Ground Floor',
+        color: palette[idx % palette.length],
+        orthoAngle: d.orthoAngle || 0,
+      };
+    });
+
+    setPlacedRoomNodes(reconstructed);
+    if (reconstructed.length > 0) setSelectedRoomId(reconstructed[0].room.id);
+    setScreenMode('editor');
+  };
+
+  const handleConfirmSaveBuild = async () => {
+    const trimmed = saveBuildName.trim() || `House Build ${savedBuilds.length + 1}`;
+    const floorLevels = new Set(placedRoomNodes.map((n) => n.floorLevel));
+    const placedData: PlacedRoomNodeData[] = placedRoomNodes.map((n) => ({
+      roomId: n.room.id,
+      x: n.x,
+      z: n.z,
+      rotation: n.rotation,
+      orthoAngle: n.orthoAngle,
+      floorLevel: n.floorLevel,
+    }));
+
+    const buildToSave: HouseBuild = {
+      id: currentBuild?.id || `build-${Date.now()}`,
+      name: trimmed,
+      room_ids: placedRoomNodes.map((n) => n.room.id),
+      placed_nodes_json: JSON.stringify(placedData),
+      total_area_sqft: Math.round(totalArea),
+      room_count: placedRoomNodes.length,
+      floor_count: Math.max(1, floorLevels.size),
+      created_at: currentBuild?.created_at || new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    await Database.saveHouseBuild(buildToSave);
+    setCurrentBuild(buildToSave);
+    setShowSaveModal(false);
+    await loadBuilds();
+  };
+
+  const handleRenameBuild = (build: HouseBuild) => {
+    if (Platform.OS === 'web') {
+      const newName = (typeof window !== 'undefined' ? window.prompt('Enter new name for this build:', build.name) : null);
+      if (newName !== null) {
+        const trimmed = newName.trim();
+        if (trimmed) {
+          const updated: HouseBuild = {
+            ...build,
+            name: trimmed.slice(0, 40),
+            updated_at: new Date().toISOString(),
+          };
+          Database.saveHouseBuild(updated).then(loadBuilds);
+        }
+      }
+      return;
+    }
+
+    Alert.prompt(
+      'Rename House Build',
+      'Enter new name for this build:',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Save',
+          onPress: async (newName?: string) => {
+            const trimmed = newName?.trim();
+            if (!trimmed) {
+              Alert.alert('Invalid Name', 'Build name cannot be empty.');
+              return;
+            }
+            const updated: HouseBuild = {
+              ...build,
+              name: trimmed.slice(0, 40),
+              updated_at: new Date().toISOString(),
+            };
+            await Database.saveHouseBuild(updated);
+            await loadBuilds();
+          },
+        },
+      ],
+      'plain-text',
+      build.name
+    );
+  };
+
+  const handleDeleteBuild = (build: HouseBuild) => {
+    if (Platform.OS === 'web') {
+      const confirmed = typeof window !== 'undefined' ? window.confirm(`Are you sure you want to delete "${build.name}"? This cannot be undone.`) : true;
+      if (confirmed) {
+        Database.deleteHouseBuild(build.id).then(loadBuilds);
+      }
+      return;
+    }
+
+    Alert.alert(
+      'Delete House Build',
+      `Are you sure you want to delete "${build.name}"? This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            await Database.deleteHouseBuild(build.id);
+            await loadBuilds();
+          },
+        },
+      ]
+    );
+  };
+
+  const handleBackToCatalog = () => {
+    setScreenMode('catalog');
+    loadBuilds();
+  };
 
   // Handle Viewport measurement with hardware-accurate measureInWindow
   const handleViewportLayout = (e: any) => {
@@ -1251,22 +1534,184 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
     return { allFaces3D: faces, allCanopies: canopies };
   }, [placedRoomNodes, angleX, angleY, zoom, panOffset, selectedRoomId, viewW, viewH, layers.furniture, threeDHeightMode]);
 
+  // Catalog Screen View (Default landing state when visiting Whole House)
+  if (screenMode === 'catalog') {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <StatusBar barStyle="dark-content" backgroundColor="#f5f5f7" />
+        <View style={styles.container}>
+          {/* Catalog Top Navigation Bar */}
+          <View style={styles.navBar}>
+            {onBack ? (
+              <TouchableOpacity onPress={onBack} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <Text style={styles.navBackText}>‹ Rooms</Text>
+              </TouchableOpacity>
+            ) : (
+              <View style={{ width: 60 }} />
+            )}
+            <View style={styles.navTitleGroup}>
+              <Text style={styles.navTitle}>Whole House</Text>
+            </View>
+            <TouchableOpacity
+              style={styles.catalogAddBuildBtn}
+              onPress={handleStartNewBuild}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.catalogAddBuildBtnText}>+ Build</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Catalog Body */}
+          {savedBuilds.length === 0 ? (
+            <View style={styles.catalogEmptyContainer}>
+              <View style={styles.catalogEmptyIconCircle}>
+                <Svg width={42} height={42} viewBox="0 0 24 24" fill="none">
+                  <Path
+                    d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"
+                    stroke="#007aff"
+                    strokeWidth={1.8}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  <Path
+                    d="M9 22V12h6v10"
+                    stroke="#007aff"
+                    strokeWidth={1.8}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </Svg>
+              </View>
+              <Text style={styles.catalogEmptyTitle}>No House Builds Yet</Text>
+              <Text style={styles.catalogEmptySubtitle}>
+                Create composite floor plans by combining your scanned rooms into a full residence.
+              </Text>
+              <TouchableOpacity
+                style={styles.catalogEmptyCtaBtn}
+                onPress={handleStartNewBuild}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.catalogEmptyCtaBtnText}>+ Start New Build</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <ScrollView
+              style={styles.catalogScrollView}
+              contentContainerStyle={styles.catalogScrollContent}
+              showsVerticalScrollIndicator={false}
+            >
+              {savedBuilds.map((build) => (
+                <View key={build.id} style={styles.buildCard}>
+                  <TouchableOpacity
+                    style={styles.buildCardTouch}
+                    onPress={() => handleOpenBuild(build)}
+                    activeOpacity={0.7}
+                  >
+                    <BuildBlueprintThumbnail build={build} allRooms={allRooms} />
+
+                    <View style={styles.buildCardMiddleCol}>
+                      <Text style={styles.buildCardTitle} numberOfLines={1}>
+                        {build.name}
+                      </Text>
+                      <Text style={styles.buildCardMeta}>
+                        {build.room_count} Rooms • {build.total_area_sqft.toLocaleString()} sq ft
+                      </Text>
+                      <Text style={styles.buildCardLevel}>
+                        {build.floor_count || 1} {(build.floor_count || 1) === 1 ? 'Level' : 'Levels'}
+                      </Text>
+                    </View>
+
+                    <View style={styles.appleIconsRightWrap}>
+                      <TouchableOpacity
+                        style={styles.appleIconBtn}
+                        onPress={(e) => {
+                          e.stopPropagation?.();
+                          handleRenameBuild(build);
+                        }}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        accessibilityLabel={`Rename ${build.name}`}
+                      >
+                        <Text style={styles.appleIconText}>✎</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.appleIconBtn, styles.appleDeleteIconBtn]}
+                        onPress={(e) => {
+                          e.stopPropagation?.();
+                          handleDeleteBuild(build);
+                        }}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        accessibilityLabel={`Delete ${build.name}`}
+                      >
+                        <Text style={[styles.appleIconText, styles.appleDeleteIconText]}>🗑</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </ScrollView>
+          )}
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Builder / Editor Screen View
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor="#f5f5f7" />
       <View style={styles.container}>
         {/* Top Navigation Bar */}
         <View style={styles.navBar}>
-          <TouchableOpacity onPress={onBack} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-            <Text style={styles.navBackText}>‹ Rooms</Text>
+          <TouchableOpacity onPress={handleBackToCatalog} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <Text style={styles.navBackText}>‹ Builds</Text>
           </TouchableOpacity>
           <View style={styles.navTitleGroup}>
-            <Text style={styles.navTitle}>House Assembly</Text>
+            <Text style={styles.navTitle} numberOfLines={1}>
+              {currentBuild?.name || 'Whole House Build'}
+            </Text>
             <Text style={styles.navSubtitle}>
-              {placedRoomNodes.length} Rooms Placed • {Math.round(totalArea)} sq ft
+              {placedRoomNodes.length} Rooms Placed • {Math.round(totalArea).toLocaleString()} sq ft
             </Text>
           </View>
-          <View style={{ width: 60 }} />
+          <View style={styles.navRightGroup}>
+            {placedRoomNodes.length > 0 ? (
+              <TouchableOpacity
+                style={styles.navSaveCircleBtn}
+                onPress={() => {
+                  setSaveBuildName(currentBuild?.name || `House Build ${savedBuilds.length + 1}`);
+                  setShowSaveModal(true);
+                }}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                accessibilityLabel="Save House Build"
+              >
+                <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+                  <Path
+                    d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"
+                    stroke="#007aff"
+                    strokeWidth={2}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  <Path
+                    d="M17 21v-8H7v8"
+                    stroke="#007aff"
+                    strokeWidth={2}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  <Path
+                    d="M7 3v5h8"
+                    stroke="#007aff"
+                    strokeWidth={2}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </Svg>
+              </TouchableOpacity>
+            ) : (
+              <View style={{ width: 34 }} />
+            )}
+          </View>
         </View>
 
         {/* Hero CAD Viewport */}
@@ -1669,7 +2114,7 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
                 <Text style={styles.emptyCanvasIcon}>🧊</Text>
                 <Text style={styles.emptyCanvasTitle}>No Rooms on Canvas</Text>
                 <Text style={styles.emptyCanvasSub}>
-                  Tap "+ Add to Studio" on any room below to place it.
+                  Tap ＋ in the bottom control capsule to add rooms.
                 </Text>
               </View>
             )}
@@ -2194,6 +2639,72 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
               </TouchableOpacity>
             </View>
           </TouchableOpacity>
+        </Modal>
+
+        {/* Layout A Centered Save Modal */}
+        <Modal
+          visible={showSaveModal}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setShowSaveModal(false)}
+        >
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={styles.saveModalBackdrop}
+          >
+            <TouchableOpacity
+              style={StyleSheet.absoluteFill}
+              activeOpacity={1}
+              onPress={() => setShowSaveModal(false)}
+            />
+            <View
+              style={styles.saveModalCard}
+              onStartShouldSetResponder={() => true}
+              onTouchEnd={(e) => e.stopPropagation()}
+            >
+              <Text style={styles.saveModalTitle}>Save House Build</Text>
+              <Text style={styles.saveModalSubtitle}>
+                Name your composite floor plan to save it to your library.
+              </Text>
+
+              {/* Live specs summary pill */}
+              <View style={styles.saveModalSpecsBox}>
+                <Text style={styles.saveModalSpecsText}>
+                  {placedRoomNodes.length} Rooms • {Math.round(totalArea).toLocaleString()} sq ft •{' '}
+                  {new Set(placedRoomNodes.map((n) => n.floorLevel)).size || 1}{' '}
+                  {(new Set(placedRoomNodes.map((n) => n.floorLevel)).size || 1) === 1 ? 'Level' : 'Levels'}
+                </Text>
+              </View>
+
+              <TextInput
+                style={styles.saveModalInput}
+                placeholder="e.g. Modern Ranch, 2-Story Colonial"
+                placeholderTextColor="#8e8e93"
+                value={saveBuildName}
+                onChangeText={setSaveBuildName}
+                autoFocus={true}
+                selectTextOnFocus={true}
+                maxLength={40}
+              />
+
+              <View style={styles.saveModalActionsRow}>
+                <TouchableOpacity
+                  style={styles.saveModalCancelBtn}
+                  onPress={() => setShowSaveModal(false)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.saveModalCancelBtnText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.saveModalConfirmBtn}
+                  onPress={handleConfirmSaveBuild}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.saveModalConfirmBtnText}>Save Build</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </KeyboardAvoidingView>
         </Modal>
       </View>
     </SafeAreaView>
@@ -2794,5 +3305,253 @@ const styles = StyleSheet.create({
     color: '#475569',
     fontSize: 12,
     fontWeight: '700',
+  },
+
+  // Catalog View Styles
+  catalogAddBuildBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: '#007aff',
+  },
+  catalogAddBuildBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+  catalogEmptyContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+  },
+  catalogEmptyIconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(0, 122, 255, 0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
+  catalogEmptyTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1c1c1e',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  catalogEmptySubtitle: {
+    fontSize: 14,
+    color: '#8e8e93',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 24,
+  },
+  catalogEmptyCtaBtn: {
+    backgroundColor: '#007aff',
+    paddingHorizontal: 22,
+    paddingVertical: 12,
+    borderRadius: 22,
+    shadowColor: '#007aff',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  catalogEmptyCtaBtnText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+  catalogScrollView: {
+    flex: 1,
+  },
+  catalogScrollContent: {
+    padding: 16,
+    gap: 12,
+  },
+  buildCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    borderWidth: 0.5,
+    borderColor: '#e5e5ea',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
+    overflow: 'hidden',
+  },
+  buildCardTouch: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    gap: 12,
+  },
+  thumbnailContainer: {
+    width: 86,
+    height: 74,
+    borderRadius: 10,
+    backgroundColor: '#f8fafc',
+    borderWidth: 0.5,
+    borderColor: '#e2e8f0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  buildCardMiddleCol: {
+    flex: 1,
+    justifyContent: 'center',
+    gap: 3,
+    paddingRight: 6,
+  },
+  buildCardTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1c1c1e',
+    letterSpacing: -0.3,
+  },
+  buildCardMeta: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#8e8e93',
+    fontVariant: ['tabular-nums'],
+  },
+  buildCardLevel: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#8e8e93',
+  },
+  appleIconsRightWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingLeft: 6,
+  },
+  appleIconBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#f2f2f7',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  appleIconText: {
+    fontSize: 13,
+    color: '#007aff',
+    fontWeight: '600',
+  },
+  appleDeleteIconBtn: {
+    backgroundColor: 'rgba(255, 59, 48, 0.08)',
+  },
+  appleDeleteIconText: {
+    fontSize: 13,
+    color: '#ff3b30',
+  },
+
+  // Editor Top Nav Styles
+  navRightGroup: {
+    width: 60,
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+  },
+  navSaveCircleBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(0, 122, 255, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  // Layout A Save Modal Styles
+  saveModalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  saveModalCard: {
+    width: '100%',
+    maxWidth: 340,
+    backgroundColor: '#ffffff',
+    borderRadius: 18,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  saveModalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1c1c1e',
+    textAlign: 'center',
+    letterSpacing: -0.3,
+  },
+  saveModalSubtitle: {
+    fontSize: 13,
+    color: '#8e8e93',
+    textAlign: 'center',
+    marginTop: 4,
+    lineHeight: 18,
+  },
+  saveModalSpecsBox: {
+    backgroundColor: '#f2f2f7',
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    marginVertical: 14,
+  },
+  saveModalSpecsText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#3a3a3c',
+    fontVariant: ['tabular-nums'],
+  },
+  saveModalInput: {
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e5e5ea',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontSize: 15,
+    color: '#1c1c1e',
+    marginBottom: 16,
+  },
+  saveModalActionsRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  saveModalCancelBtn: {
+    flex: 1,
+    paddingVertical: 11,
+    borderRadius: 10,
+    backgroundColor: '#f2f2f7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  saveModalCancelBtnText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#8e8e93',
+  },
+  saveModalConfirmBtn: {
+    flex: 1,
+    paddingVertical: 11,
+    borderRadius: 10,
+    backgroundColor: '#007aff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  saveModalConfirmBtnText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#ffffff',
   },
 });

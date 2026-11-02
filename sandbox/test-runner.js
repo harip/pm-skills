@@ -10,6 +10,7 @@ let totalTests = 0;
 let inMemRooms = [];
 let inMemFurniture = [];
 let inMemProjects = [];
+let inMemBuilds = [];
 
 const Database = {
   async getRooms(includeSamples = false) {
@@ -31,10 +32,25 @@ const Database = {
       p.room_ids = (p.room_ids || []).filter((rId) => rId !== id);
     });
   },
+  async getHouseBuilds() {
+    return [...inMemBuilds];
+  },
+  async getHouseBuildById(id) {
+    return inMemBuilds.find((b) => b.id === id) || null;
+  },
+  async saveHouseBuild(build) {
+    const idx = inMemBuilds.findIndex((b) => b.id === build.id);
+    if (idx >= 0) inMemBuilds[idx] = build;
+    else inMemBuilds.unshift(build);
+  },
+  async deleteHouseBuild(id) {
+    inMemBuilds = inMemBuilds.filter((b) => b.id !== id);
+  },
   async purgeAllData() {
     inMemRooms = [];
     inMemFurniture = [];
     inMemProjects = [];
+    inMemBuilds = [];
   },
   async getStorageStats() {
     const active = inMemRooms.filter((r) => !r.is_sample);
@@ -899,6 +915,62 @@ endsolid ${room.name}`;
     // 4. Idempotency test (purging when already empty must succeed without error)
     await Database.purgeAllData();
     assert.strictEqual((await Database.getRooms()).length, 0, 'Second purge must succeed idempotently');
+  });
+
+  // EVAL-23: Whole House Build Persistence & CRUD Life Cycle
+  await it('EVAL-23: Whole House build persistence (Create, Read, Update, Delete, and Purge)', async () => {
+    // 1. Initial state is 0 builds
+    let builds = await Database.getHouseBuilds();
+    assert.strictEqual(builds.length, 0, 'Builds must initially be empty');
+
+    // 2. Save a new build
+    const newBuild = {
+      id: 'build-101',
+      name: 'Modern Craftsman Residence',
+      room_ids: ['room-a', 'room-b'],
+      placed_nodes_json: JSON.stringify([
+        { roomId: 'room-a', x: 0, z: 0, rotation: 0, orthoAngle: 0, floorLevel: 'Ground Floor' },
+        { roomId: 'room-b', x: 16, z: 0, rotation: 0, orthoAngle: 0, floorLevel: 'Ground Floor' },
+      ]),
+      total_area_sqft: 1420,
+      room_count: 2,
+      floor_count: 1,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    await Database.saveHouseBuild(newBuild);
+
+    builds = await Database.getHouseBuilds();
+    assert.strictEqual(builds.length, 1, 'Must have 1 build after saving');
+    assert.strictEqual(builds[0].name, 'Modern Craftsman Residence');
+    assert.strictEqual(builds[0].total_area_sqft, 1420);
+    assert.strictEqual(builds[0].floor_count, 1);
+
+    // 3. Update build (Rename / Add level)
+    const updatedBuild = {
+      ...newBuild,
+      name: 'Modern Craftsman Two-Story',
+      floor_count: 2,
+      updated_at: new Date().toISOString(),
+    };
+    await Database.saveHouseBuild(updatedBuild);
+
+    const fetched = await Database.getHouseBuildById('build-101');
+    assert.ok(fetched, 'Fetched build must exist');
+    assert.strictEqual(fetched.name, 'Modern Craftsman Two-Story', 'Name must update');
+    assert.strictEqual(fetched.floor_count, 2, 'Floor count must update');
+
+    // 4. Delete build
+    await Database.deleteHouseBuild('build-101');
+    builds = await Database.getHouseBuilds();
+    assert.strictEqual(builds.length, 0, 'Build count must return to 0 after deletion');
+    assert.strictEqual(await Database.getHouseBuildById('build-101'), null, 'Deleted build must return null');
+
+    // 5. Factory purge clears builds
+    await Database.saveHouseBuild(newBuild);
+    assert.strictEqual((await Database.getHouseBuilds()).length, 1, 'Build must exist before purge');
+    await Database.purgeAllData();
+    assert.strictEqual((await Database.getHouseBuilds()).length, 0, 'Builds must be 0 after purge');
   });
 
   console.log(`\n📊 Verification Summary: ${passedTests}/${totalTests} tests passed.\n`);

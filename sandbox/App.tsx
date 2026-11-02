@@ -103,7 +103,6 @@ export default function App() {
         )}
         {activeTab === 'assembly' && (
           <HouseAssemblyScreen
-            initialSelectedRoom={selectedRoom}
             onBack={handleBackToCatalog}
           />
         )}

@@ -57,3 +57,24 @@ export interface HouseProject {
   created_at: string;
   updated_at: string;
 }
+
+export interface PlacedRoomNodeData {
+  roomId: string;
+  x: number;
+  z: number;
+  rotation: number;
+  orthoAngle: number;
+  floorLevel: string;
+}
+
+export interface HouseBuild {
+  id: string;
+  name: string;
+  room_ids: string[];
+  placed_nodes_json: string; // JSON of PlacedRoomNodeData[]
+  total_area_sqft: number;
+  room_count: number;
+  floor_count: number;
+  created_at: string;
+  updated_at: string;
+}

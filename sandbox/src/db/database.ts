@@ -1,11 +1,12 @@
 // sandbox/src/db/database.ts
 import { NativeModules, Platform } from 'react-native';
-import { Room, FurnitureItem, HouseProject } from '../types/room';
+import { Room, FurnitureItem, HouseProject, HouseBuild } from '../types/room';
 
 // In-memory + persistent store (works cleanly across Expo Web, iOS native, and Node tests)
 let inMemoryRooms: Room[] = [];
 let inMemoryFurniture: FurnitureItem[] = [];
 let inMemoryProjects: HouseProject[] = [];
+let inMemoryBuilds: HouseBuild[] = [];
 let hasLoadedFromDisk = false;
 let loadPromise: Promise<void> | null = null;
 
@@ -75,6 +76,22 @@ async function ensureLoaded(): Promise<void> {
         // Gracefully ignore if running in environment where bundled_rooms is omitted
       }
     }
+
+    // Hydrate saved house builds from Web local storage if available
+    if (Platform.OS === 'web' && typeof localStorage !== 'undefined') {
+      try {
+        const raw = localStorage.getItem('roomos_house_builds');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) {
+            inMemoryBuilds = parsed;
+          }
+        }
+      } catch (err) {
+        console.warn('Failed loading house builds from localStorage:', err);
+      }
+    }
+
     hasLoadedFromDisk = true;
     loadPromise = null;
   })();
@@ -150,7 +167,14 @@ export const Database = {
     inMemoryRooms = [];
     inMemoryFurniture = [];
     inMemoryProjects = [];
+    inMemoryBuilds = [];
     hasLoadedFromDisk = true; // Lock cache so deleted rooms are never reloaded
+
+    if (Platform.OS === 'web' && typeof localStorage !== 'undefined') {
+      try {
+        localStorage.removeItem('roomos_house_builds');
+      } catch {}
+    }
 
     if (Platform.OS === 'ios' && NativeModules?.RoomPlanModule?.saveRoomJson) {
       try {
@@ -188,6 +212,42 @@ export const Database = {
 
   async saveFurniture(item: FurnitureItem): Promise<void> {
     inMemoryFurniture.push(item);
+  },
+
+  async getHouseBuilds(): Promise<HouseBuild[]> {
+    await ensureLoaded();
+    return [...inMemoryBuilds];
+  },
+
+  async getHouseBuildById(id: string): Promise<HouseBuild | null> {
+    await ensureLoaded();
+    const build = inMemoryBuilds.find((b) => b.id === id);
+    return build || null;
+  },
+
+  async saveHouseBuild(build: HouseBuild): Promise<void> {
+    await ensureLoaded();
+    const idx = inMemoryBuilds.findIndex((b) => b.id === build.id);
+    if (idx >= 0) {
+      inMemoryBuilds[idx] = build;
+    } else {
+      inMemoryBuilds.unshift(build);
+    }
+    if (Platform.OS === 'web' && typeof localStorage !== 'undefined') {
+      try {
+        localStorage.setItem('roomos_house_builds', JSON.stringify(inMemoryBuilds));
+      } catch {}
+    }
+  },
+
+  async deleteHouseBuild(id: string): Promise<void> {
+    await ensureLoaded();
+    inMemoryBuilds = inMemoryBuilds.filter((b) => b.id !== id);
+    if (Platform.OS === 'web' && typeof localStorage !== 'undefined') {
+      try {
+        localStorage.setItem('roomos_house_builds', JSON.stringify(inMemoryBuilds));
+      } catch {}
+    }
   },
 
   async clearDatabase(): Promise<void> {
