@@ -292,7 +292,7 @@ export const RoomsCatalogScreen: React.FC<Props> = ({
                     {/* Left: 2D Floor Plan Blueprint Thumbnail */}
                     <RoomBlueprintThumbnail room={room} width={86} height={74} />
 
-                    {/* Middle: Clean Room Name, Floor Badge & Minimalist Apple Action Icons */}
+                    {/* Middle: Room Title + Dimensions + Area next to thumbnail */}
                     <View style={styles.cardMiddleCol}>
                       <View style={styles.cardTitleRow}>
                         <Text style={styles.cardRoomName} numberOfLines={1}>
@@ -305,55 +305,6 @@ export const RoomsCatalogScreen: React.FC<Props> = ({
                         )}
                       </View>
 
-                      {room.floor_level && (
-                        <View
-                          style={[
-                            styles.floorBadge,
-                            room.floor_level === 'Basement' && styles.floorBadgeBasement,
-                          ]}
-                        >
-                          <Text
-                            style={[
-                              styles.floorBadgeText,
-                              room.floor_level === 'Basement' && styles.floorBadgeTextBasement,
-                            ]}
-                          >
-                            {room.floor_level === 'Basement' ? '🪜 Basement' : `🚪 ${room.floor_level}`}
-                          </Text>
-                        </View>
-                      )}
-
-                      {/* Minimalist Apple Action Icons (✎ and 🗑) */}
-                      {!room.is_sample && (
-                        <View style={styles.appleIconsRow}>
-                          <TouchableOpacity
-                            style={styles.appleIconBtn}
-                            onPress={(e) => {
-                              e.stopPropagation?.();
-                              handleRenameRoom(room);
-                            }}
-                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                            accessibilityLabel={`Rename ${displayName}`}
-                          >
-                            <Text style={styles.appleIconText}>✎</Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            style={[styles.appleIconBtn, styles.appleDeleteIconBtn]}
-                            onPress={(e) => {
-                              e.stopPropagation?.();
-                              handleDeleteRoom(room);
-                            }}
-                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                            accessibilityLabel={`Delete ${displayName}`}
-                          >
-                            <Text style={[styles.appleIconText, styles.appleDeleteIconText]}>🗑</Text>
-                          </TouchableOpacity>
-                        </View>
-                      )}
-                    </View>
-
-                    {/* Right Corner: Dimensions L×W×H and sq ft underneath */}
-                    <View style={styles.cardDimensionsRightWrap}>
                       <Text style={styles.dimensionsValueText}>
                         {formatDimensionsTag(room)}
                       </Text>
@@ -361,6 +312,34 @@ export const RoomsCatalogScreen: React.FC<Props> = ({
                         {GeometryService.formatAreaSqFt(room.area_sqft)}
                       </Text>
                     </View>
+
+                    {/* Right Corner: Minimalist Apple Action Icons (✎ and 🗑) */}
+                    {!room.is_sample && (
+                      <View style={styles.appleIconsRightWrap}>
+                        <TouchableOpacity
+                          style={styles.appleIconBtn}
+                          onPress={(e) => {
+                            e.stopPropagation?.();
+                            handleRenameRoom(room);
+                          }}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                          accessibilityLabel={`Rename ${displayName}`}
+                        >
+                          <Text style={styles.appleIconText}>✎</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.appleIconBtn, styles.appleDeleteIconBtn]}
+                          onPress={(e) => {
+                            e.stopPropagation?.();
+                            handleDeleteRoom(room);
+                          }}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                          accessibilityLabel={`Delete ${displayName}`}
+                        >
+                          <Text style={[styles.appleIconText, styles.appleDeleteIconText]}>🗑</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
                   </TouchableOpacity>
                 </View>
               );
@@ -547,7 +526,8 @@ const styles = StyleSheet.create({
   cardMiddleCol: {
     flex: 1,
     justifyContent: 'center',
-    gap: 4,
+    gap: 3,
+    paddingRight: 6,
   },
   cardTitleRow: {
     flexDirection: 'row',
@@ -560,11 +540,23 @@ const styles = StyleSheet.create({
     color: '#1c1c1e',
     letterSpacing: -0.3,
   },
-  appleIconsRow: {
+  dimensionsValueText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#3a3a3c',
+    fontVariant: ['tabular-nums'],
+    letterSpacing: -0.2,
+  },
+  areaSqFtText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#8e8e93',
+  },
+  appleIconsRightWrap: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginTop: 2,
+    paddingLeft: 6,
   },
   appleIconBtn: {
     width: 28,
@@ -597,26 +589,6 @@ const styles = StyleSheet.create({
     color: '#007aff',
     fontWeight: '600',
   },
-  floorBadge: {
-    backgroundColor: '#f2f2f7',
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 5,
-    alignSelf: 'flex-start',
-  },
-  floorBadgeBasement: {
-    backgroundColor: '#fff7ed',
-    borderWidth: 0.5,
-    borderColor: '#fed7aa',
-  },
-  floorBadgeText: {
-    color: '#636366',
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  floorBadgeTextBasement: {
-    color: '#ea580c',
-  },
   thumbnailContainer: {
     width: 86,
     height: 74,
@@ -627,23 +599,5 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  cardDimensionsRightWrap: {
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-    paddingLeft: 4,
-  },
-  dimensionsValueText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#1c1c1e',
-    fontVariant: ['tabular-nums'],
-    letterSpacing: -0.2,
-  },
-  areaSqFtText: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#8e8e93',
-    marginTop: 3,
   },
 });
