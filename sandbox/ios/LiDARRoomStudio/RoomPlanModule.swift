@@ -3,6 +3,8 @@ import Foundation
 import UIKit
 import RoomPlan
 import QuickLook
+import SwiftUI
+import RealityKit
 
 class QuickLookPreviewItem: NSObject, QLPreviewItem {
     var previewItemURL: URL?
@@ -42,6 +44,50 @@ class RoomPlanModule: NSObject {
             resolve(RoomCaptureSession.isSupported)
         } else {
             resolve(false)
+        }
+    }
+
+    @objc
+    func isObjectCaptureSupported(_ resolve: @escaping RCTPromiseResolveBlock, rejecter: @escaping RCTPromiseRejectBlock) {
+        if #available(iOS 17.0, *) {
+            DispatchQueue.main.async {
+                resolve(ObjectCaptureSession.isSupported)
+            }
+        } else {
+            resolve(false)
+        }
+    }
+
+    @objc
+    func startObjectCapture(_ objectId: String, category: String, resolve: @escaping RCTPromiseResolveBlock, rejecter: @escaping RCTPromiseRejectBlock) {
+        if #available(iOS 17.0, *) {
+            DispatchQueue.main.async {
+                guard ObjectCaptureSession.isSupported else {
+                    rejecter("NOT_SUPPORTED", "Apple RealityKit Object Capture requires an iPhone Pro with iOS 17+", nil)
+                    return
+                }
+
+                guard let rootVC = RCTPresentedViewController() ?? UIApplication.shared.windows.first(where: { $0.isKeyWindow })?.rootViewController else {
+                    rejecter("NO_VIEW_CONTROLLER", "Unable to find key root view controller", nil)
+                    return
+                }
+
+                let objectVC = ObjectCaptureViewController()
+                objectVC.objectId = objectId
+                objectVC.objectCategory = category
+                objectVC.modalPresentationStyle = .fullScreen
+                objectVC.onComplete = { result in
+                    if let data = result {
+                        resolve(data)
+                    } else {
+                        rejecter("CANCELLED", "Object capture cancelled", nil)
+                    }
+                }
+
+                rootVC.present(objectVC, animated: true, completion: nil)
+            }
+        } else {
+            rejecter("NOT_SUPPORTED", "Object Capture requires iOS 17.0 or later", nil)
         }
     }
     

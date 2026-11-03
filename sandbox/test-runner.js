@@ -1295,6 +1295,50 @@ endsolid ${room.name}`;
     assert.strictEqual(healed.length, 4, 'Deleting wall from 5-gon must heal to 4 corners');
   });
 
+  // EVAL-28: Multi-Pass Diagonal Truss (Image 1) and Furniture-Slicing Chord (Image 2) Automated Elimination
+  await it('EVAL-28: Multi-pass diagonal truss and furniture-slicing chord automated elimination', async () => {
+    // 1. Scenario Image 1: Multi-pass scan at top wall creates a diagonal truss / criss-cross cutting inward
+    const wallsWithTopTruss = [
+      { x1: -7.0, z1: -7.0, x2: -7.0, z2: 7.2, id: 'wall-left' },
+      { x1: -7.0, z1: 7.2, x2: 7.0, z2: 7.2, id: 'wall-top-exterior' }, // True outer top wall
+      { x1: -7.0, z1: 7.2, x2: 4.0, z2: 4.8, id: 'wall-top-slanted-truss' }, // Slanted second pass cutting inward
+      { x1: 7.0, z1: 7.2, x2: 7.0, z2: 4.8, id: 'wall-top-door-jamb' },
+      { x1: 7.0, z1: 2.0, x2: 7.0, z2: -7.0, id: 'wall-right' },
+      { x1: 7.0, z1: -7.0, x2: -7.0, z2: -7.0, id: 'wall-bottom' },
+    ];
+    const furniture1 = [
+      { x: -3.5, z: 5.5, widthFt: 3.0, lengthFt: 2.0, category: 'wardrobe' },
+      { x: -3.0, z: -3.0, widthFt: 5.5, lengthFt: 6.5, category: 'bed' },
+    ];
+
+    const polyTrussPruned = GeometryService.buildRoomPolygon(wallsWithTopTruss, 14, 14.5, furniture1);
+    assert(!GeometryService.isPolygonSelfIntersecting(polyTrussPruned), 'Pruned polygon must not self-intersect');
+    assert(!GeometryService.hasInteriorChords(polyTrussPruned), 'Pruned polygon must have zero interior chords');
+
+    // 2. Scenario Image 2: 14' 2" x 15' 5" room with clean outer perimeter and diagonal slicing through bed
+    const wallsWithBedSlice = [
+      { x1: -7.1, z1: -7.7, x2: -7.1, z2: 7.7, id: 'wall-west' },
+      { x1: -7.1, z1: 7.7, x2: 7.1, z2: 7.7, id: 'wall-north' },
+      { x1: 7.1, z1: 7.7, x2: 7.1, z2: -7.7, id: 'wall-east' },
+      { x1: 7.1, z1: -7.7, x2: -7.1, z2: -7.7, id: 'wall-south' },
+      // Diagonal chord cutting straight through the bed in center-right
+      { x1: -7.0, z1: -2.0, x2: 7.0, z2: 4.5, id: 'bed-diagonal-slice' },
+    ];
+    const bedObject = [
+      { x: 3.5, z: 2.5, widthFt: 5.5, lengthFt: 7.0, category: 'bed' },
+    ];
+
+    assert(GeometryService.segmentIntersectsOBB(
+      { x: -7.0, z: -2.0 },
+      { x: 7.0, z: 4.5 },
+      bedObject[0]
+    ), 'Segment must detect intersection with bed bounding box');
+
+    const cleanBedRoom = GeometryService.buildRoomPolygon(wallsWithBedSlice, 14.2, 15.4, bedObject);
+    assert.strictEqual(cleanBedRoom.length, 4, 'Bed-slicing chord must be pruned, leaving 4 outer walls');
+    assert(!GeometryService.polygonCutsThroughFurniture(cleanBedRoom, bedObject), 'Clean room boundary must NOT cut through bed');
+  });
+
   console.log(`\n📊 Verification Summary: ${passedTests}/${totalTests} tests passed.\n`);
 }
 

@@ -1228,6 +1228,128 @@ export const GeometryService = {
     return simplified.length >= 3 ? simplified : pts;
   },
 
+  // Tests if a 2D line segment intersects an Oriented Bounding Box (OBB) using Liang-Barsky parametric clipping
+  segmentIntersectsOBB(
+    p1: { x: number; z: number },
+    p2: { x: number; z: number },
+    obj: any
+  ): boolean {
+    const hw = ((obj.widthFt || 3) / 2) + 0.15; // 0.15 ft tolerance buffer
+    const hl = ((obj.lengthFt || 3) / 2) + 0.15;
+    const ox = obj.x || 0;
+    const oz = obj.z || 0;
+
+    let ux = 1, uz = 0;
+    if (obj.dirXx !== undefined && obj.dirXz !== undefined) {
+      const len = Math.hypot(obj.dirXx, obj.dirXz) || 1;
+      ux = obj.dirXx / len;
+      uz = obj.dirXz / len;
+    } else if (obj.yawDeg !== undefined) {
+      const rad = (obj.yawDeg * Math.PI) / 180;
+      ux = Math.cos(rad);
+      uz = Math.sin(rad);
+    }
+    const vx = -uz;
+    const vz = ux;
+
+    // Transform segment endpoints to object local coordinates
+    const dx1 = p1.x - ox;
+    const dz1 = p1.z - oz;
+    const lx1 = dx1 * ux + dz1 * uz;
+    const lz1 = dx1 * vx + dz1 * vz;
+
+    const dx2 = p2.x - ox;
+    const dz2 = p2.z - oz;
+    const lx2 = dx2 * ux + dz2 * uz;
+    const lz2 = dx2 * vx + dz2 * vz;
+
+    // Fast reject if either endpoint is inside the box
+    if (Math.abs(lx1) <= hw && Math.abs(lz1) <= hl) return true;
+    if (Math.abs(lx2) <= hw && Math.abs(lz2) <= hl) return true;
+
+    // Liang-Barsky parametric clipping against [-hw, hw] x [-hl, hl]
+    const p = [-(lx2 - lx1), lx2 - lx1, -(lz2 - lz1), lz2 - lz1];
+    const q = [lx1 - (-hw), hw - lx1, lz1 - (-hl), hl - lz1];
+
+    let u1 = 0.0;
+    let u2 = 1.0;
+
+    for (let i = 0; i < 4; i++) {
+      if (Math.abs(p[i]) < 1e-6) {
+        if (q[i] < 0) return false;
+      } else {
+        const t = q[i] / p[i];
+        if (p[i] < 0) {
+          if (t > u2) return false;
+          if (t > u1) u1 = t;
+        } else {
+          if (t < u1) return false;
+          if (t < u2) u2 = t;
+        }
+      }
+    }
+    return u1 <= u2;
+  },
+
+  // Checks whether any edge of a polygon cuts through detected interior furniture
+  polygonCutsThroughFurniture(polygon: PolygonPoint[], objects?: any[]): boolean {
+    if (!polygon || polygon.length < 3 || !Array.isArray(objects) || objects.length === 0) {
+      return false;
+    }
+    const n = polygon.length;
+    for (let i = 0; i < n; i++) {
+      const p1 = polygon[i];
+      const p2 = polygon[(i + 1) % n];
+      for (const obj of objects) {
+        if (this.segmentIntersectsOBB(p1, p2, obj)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  },
+
+  // Checks whether a polygon contains an internal diagonal chord passing through centroid
+  hasInteriorChords(polygon: PolygonPoint[]): boolean {
+    if (!polygon || polygon.length < 4) return false;
+    let cx = 0, cz = 0;
+    const n = polygon.length;
+    for (const p of polygon) {
+      cx += p.x;
+      cz += p.z;
+    }
+    cx /= n;
+    cz /= n;
+
+    const radii = polygon.map((p) => Math.hypot(p.x - cx, p.z - cz));
+    const maxR = Math.max(...radii);
+    if (maxR < 2.0) return false;
+
+    for (let i = 0; i < n; i++) {
+      const p1 = polygon[i];
+      const p2 = polygon[(i + 1) % n];
+      const mx = (p1.x + p2.x) / 2;
+      const mz = (p1.z + p2.z) / 2;
+      const r = Math.hypot(mx - cx, mz - cz);
+      const rRatio = r / maxR;
+
+      const v1x = p1.x - cx;
+      const v1z = p1.z - cz;
+      const v2x = p2.x - cx;
+      const v2z = p2.z - cz;
+      const dot = v1x * v2x + v1z * v2z;
+      const len1 = Math.hypot(v1x, v1z);
+      const len2 = Math.hypot(v2x, v2z);
+      const cosAngle = (len1 * len2 > 1e-4) ? (dot / (len1 * len2)) : 1;
+
+      // Chord slicing through center of room
+      if (rRatio < 0.45 && cosAngle < -0.25) {
+        return true;
+      }
+    }
+    return false;
+  },
+
   // Filters out phantom interior chords (e.g. bed edges, grazing LiDAR returns slicing through room interior)
   filterInteriorChords(segments: InternalSeg[], objects?: any[]): InternalSeg[] {
     if (segments.length <= 3) return segments;
@@ -1264,25 +1386,60 @@ export const GeometryService = {
       const len2 = Math.hypot(v2x, v2z);
       const cosAngle = (len1 * len2 > 1e-4) ? (dot / (len1 * len2)) : 1;
 
-      // Interior chord passes near room centroid (rRatio < 0.45) AND spans across center (cosAngle < -0.25)
-      const isCentroidSpanningChord = (rRatio < 0.45 && cosAngle < -0.25);
+      // Interior chord passes near room centroid (rRatio < 0.50) AND spans across center (cosAngle < -0.15)
+      const isCentroidSpanningChord = (rRatio < 0.50 && cosAngle < -0.15);
 
-      // Check if wall slices through detected interior furniture (bed, table, desk, storage)
+      // Check if wall slices through detected interior furniture (bed, table, desk, storage) using full Liang-Barsky
       let cutsThroughFurniture = false;
       if (Array.isArray(objects) && objects.length > 0) {
         for (const obj of objects) {
-          const hw = (obj.widthFt || 3) / 2;
-          const hl = (obj.lengthFt || 3) / 2;
-          const ox = obj.x || 0;
-          const oz = obj.z || 0;
-          if (Math.abs(mx - ox) <= hw && Math.abs(mz - oz) <= hl) {
+          if (this.segmentIntersectsOBB(s.p1, s.p2, obj)) {
             cutsThroughFurniture = true;
             break;
           }
         }
       }
 
-      return !(isCentroidSpanningChord || cutsThroughFurniture);
+      // Check for multi-pass interior corner-cutting chord (e.g. top wall diagonal truss):
+      // If another segment exists in the same quadrant that is significantly further from the centroid (> 1.2 ft)
+      // and spans across the same coordinate interval, then this segment is an internal artifact
+      let isInteriorShortcut = false;
+      for (let j = 0; j < segments.length; j++) {
+        if (j === idx) continue;
+        const other = segments[j];
+        const otherR = radii[j];
+
+        // Is other segment further out from centroid along the exterior perimeter?
+        if (otherR > r + 1.2) {
+          const sMinX = Math.min(s.p1.x, s.p2.x);
+          const sMaxX = Math.max(s.p1.x, s.p2.x);
+          const sMinZ = Math.min(s.p1.z, s.p2.z);
+          const sMaxZ = Math.max(s.p1.z, s.p2.z);
+
+          const oMinX = Math.min(other.p1.x, other.p2.x);
+          const oMaxX = Math.max(other.p1.x, other.p2.x);
+          const oMinZ = Math.min(other.p1.z, other.p2.z);
+          const oMaxZ = Math.max(other.p1.z, other.p2.z);
+
+          const xOverlap = Math.max(0, Math.min(sMaxX, oMaxX) - Math.max(sMinX, oMinX));
+          const zOverlap = Math.max(0, Math.min(sMaxZ, oMaxZ) - Math.max(sMinZ, oMinZ));
+          const sSpanX = Math.max(0.1, sMaxX - sMinX);
+          const sSpanZ = Math.max(0.1, sMaxZ - sMinZ);
+
+          // If s overlaps heavily in X or Z with an outer perimeter wall, and cuts inward
+          if ((xOverlap / sSpanX > 0.6) || (zOverlap / sSpanZ > 0.6)) {
+            // Check if s connects inward (towards centroid)
+            const dStart = Math.hypot(s.p1.x - cx, s.p1.z - cz);
+            const dEnd = Math.hypot(s.p2.x - cx, s.p2.z - cz);
+            if (Math.min(dStart, dEnd) < otherR - 1.5) {
+              isInteriorShortcut = true;
+              break;
+            }
+          }
+        }
+      }
+
+      return !(isCentroidSpanningChord || cutsThroughFurniture || isInteriorShortcut);
     });
 
     return filtered.length >= 3 ? filtered : segments;
@@ -1358,26 +1515,21 @@ export const GeometryService = {
     objects?: any[]
   ): PolygonPoint[] {
     const poly = this.buildRoomPolygon(walls, defaultWidthFt, defaultLengthFt, objects);
-    if (!poly || poly.length < 4) return poly;
+    if (!poly || poly.length < 3) return poly;
 
-    // Snap to dominant 4-wall rectilinear bounding if already close to 4-corner
-    if (poly.length === 4) {
-      const xs = poly.map((p) => p.x);
-      const zs = poly.map((p) => p.z);
-      const minX = Math.min(...xs);
-      const maxX = Math.max(...xs);
-      const minZ = Math.min(...zs);
-      const maxZ = Math.max(...zs);
+    const xs = poly.map((p) => p.x);
+    const zs = poly.map((p) => p.z);
+    const minX = Math.min(...xs);
+    const maxX = Math.max(...xs);
+    const minZ = Math.min(...zs);
+    const maxZ = Math.max(...zs);
 
-      return [
-        { x: +minX.toFixed(2), z: +minZ.toFixed(2) },
-        { x: +maxX.toFixed(2), z: +minZ.toFixed(2) },
-        { x: +maxX.toFixed(2), z: +maxZ.toFixed(2) },
-        { x: +minX.toFixed(2), z: +maxZ.toFixed(2) },
-      ];
-    }
-
-    return poly;
+    return [
+      { x: +minX.toFixed(2), z: +minZ.toFixed(2) },
+      { x: +maxX.toFixed(2), z: +minZ.toFixed(2) },
+      { x: +maxX.toFixed(2), z: +maxZ.toFixed(2) },
+      { x: +minX.toFixed(2), z: +maxZ.toFixed(2) },
+    ];
   },
 
   // Convert a closed polygon to the standard RoomCapture mesh walls array

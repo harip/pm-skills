@@ -221,8 +221,10 @@ class RoomCaptureViewController: UIViewController, RoomCaptureViewDelegate, Room
 
                 if optResult.isWatertight && optResult.areaSqFt > 10.0 {
                     areaSqFt = Double(round(optResult.areaSqFt * 10) / 10)
-                    polygonPointsData = optResult.closedPolygon.map {
-                        ["x": round($0.x * 100) / 100, "z": round($0.z * 100) / 100]
+                    polygonPointsData = optResult.closedPolygon.map { pt -> [String: Any] in
+                        let px = Double(round(pt.x * 100) / 100)
+                        let pz = Double(round(pt.z * 100) / 100)
+                        return ["x": px, "z": pz]
                     }
                 }
             }

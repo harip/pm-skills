@@ -17,6 +17,7 @@ import Svg, { Line, Polygon, Circle, Text as SvgText, Path, G, Rect } from 'reac
 import { Room } from '../types/room';
 import { GeometryService, PolygonPoint, ProjectedPoint } from '../services/geometryService';
 import { StlExporterService } from '../services/stlExporterService';
+import { ScannerService } from '../services/scannerService';
 import { Database } from '../db/database';
 
 interface Props {
@@ -48,6 +49,12 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
     x2: number;
     z2: number;
     widthFt: number;
+  } | null>(null);
+
+  // Selected Furniture Object State (for On-Device Photogrammetry & AR View)
+  const [selectedObject, setSelectedObject] = useState<{
+    obj: any;
+    index: number;
   } | null>(null);
 
   // Wall Alignment & Snapping State
@@ -140,7 +147,9 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
     Array.isArray(parsedMesh.polygon) &&
     parsedMesh.polygon.length >= 3 &&
     parsedMesh.isWatertight &&
-    !GeometryService.isPolygonSelfIntersecting(parsedMesh.polygon);
+    !GeometryService.isPolygonSelfIntersecting(parsedMesh.polygon) &&
+    !GeometryService.polygonCutsThroughFurniture(parsedMesh.polygon, realObjects) &&
+    !GeometryService.hasInteriorChords(parsedMesh.polygon);
 
   const polygon: PolygonPoint[] = activePolygon || (
     hasValidPrecomputedPolygon
@@ -702,6 +711,68 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
       wallAnchorInfoRef.current = null;
       await handleSaveUpdatedPolygon(squared);
       Alert.alert('Square Up Room', 'Interior chords removed. Room snapped to clean rectangular boundary.');
+    }
+  };
+
+  const handleCaptureObject = async (obj: any, objIdx: number) => {
+    try {
+      const isSupported = await ScannerService.isObjectCaptureSupported();
+      if (!isSupported && Platform.OS === 'ios') {
+        Alert.alert(
+          'Object Capture',
+          'Apple RealityKit Object Capture is supported on iPhone Pro models running iOS 17+.'
+        );
+        return;
+      }
+
+      const objectId = obj.id || `obj-${objIdx}`;
+      const category = obj.category || 'furniture';
+      const result = await ScannerService.startObjectCapture(objectId, category);
+
+      if (result && result.usdzPath) {
+        const updatedObjects = [...realObjects];
+        updatedObjects[objIdx] = {
+          ...updatedObjects[objIdx],
+          usdzPath: result.usdzPath,
+          hasHighDetailModel: true,
+        };
+
+        const mesh = parsedMesh ? JSON.parse(JSON.stringify(parsedMesh)) : {};
+        mesh.objects = updatedObjects;
+
+        const updatedRoom: Room = {
+          ...room,
+          mesh_json: JSON.stringify(mesh),
+          updated_at: new Date().toISOString(),
+        };
+
+        setRoom(updatedRoom);
+        await Database.saveRoom(updatedRoom);
+        setSelectedObject({ obj: updatedObjects[objIdx], index: objIdx });
+
+        Alert.alert(
+          'High-Detail 3D Object Captured!',
+          `Reconstructed realistic 3D model for ${category.toUpperCase()} directly on device.\nStored at: ${result.filename}`
+        );
+      }
+    } catch (err: any) {
+      if (err?.code !== 'CANCELLED') {
+        Alert.alert('Object Capture Notice', err?.message || 'Object capture could not complete.');
+      }
+    }
+  };
+
+  const handleViewObjectQuickLook = async (obj: any) => {
+    if (!obj.usdzPath) return;
+    if (Platform.OS === 'ios' && NativeModules?.RoomPlanModule?.openQuickLook) {
+      try {
+        await NativeModules.RoomPlanModule.openQuickLook(
+          obj.usdzPath,
+          `${(obj.category || 'Furniture').toUpperCase()} (Realistic 3D Object)`
+        );
+      } catch (e) {
+        Alert.alert('Error', 'Unable to open QuickLook for this object.');
+      }
     }
   };
 
@@ -1445,6 +1516,47 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
                 </TouchableOpacity>
               </View>
             </View>
+          ) : selectedObject ? (
+            <View style={styles.floatingApertureCapsuleWrap} pointerEvents="box-none">
+              <View style={styles.floatingApertureCapsule}>
+                <Text style={[styles.apertureSegText, { fontWeight: '700', paddingHorizontal: 6 }]}>
+                  {selectedObject.obj.category?.toUpperCase() || 'FURNITURE'}
+                </Text>
+
+                <View style={styles.apertureDivider} />
+
+                <TouchableOpacity
+                  style={[styles.apertureSegBtn, { backgroundColor: '#007aff' }]}
+                  onPress={() => handleCaptureObject(selectedObject.obj, selectedObject.index)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.apertureSegText, { color: '#ffffff', fontWeight: 'bold' }]}>
+                    📸 Scan 3D
+                  </Text>
+                </TouchableOpacity>
+
+                {selectedObject.obj.usdzPath && (
+                  <TouchableOpacity
+                    style={[styles.apertureSegBtn, { backgroundColor: '#34c759', marginLeft: 4 }]}
+                    onPress={() => handleViewObjectQuickLook(selectedObject.obj)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.apertureSegText, { color: '#ffffff', fontWeight: 'bold' }]}>
+                      👁️ View AR
+                    </Text>
+                  </TouchableOpacity>
+                )}
+
+                <TouchableOpacity
+                  style={styles.apertureCloseBtn}
+                  onPress={() => setSelectedObject(null)}
+                  activeOpacity={0.8}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Text style={styles.apertureCloseText}>✕</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
           ) : (
             <View style={styles.floatingHudCapsule} pointerEvents="none">
               <Text style={styles.floatingHudText}>
@@ -1899,24 +2011,32 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
                   const p3 = { x: cx - halfW * ux + halfL * vx, y: cz - halfW * uz + halfL * vz };
 
                   const polyPoints = `${p0.x.toFixed(1)},${p0.y.toFixed(1)} ${p1.x.toFixed(1)},${p1.y.toFixed(1)} ${p2.x.toFixed(1)},${p2.y.toFixed(1)} ${p3.x.toFixed(1)},${p3.y.toFixed(1)}`;
+                  const isSel = selectedObject?.index === idx;
 
                   return (
-                    <G key={`obj-2d-${idx}`}>
+                    <G
+                      key={`obj-2d-${idx}`}
+                      onPress={() => {
+                        setSelectedAperture(null);
+                        setSelectedWallIdx(null);
+                        setSelectedObject({ obj, index: idx });
+                      }}
+                    >
                       <Polygon
                         points={polyPoints}
-                        fill="#eff6ff"
-                        stroke="#2563eb"
-                        strokeWidth="1.5"
+                        fill={isSel ? '#dbeafe' : obj.usdzPath ? '#ecfdf5' : '#eff6ff'}
+                        stroke={isSel ? '#2563eb' : obj.usdzPath ? '#059669' : '#3b82f6'}
+                        strokeWidth={isSel ? '2.5' : '1.5'}
                       />
                       <SvgText
                         x={cx}
                         y={cz + 3}
-                        fill="#1d4ed8"
+                        fill={obj.usdzPath ? '#047857' : '#1d4ed8'}
                         fontSize="9"
                         fontWeight="700"
                         textAnchor="middle"
                       >
-                        {obj.category || 'Item'}
+                        {obj.usdzPath ? `✨ ${obj.category || 'Item'}` : (obj.category || 'Item')}
                       </SvgText>
                     </G>
                   );
@@ -2059,45 +2179,43 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
             </View>
           </View>
 
-          {/* Lower-Left Floating Action Bar: Square Up Icon, Reset Icon & Dynamic Save Icon */}
-          {viewMode === '2d' && (
-            <View style={styles.lowerLeftActionWrap} pointerEvents="box-none">
-              {/* Square Up Icon Button (Polycam / Magicplan Auto-Enclose) */}
+          {/* Lower-Left Floating Action Bar: Square Up Icon, Reset Icon & Dynamic Save Icon (Available in 2D & 3D) */}
+          <View style={styles.lowerLeftActionWrap} pointerEvents="box-none">
+            {/* Square Up Icon Button (Polycam / Magicplan Auto-Enclose) */}
+            <TouchableOpacity
+              style={styles.lowerLeftIconBtn}
+              onPress={handleSquareUpRoom}
+              activeOpacity={0.8}
+              accessibilityLabel="Square up room and remove interior chords"
+              accessibilityRole="button"
+            >
+              <Text style={styles.resetIconText}>🪄</Text>
+            </TouchableOpacity>
+
+            {/* Reset Icon Button (Reverts to original LiDAR scan) */}
+            <TouchableOpacity
+              style={styles.lowerLeftIconBtn}
+              onPress={handleResetToOriginal}
+              activeOpacity={0.8}
+              accessibilityLabel="Reset to original LiDAR scan"
+              accessibilityRole="button"
+            >
+              <Text style={styles.resetIconText}>↺</Text>
+            </TouchableOpacity>
+
+            {/* Dynamic Save Icon Button (Appears as soon as user starts moving a wall) */}
+            {hasUnsavedWallChanges && (
               <TouchableOpacity
-                style={styles.lowerLeftIconBtn}
-                onPress={handleSquareUpRoom}
+                style={[styles.lowerLeftIconBtn, styles.saveIconBtnActive]}
+                onPress={handleSaveWallChanges}
                 activeOpacity={0.8}
-                accessibilityLabel="Square up room and remove interior chords"
+                accessibilityLabel="Save wall adjustments"
                 accessibilityRole="button"
               >
-                <Text style={styles.resetIconText}>🪄</Text>
+                <Text style={styles.saveIconText}>💾</Text>
               </TouchableOpacity>
-
-              {/* Reset Icon Button (Reverts to original LiDAR scan) */}
-              <TouchableOpacity
-                style={styles.lowerLeftIconBtn}
-                onPress={handleResetToOriginal}
-                activeOpacity={0.8}
-                accessibilityLabel="Reset to original LiDAR scan"
-                accessibilityRole="button"
-              >
-                <Text style={styles.resetIconText}>↺</Text>
-              </TouchableOpacity>
-
-              {/* Dynamic Save Icon Button (Appears as soon as user starts moving a wall) */}
-              {hasUnsavedWallChanges && (
-                <TouchableOpacity
-                  style={[styles.lowerLeftIconBtn, styles.saveIconBtnActive]}
-                  onPress={handleSaveWallChanges}
-                  activeOpacity={0.8}
-                  accessibilityLabel="Save wall adjustments"
-                  accessibilityRole="button"
-                >
-                  <Text style={styles.saveIconText}>💾</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          )}
+            )}
+          </View>
 
           {/* Style 2: Floating Lower-Right Satellite Export Button (Contextual STL in 3D / PDF in 2D) */}
           <View style={styles.floatingExportBtnWrap} pointerEvents="box-none">

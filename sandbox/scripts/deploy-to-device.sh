@@ -42,6 +42,7 @@ xcrun devicectl device install app --device "${DEVICE_UDID}" "${APP_DIR}"
 # Step 5: Launch & Capture Visual Verification
 echo "⚡ 5/5 Launching ${BUNDLE_ID} on device..."
 xcrun devicectl device process launch --device "${DEVICE_UDID}" --terminate-existing "${BUNDLE_ID}"
+sleep 2.5
 
 SCREENSHOT_PATH="/Users/gootyboy/.gemini/antigravity/brain/9f6fadf7-a772-4c8e-93ca-a8021c824f6f/device_uat_verified_$(date +%s).png"
 echo "📸 Capturing hardware UAT verification screenshot..."

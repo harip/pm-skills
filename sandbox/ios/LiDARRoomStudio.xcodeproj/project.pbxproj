@@ -20,6 +20,8 @@
 		RP000001 /* RoomCaptureViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = RP000010 /* RoomCaptureViewController.swift */; };
 		RP000002 /* RoomPlanModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = RP000020 /* RoomPlanModule.swift */; };
 		RP000003 /* RoomPlanModule.m in Sources */ = {isa = PBXBuildFile; fileRef = RP000030 /* RoomPlanModule.m */; };
+		RP000004 /* ObjectCaptureViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = RP000040 /* ObjectCaptureViewController.swift */; };
+		RP000005 /* RoomGeometryOptimizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = RP000050 /* RoomGeometryOptimizer.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -29,6 +31,8 @@
 		RP000010 /* RoomCaptureViewController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = RoomCaptureViewController.swift; path = LiDARRoomStudio/RoomCaptureViewController.swift; sourceTree = "<group>"; };
 		RP000020 /* RoomPlanModule.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = RoomPlanModule.swift; path = LiDARRoomStudio/RoomPlanModule.swift; sourceTree = "<group>"; };
 		RP000030 /* RoomPlanModule.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = RoomPlanModule.m; path = LiDARRoomStudio/RoomPlanModule.m; sourceTree = "<group>"; };
+		RP000040 /* ObjectCaptureViewController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = ObjectCaptureViewController.swift; path = LiDARRoomStudio/ObjectCaptureViewController.swift; sourceTree = "<group>"; };
+		RP000050 /* RoomGeometryOptimizer.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = RoomGeometryOptimizer.swift; path = LiDARRoomStudio/RoomGeometryOptimizer.swift; sourceTree = "<group>"; };
 		13B07FB01A68108700A75B9A /* AppDelegate.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; name = AppDelegate.mm; path = LiDARRoomStudio/AppDelegate.mm; sourceTree = "<group>"; };
 		13B07FB01A68108700A75B9B /* SceneDelegate.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; name = SceneDelegate.mm; path = LiDARRoomStudio/SceneDelegate.mm; sourceTree = "<group>"; };
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = LiDARRoomStudio/Images.xcassets; sourceTree = "<group>"; };
@@ -76,6 +80,8 @@
 				RP000010 /* RoomCaptureViewController.swift */,
 				RP000020 /* RoomPlanModule.swift */,
 				RP000030 /* RoomPlanModule.m */,
+				RP000040 /* ObjectCaptureViewController.swift */,
+				RP000050 /* RoomGeometryOptimizer.swift */,
 			);
 			name = LiDARRoomStudio;
 			sourceTree = "<group>";
@@ -343,6 +349,8 @@
 				RP000001 /* RoomCaptureViewController.swift in Sources */,
 				RP000002 /* RoomPlanModule.swift in Sources */,
 				RP000003 /* RoomPlanModule.m in Sources */,
+				RP000004 /* ObjectCaptureViewController.swift in Sources */,
+				RP000005 /* RoomGeometryOptimizer.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

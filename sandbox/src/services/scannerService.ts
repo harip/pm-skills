@@ -174,4 +174,24 @@ export const ScannerService = {
       updated_at: new Date().toISOString(),
     };
   },
+
+  async isObjectCaptureSupported(): Promise<boolean> {
+    const { NativeModules, Platform } = require('react-native');
+    if (Platform.OS !== 'ios' || !NativeModules.RoomPlanModule?.isObjectCaptureSupported) {
+      return false;
+    }
+    try {
+      return await NativeModules.RoomPlanModule.isObjectCaptureSupported();
+    } catch {
+      return false;
+    }
+  },
+
+  async startObjectCapture(objectId: string, category: string): Promise<any> {
+    const { NativeModules, Platform } = require('react-native');
+    if (Platform.OS !== 'ios' || !NativeModules.RoomPlanModule?.startObjectCapture) {
+      throw new Error('Object Capture requires iOS 17+ on iPhone Pro with LiDAR');
+    }
+    return await NativeModules.RoomPlanModule.startObjectCapture(objectId, category);
+  },
 };
