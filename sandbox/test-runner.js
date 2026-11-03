@@ -1199,6 +1199,50 @@ endsolid ${room.name}`;
     }
   });
 
+  // EVAL-26: Multi-pass duplicate wall fusion & 2-opt untangling eliminates bowtie truss loops
+  await it('EVAL-26: Multi-pass duplicate wall fusion & 2-opt untangling eliminates bowtie truss loops', async () => {
+    // Simulate user scenario from screenshot 10:58:
+    // Left, bottom, and right walls are normal
+    // Top wall was scanned in two passes from different positions:
+    // Pass 1: detected a slanted/occluded wall from (-6, 5) to (6, 2)
+    // Pass 2: detected the true top wall from (-6, 6) to (6, 6)
+    const multiPassWalls = [
+      { x1: -6, z1: 6, x2: -6, z2: -6, id: 'left' },
+      { x1: -6, z1: -6, x2: 6, z2: -6, id: 'bottom' },
+      { x1: 6, z1: -6, x2: 6, z2: 6, id: 'right' },
+      { x1: 6, z1: 6, x2: -6, z2: 6, id: 'top-pass2-true' },
+      { x1: -6, z1: 4.5, x2: 6, z2: 5.0, id: 'top-pass1-occluded' }, // Duplicate near-parallel top wall
+    ];
+
+    const poly = GeometryService.buildRoomPolygon(multiPassWalls, 12, 12, []);
+
+    // 1. Must NOT be self-intersecting (0 bowtie knots)
+    assert(!GeometryService.isPolygonSelfIntersecting(poly), 'Resulting polygon must NEVER be self-intersecting');
+
+    // 2. Must produce a clean 4-corner room (duplicate top wall fused into true top wall)
+    assert.strictEqual(poly.length, 4, `Expected clean 4-corner room, got ${poly.length} corners`);
+
+    // 3. Top corners must be at z ≈ 6 (the true outer wall, not the occluded inner wall)
+    const topCorners = poly.filter((p) => p.z > 0);
+    assert.strictEqual(topCorners.length, 2, 'Must have exactly 2 top corners');
+    for (const c of topCorners) {
+      assert(c.z >= 5.8 && c.z <= 6.2, `Top wall must be aligned with outer boundary (z ≈ 6.0, got ${c.z})`);
+    }
+
+    // 4. Test direct 2-opt untangling on an artificial bowtie polygon
+    const artificialBowtie = [
+      { x: 0, z: 0 },
+      { x: 10, z: 0 },
+      { x: 10, z: 10 },
+      { x: 0, z: 5 },  // Crosses over!
+      { x: 10, z: 5 },
+      { x: 0, z: 10 },
+    ];
+    assert(GeometryService.isPolygonSelfIntersecting(artificialBowtie), 'Test setup: artificial bowtie must be self-intersecting');
+    const untangled = GeometryService.untanglePolygon(artificialBowtie);
+    assert(!GeometryService.isPolygonSelfIntersecting(untangled), 'Untangled polygon must NOT be self-intersecting');
+  });
+
   console.log(`\n📊 Verification Summary: ${passedTests}/${totalTests} tests passed.\n`);
 }
 

@@ -38,7 +38,7 @@ export const StlExporterService = {
 
     const walls: any[] = parsedMesh?.walls || [];
     const realObjects: any[] = parsedMesh?.objects || [];
-    const polygon: PolygonPoint[] = (parsedMesh?.polygon && Array.isArray(parsedMesh.polygon) && parsedMesh.polygon.length >= 3 && parsedMesh.isWatertight)
+    const polygon: PolygonPoint[] = (parsedMesh?.polygon && Array.isArray(parsedMesh.polygon) && parsedMesh.polygon.length >= 3 && parsedMesh.isWatertight && !GeometryService.isPolygonSelfIntersecting(parsedMesh.polygon))
       ? parsedMesh.polygon
       : GeometryService.buildRoomPolygon(walls, room.width_ft || 14, room.length_ft || 16, realObjects);
     const N = polygon.length;
@@ -403,7 +403,7 @@ export const StlExporterService = {
       } catch {}
       const walls: any[] = parsedMesh?.walls || [];
       const realObjects: any[] = parsedMesh?.objects || [];
-      const polygon: PolygonPoint[] = (parsedMesh?.polygon && Array.isArray(parsedMesh.polygon) && parsedMesh.polygon.length >= 3 && parsedMesh.isWatertight)
+      const polygon: PolygonPoint[] = (parsedMesh?.polygon && Array.isArray(parsedMesh.polygon) && parsedMesh.polygon.length >= 3 && parsedMesh.isWatertight && !GeometryService.isPolygonSelfIntersecting(parsedMesh.polygon))
         ? parsedMesh.polygon
         : GeometryService.buildRoomPolygon(walls, node.w, node.l, realObjects);
       const N = polygon.length;
@@ -467,7 +467,7 @@ export const StlExporterService = {
 
       const walls: any[] = parsedMesh?.walls || [];
       const realObjects: any[] = parsedMesh?.objects || [];
-      const polygon: PolygonPoint[] = (parsedMesh?.polygon && Array.isArray(parsedMesh.polygon) && parsedMesh.polygon.length >= 3 && parsedMesh.isWatertight)
+      const polygon: PolygonPoint[] = (parsedMesh?.polygon && Array.isArray(parsedMesh.polygon) && parsedMesh.polygon.length >= 3 && parsedMesh.isWatertight && !GeometryService.isPolygonSelfIntersecting(parsedMesh.polygon))
         ? parsedMesh.polygon
         : GeometryService.buildRoomPolygon(walls, node.w, node.l, realObjects);
       const N = polygon.length;

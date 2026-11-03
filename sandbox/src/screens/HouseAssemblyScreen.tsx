@@ -106,7 +106,7 @@ const BuildBlueprintThumbnail: React.FC<{
 
     const realWalls = parsedMesh?.walls || [];
     const realObjects = parsedMesh?.objects || [];
-    const poly: PolygonPoint[] = (parsedMesh?.polygon && Array.isArray(parsedMesh.polygon) && parsedMesh.polygon.length >= 3 && parsedMesh.isWatertight)
+    const poly: PolygonPoint[] = (parsedMesh?.polygon && Array.isArray(parsedMesh.polygon) && parsedMesh.polygon.length >= 3 && parsedMesh.isWatertight && !GeometryService.isPolygonSelfIntersecting(parsedMesh.polygon))
       ? parsedMesh.polygon
       : GeometryService.buildRoomPolygon(realWalls, room.width_ft || 16, room.length_ft || 14, realObjects);
     const N = poly.length;
@@ -604,7 +604,7 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
 
     const realWalls: any[] = parsedMesh?.walls || [];
     const realObjects: any[] = parsedMesh?.objects || [];
-    const polygon: PolygonPoint[] = (parsedMesh?.polygon && Array.isArray(parsedMesh.polygon) && parsedMesh.polygon.length >= 3 && parsedMesh.isWatertight)
+    const polygon: PolygonPoint[] = (parsedMesh?.polygon && Array.isArray(parsedMesh.polygon) && parsedMesh.polygon.length >= 3 && parsedMesh.isWatertight && !GeometryService.isPolygonSelfIntersecting(parsedMesh.polygon))
       ? parsedMesh.polygon
       : GeometryService.buildRoomPolygon(realWalls, node.w, node.l, realObjects);
     const N = polygon.length;
@@ -1220,7 +1220,7 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
       const realClosets: any[] = parsedMesh?.closets || [];
       const realObjects: any[] = parsedMesh?.objects || [];
 
-      const polygon: PolygonPoint[] = (parsedMesh?.polygon && Array.isArray(parsedMesh.polygon) && parsedMesh.polygon.length >= 3 && parsedMesh.isWatertight)
+      const polygon: PolygonPoint[] = (parsedMesh?.polygon && Array.isArray(parsedMesh.polygon) && parsedMesh.polygon.length >= 3 && parsedMesh.isWatertight && !GeometryService.isPolygonSelfIntersecting(parsedMesh.polygon))
         ? parsedMesh.polygon
         : GeometryService.buildRoomPolygon(realWalls, node.w, node.l, realObjects);
       const N = polygon.length;
@@ -1774,7 +1774,7 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
                     const realClosets: any[] = parsedMesh?.closets || [];
                     const realObjects: any[] = parsedMesh?.objects || [];
 
-                    const polygon: PolygonPoint[] = (parsedMesh?.polygon && Array.isArray(parsedMesh.polygon) && parsedMesh.polygon.length >= 3 && parsedMesh.isWatertight)
+                    const polygon: PolygonPoint[] = (parsedMesh?.polygon && Array.isArray(parsedMesh.polygon) && parsedMesh.polygon.length >= 3 && parsedMesh.isWatertight && !GeometryService.isPolygonSelfIntersecting(parsedMesh.polygon))
                       ? parsedMesh.polygon
                       : GeometryService.buildRoomPolygon(realWalls, n.w, n.l, realObjects);
                     const N = polygon.length;

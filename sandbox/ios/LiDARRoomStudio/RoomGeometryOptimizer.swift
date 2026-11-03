@@ -275,6 +275,209 @@ public final class RoomGeometryOptimizer {
         return perim
     }
 
+    /// Global duplicate wall de-duplication (fuses multi-pass scans of the same physical wall)
+    public static func deduplicateOverlappingWalls(segments: [RawSegment], maxDist: Double = 3.5) -> [RawSegment] {
+        guard segments.count > 1 else { return segments }
+        var result: [RawSegment] = []
+        var merged = Set<Int>()
+
+        var cX = 0.0
+        var cZ = 0.0
+        for s in segments {
+            cX += (s.p1.x + s.p2.x) / 2.0
+            cZ += (s.p1.z + s.p2.z) / 2.0
+        }
+        let centroidX = cX / Double(segments.count)
+        let centroidZ = cZ / Double(segments.count)
+
+        for i in 0..<segments.count {
+            if merged.contains(i) { continue }
+            var s1 = segments[i]
+            var len1 = s1.length
+            guard len1 > 0.001 else { continue }
+            var ux = (s1.p2.x - s1.p1.x) / len1
+            var uz = (s1.p2.z - s1.p1.z) / len1
+            var nx = -uz
+            var nz = ux
+
+            for j in (i + 1)..<segments.count {
+                if merged.contains(j) { continue }
+                let s2 = segments[j]
+                let len2 = s2.length
+                guard len2 > 0.001 else { continue }
+                let ux2 = (s2.p2.x - s2.p1.x) / len2
+                let uz2 = (s2.p2.z - s2.p1.z) / len2
+
+                let dot = ux * ux2 + uz * uz2
+                if abs(dot) >= cos(30.0 * .pi / 180.0) {
+                    let mid1x = (s1.p1.x + s1.p2.x) / 2.0
+                    let mid1z = (s1.p1.z + s1.p2.z) / 2.0
+                    let mid2x = (s2.p1.x + s2.p2.x) / 2.0
+                    let mid2z = (s2.p1.z + s2.p2.z) / 2.0
+                    let perpDist = abs(nx * (mid2x - s1.p1.x) + nz * (mid2z - s1.p1.z))
+
+                    let t2_p1 = ux * (s2.p1.x - s1.p1.x) + uz * (s2.p1.z - s1.p1.z)
+                    let t2_p2 = ux * (s2.p2.x - s1.p1.x) + uz * (s2.p2.z - s1.p1.z)
+                    let minT2 = min(t2_p1, t2_p2)
+                    let maxT2 = max(t2_p1, t2_p2)
+
+                    let hasOverlap = (minT2 <= len1 + 2.0) && (maxT2 >= -2.0)
+
+                    if perpDist <= maxDist && hasOverlap {
+                        let d1 = hypot(mid1x - centroidX, mid1z - centroidZ)
+                        let d2 = hypot(mid2x - centroidX, mid2z - centroidZ)
+                        let baseSeg = d2 > d1 ? s2 : s1
+                        let otherSeg = d2 > d1 ? s1 : s2
+
+                        let bLen = baseSeg.length
+                        let bux = (baseSeg.p2.x - baseSeg.p1.x) / bLen
+                        let buz = (baseSeg.p2.z - baseSeg.p1.z) / bLen
+
+                        let to_p1 = bux * (otherSeg.p1.x - baseSeg.p1.x) + buz * (otherSeg.p1.z - baseSeg.p1.z)
+                        let to_p2 = bux * (otherSeg.p2.x - baseSeg.p1.x) + buz * (otherSeg.p2.z - baseSeg.p1.z)
+                        let minT = min(0.0, min(to_p1, to_p2))
+                        let maxT = max(bLen, max(to_p1, to_p2))
+
+                        s1 = RawSegment(
+                            p1: Point2D(x: baseSeg.p1.x + bux * minT, z: baseSeg.p1.z + buz * minT),
+                            p2: Point2D(x: baseSeg.p1.x + bux * maxT, z: baseSeg.p1.z + buz * maxT),
+                            label: "\(s1.label)+\(s2.label)"
+                        )
+                        len1 = s1.length
+                        ux = bux
+                        uz = buz
+                        nx = -uz
+                        nz = ux
+                        merged.insert(j)
+                    }
+                }
+            }
+            result.append(s1)
+        }
+        return result
+    }
+
+    /// Chains segments sequentially into a continuous perimeter
+    public static func chainSegments(segments: [RawSegment]) -> [RawSegment] {
+        guard segments.count > 1 else { return segments }
+        var startIdx = 0
+        var maxLen = -Double.infinity
+        for (idx, s) in segments.enumerated() {
+            if s.length > maxLen {
+                maxLen = s.length
+                startIdx = idx
+            }
+        }
+
+        var chained: [RawSegment] = [segments[startIdx]]
+        var used = Set<Int>([startIdx])
+        var currPt = segments[startIdx].p2
+
+        while chained.count < segments.count {
+            var bestIdx = -1
+            var bestDist = Double.infinity
+            var flip = false
+
+            for i in 0..<segments.count {
+                if used.contains(i) { continue }
+                let s = segments[i]
+                let d1 = currPt.distance(to: s.p1)
+                let d2 = currPt.distance(to: s.p2)
+                if d1 < bestDist {
+                    bestDist = d1
+                    bestIdx = i
+                    flip = false
+                }
+                if d2 < bestDist {
+                    bestDist = d2
+                    bestIdx = i
+                    flip = true
+                }
+            }
+
+            if bestIdx < 0 { break }
+            used.insert(bestIdx)
+            let chosen = segments[bestIdx]
+            if flip {
+                chained.append(RawSegment(p1: chosen.p2, p2: chosen.p1, label: chosen.label))
+                currPt = chosen.p1
+            } else {
+                chained.append(chosen)
+                currPt = chosen.p2
+            }
+        }
+
+        return chained
+    }
+
+    /// Self-intersection detector to reject bowtie geometries
+    public static func isPolygonSelfIntersecting(points: [Point2D]) -> Bool {
+        let n = points.count
+        guard n >= 4 else { return false }
+
+        func ccw(_ a: Point2D, _ b: Point2D, _ c: Point2D) -> Bool {
+            return (c.z - a.z) * (b.x - a.x) > (b.z - a.z) * (c.x - a.x)
+        }
+
+        func segmentsIntersect(_ p1: Point2D, _ p2: Point2D, _ p3: Point2D, _ p4: Point2D) -> Bool {
+            return ccw(p1, p3, p4) != ccw(p2, p3, p4) && ccw(p1, p2, p3) != ccw(p1, p2, p4)
+        }
+
+        for i in 0..<n {
+            let a1 = points[i]
+            let a2 = points[(i + 1) % n]
+            for j in (i + 2)..<n {
+                if i == 0 && j == n - 1 { continue }
+                let b1 = points[j]
+                let b2 = points[(j + 1) % n]
+                if segmentsIntersect(a1, a2, b1, b2) {
+                    return true
+                }
+            }
+        }
+        return false
+    }
+
+    /// Untangles a self-intersecting polygon loop (e.g. multi-pass bowtie artifacts) using 2-opt inversion moves
+    public static func untanglePolygon(points: [Point2D]) -> [Point2D] {
+        var pts = points
+        var changed = true
+        var iters = 0
+        let maxIters = 25
+
+        func ccw(_ a: Point2D, _ b: Point2D, _ c: Point2D) -> Bool {
+            return (c.z - a.z) * (b.x - a.x) > (b.z - a.z) * (c.x - a.x)
+        }
+
+        func segmentsIntersect(_ p1: Point2D, _ p2: Point2D, _ p3: Point2D, _ p4: Point2D) -> Bool {
+            return ccw(p1, p3, p4) != ccw(p2, p3, p4) && ccw(p1, p2, p3) != ccw(p1, p2, p4)
+        }
+
+        while changed && iters < maxIters {
+            changed = false
+            iters += 1
+            let n = pts.count
+            for i in 0..<n {
+                let a1 = pts[i]
+                let a2 = pts[(i + 1) % n]
+                for j in (i + 2)..<n {
+                    if i == 0 && j == n - 1 { continue }
+                    let b1 = pts[j]
+                    let b2 = pts[(j + 1) % n]
+                    if segmentsIntersect(a1, a2, b1, b2) {
+                        let sub = Array(pts[(i + 1)...j].reversed())
+                        pts = Array(pts[0...i]) + sub + Array(pts[(j + 1)..<n])
+                        changed = true
+                        break
+                    }
+                }
+                if changed { break }
+            }
+        }
+
+        return pts
+    }
+
     /// Master solver entry point.
     public static func solve(
         segments: [RawSegment],
@@ -293,11 +496,26 @@ public final class RoomGeometryOptimizer {
             )
         }
 
-        let rawClosingGap = isClosed ? segments.last!.p2.distance(to: segments.first!.p1) : 0.0
-        let domAngleRad = computeDominantOrientation(segments: segments)
+        let deduped = deduplicateOverlappingWalls(segments: segments)
+        let chained = chainSegments(segments: deduped)
+
+        guard chained.count >= 3 else {
+            return OptimizerResult(
+                dominantOrientationDeg: 0.0,
+                snappedWalls: [],
+                closedPolygon: [],
+                isWatertight: false,
+                loopClosingGapFt: 0.0,
+                areaSqFt: 0.0,
+                perimeterFt: 0.0
+            )
+        }
+
+        let rawClosingGap = isClosed ? chained.last!.p2.distance(to: chained.first!.p1) : 0.0
+        let domAngleRad = computeDominantOrientation(segments: chained)
         let domAngleDeg = domAngleRad * 180.0 / .pi
 
-        var snapped = quantizeWallOrientations(segments: segments, domAngle: domAngleRad)
+        var snapped = quantizeWallOrientations(segments: chained, domAngle: domAngleRad)
 
         if fuseCollinear {
             snapped = fuseCollinearWalls(walls: snapped)
@@ -320,14 +538,20 @@ public final class RoomGeometryOptimizer {
             }
         }
 
-        let area = isClosed ? computePolygonArea(points: vertices) : 0.0
-        let perimeter = computePolygonPerimeter(points: vertices)
+        var finalVertices = vertices
+        if isClosed && isPolygonSelfIntersecting(points: finalVertices) {
+            finalVertices = untanglePolygon(points: finalVertices)
+        }
+
+        let isSelfIntersecting = isClosed && isPolygonSelfIntersecting(points: finalVertices)
+        let area = (isClosed && !isSelfIntersecting) ? computePolygonArea(points: finalVertices) : 0.0
+        let perimeter = computePolygonPerimeter(points: finalVertices)
 
         return OptimizerResult(
             dominantOrientationDeg: domAngleDeg,
             snappedWalls: snapped,
-            closedPolygon: vertices,
-            isWatertight: isClosed && (vertices.count >= 3),
+            closedPolygon: finalVertices,
+            isWatertight: isClosed && (finalVertices.count >= 3) && !isSelfIntersecting,
             loopClosingGapFt: isClosed ? 0.0 : rawClosingGap,
             areaSqFt: area,
             perimeterFt: perimeter

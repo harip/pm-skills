@@ -179,28 +179,111 @@ export const GeometryService = {
       return fallbackRect;
     }
 
+    // Step 0: Global Duplicate Wall De-Duplication (Multi-pass scan overlap resolution)
+    // When an operator scans the same physical wall from two different positions/passes,
+    // RoomPlan generates two overlapping/parallel segments. Merge them into one!
+    const dedupedSegments: InternalSeg[] = [];
+    const mergedIndices = new Set<number>();
+
+    // Approximate centroid of raw walls
+    const rawCentroidX = rawSegments.reduce((sum, s) => sum + (s.p1.x + s.p2.x) / 2, 0) / (rawSegments.length || 1);
+    const rawCentroidZ = rawSegments.reduce((sum, s) => sum + (s.p1.z + s.p2.z) / 2, 0) / (rawSegments.length || 1);
+
+    for (let i = 0; i < rawSegments.length; i++) {
+      if (mergedIndices.has(i)) continue;
+      let s1 = { ...rawSegments[i] };
+      let len1 = s1.length || Math.hypot(s1.p2.x - s1.p1.x, s1.p2.z - s1.p1.z) || 1;
+      let ux = (s1.p2.x - s1.p1.x) / len1;
+      let uz = (s1.p2.z - s1.p1.z) / len1;
+      let nx = -uz;
+      let nz = ux;
+
+      for (let j = i + 1; j < rawSegments.length; j++) {
+        if (mergedIndices.has(j)) continue;
+        const s2 = rawSegments[j];
+        const len2 = s2.length || Math.hypot(s2.p2.x - s2.p1.x, s2.p2.z - s2.p1.z) || 1;
+        const ux2 = (s2.p2.x - s2.p1.x) / len2;
+        const uz2 = (s2.p2.z - s2.p1.z) / len2;
+
+        const dot = ux * ux2 + uz * uz2;
+        // Check parallel or near-parallel (|dot| >= cos(30°))
+        if (Math.abs(dot) >= 0.866) {
+          const mid1x = (s1.p1.x + s1.p2.x) / 2.0;
+          const mid1z = (s1.p1.z + s1.p2.z) / 2.0;
+          const mid2x = (s2.p1.x + s2.p2.x) / 2.0;
+          const mid2z = (s2.p1.z + s2.p2.z) / 2.0;
+          const perpDist = Math.abs(nx * (mid2x - s1.p1.x) + nz * (mid2z - s1.p1.z));
+
+          // Projections along s1 axis
+          const t2_p1 = ux * (s2.p1.x - s1.p1.x) + uz * (s2.p1.z - s1.p1.z);
+          const t2_p2 = ux * (s2.p2.x - s1.p1.x) + uz * (s2.p2.z - s1.p1.z);
+          const minT2 = Math.min(t2_p1, t2_p2);
+          const maxT2 = Math.max(t2_p1, t2_p2);
+
+          const hasOverlap = (minT2 <= len1 + 2.0) && (maxT2 >= -2.0);
+
+          // Allow merging multi-pass parallel walls separated by up to 3.5 ft (furniture depth)
+          if (perpDist <= 3.5 && hasOverlap) {
+            // Favor the wall segment that is further from room center (true exterior perimeter)
+            const dist1Center = Math.hypot(mid1x - rawCentroidX, mid1z - rawCentroidZ);
+            const dist2Center = Math.hypot(mid2x - rawCentroidX, mid2z - rawCentroidZ);
+            const baseSeg = dist2Center > dist1Center ? s2 : s1;
+
+            const baseLen = baseSeg.length || Math.hypot(baseSeg.p2.x - baseSeg.p1.x, baseSeg.p2.z - baseSeg.p1.z) || 1;
+            const bux = (baseSeg.p2.x - baseSeg.p1.x) / baseLen;
+            const buz = (baseSeg.p2.z - baseSeg.p1.z) / baseLen;
+
+            // Project both s1 and s2 onto the base axis
+            const otherSeg = dist2Center > dist1Center ? s1 : s2;
+            const to_p1 = bux * (otherSeg.p1.x - baseSeg.p1.x) + buz * (otherSeg.p1.z - baseSeg.p1.z);
+            const to_p2 = bux * (otherSeg.p2.x - baseSeg.p1.x) + buz * (otherSeg.p2.z - baseSeg.p1.z);
+            const minT = Math.min(0, to_p1, to_p2);
+            const maxT = Math.max(baseLen, to_p1, to_p2);
+
+            s1 = {
+              p1: { x: baseSeg.p1.x + bux * minT, z: baseSeg.p1.z + buz * minT },
+              p2: { x: baseSeg.p1.x + bux * maxT, z: baseSeg.p1.z + buz * maxT },
+              label: `${s1.label}+${s2.label}`,
+              length: maxT - minT,
+            };
+            len1 = s1.length;
+            ux = bux;
+            uz = buz;
+            nx = -uz;
+            nz = ux;
+            mergedIndices.add(j);
+          }
+        }
+      }
+      dedupedSegments.push(s1);
+    }
+
+    if (dedupedSegments.length < 3) {
+      return fallbackRect;
+    }
+
     // Step 1: Cyclic Chaining (Start from longest wall for numerical stability)
     let startIdx = 0;
     let maxLen = -Infinity;
-    for (let i = 0; i < rawSegments.length; i++) {
-      if (rawSegments[i].length > maxLen) {
-        maxLen = rawSegments[i].length;
+    for (let i = 0; i < dedupedSegments.length; i++) {
+      if (dedupedSegments[i].length > maxLen) {
+        maxLen = dedupedSegments[i].length;
         startIdx = i;
       }
     }
 
-    const chained: InternalSeg[] = [{ ...rawSegments[startIdx] }];
+    const chained: InternalSeg[] = [{ ...dedupedSegments[startIdx] }];
     const used = new Set<number>([startIdx]);
-    let currPt = rawSegments[startIdx].p2;
+    let currPt = dedupedSegments[startIdx].p2;
 
-    while (chained.length < rawSegments.length) {
+    while (chained.length < dedupedSegments.length) {
       let bestIdx = -1;
       let bestDist = Infinity;
       let flip = false;
 
-      for (let i = 0; i < rawSegments.length; i++) {
+      for (let i = 0; i < dedupedSegments.length; i++) {
         if (used.has(i)) continue;
-        const s = rawSegments[i];
+        const s = dedupedSegments[i];
         const d1 = Math.hypot(currPt.x - s.p1.x, currPt.z - s.p1.z);
         const d2 = Math.hypot(currPt.x - s.p2.x, currPt.z - s.p2.z);
         if (d1 < bestDist) {
@@ -217,7 +300,7 @@ export const GeometryService = {
 
       if (bestIdx < 0) break;
       used.add(bestIdx);
-      const chosen = rawSegments[bestIdx];
+      const chosen = dedupedSegments[bestIdx];
       if (flip) {
         chained.push({
           p1: { ...chosen.p2 },
@@ -562,17 +645,23 @@ export const GeometryService = {
       }
     }
 
+    // If self-intersecting bowtie or truss loop detected, untangle via 2-opt moves
+    let finalVertices = cleanedVertices;
+    if (this.isPolygonSelfIntersecting(finalVertices)) {
+      finalVertices = this.untanglePolygon(finalVertices);
+    }
+
     // Validate polygon area
     let area = 0;
-    const vLen = cleanedVertices.length;
+    const vLen = finalVertices.length;
     for (let m = 0; m < vLen; m++) {
       const nextIdx = (m + 1) % vLen;
-      area += cleanedVertices[m].x * cleanedVertices[nextIdx].z - cleanedVertices[nextIdx].x * cleanedVertices[m].z;
+      area += finalVertices[m].x * finalVertices[nextIdx].z - finalVertices[nextIdx].x * finalVertices[m].z;
     }
     area = Math.abs(area) / 2.0;
 
-    if (vLen >= 3 && area >= 5.0) {
-      return cleanedVertices;
+    if (vLen >= 3 && area >= 5.0 && !this.isPolygonSelfIntersecting(finalVertices)) {
+      return finalVertices;
     }
 
     return fallbackRect;
@@ -1079,6 +1168,59 @@ export const GeometryService = {
       }
     }
     return false;
+  },
+
+  // Untangles a self-intersecting polygon loop (e.g. multi-pass bowtie artifacts) using 2-opt inversion moves
+  untanglePolygon(polygon: PolygonPoint[]): PolygonPoint[] {
+    let pts = [...polygon];
+    let changed = true;
+    let iters = 0;
+    const maxIters = 25;
+
+    const ccw = (a: PolygonPoint, b: PolygonPoint, c: PolygonPoint) => {
+      return (c.z - a.z) * (b.x - a.x) > (b.z - a.z) * (c.x - a.x);
+    };
+
+    const segmentsIntersect = (p1: PolygonPoint, p2: PolygonPoint, p3: PolygonPoint, p4: PolygonPoint) => {
+      return ccw(p1, p3, p4) !== ccw(p2, p3, p4) && ccw(p1, p2, p3) !== ccw(p1, p2, p4);
+    };
+
+    while (changed && iters < maxIters) {
+      changed = false;
+      iters++;
+      const n = pts.length;
+      for (let i = 0; i < n; i++) {
+        const a1 = pts[i];
+        const a2 = pts[(i + 1) % n];
+        for (let j = i + 2; j < n; j++) {
+          if (i === 0 && j === n - 1) continue;
+          const b1 = pts[j];
+          const b2 = pts[(j + 1) % n];
+          if (segmentsIntersect(a1, a2, b1, b2)) {
+            // 2-opt flip: reverse vertex sub-sequence between i+1 and j
+            const sub = pts.slice(i + 1, j + 1).reverse();
+            pts = [...pts.slice(0, i + 1), ...sub, ...pts.slice(j + 1)];
+            changed = true;
+            break;
+          }
+        }
+        if (changed) break;
+      }
+    }
+
+    // Post-untangle: simplify collinear points
+    const simplified: PolygonPoint[] = [];
+    const n = pts.length;
+    for (let k = 0; k < n; k++) {
+      const prev = pts[(k - 1 + n) % n];
+      const cur = pts[k];
+      const next = pts[(k + 1) % n];
+      const cross = (cur.x - prev.x) * (next.z - cur.z) - (cur.z - prev.z) * (next.x - cur.x);
+      if (Math.abs(cross) > 1e-3) {
+        simplified.push(cur);
+      }
+    }
+    return simplified.length >= 3 ? simplified : pts;
   },
 
   // Convert a closed polygon to the standard RoomCapture mesh walls array

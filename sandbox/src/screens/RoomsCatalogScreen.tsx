@@ -29,7 +29,14 @@ const RoomBlueprintThumbnail: React.FC<{ room: Room; width?: number; height?: nu
   const realDoors: any[] = parsedMesh?.doors || [];
   const realWindows: any[] = parsedMesh?.windows || [];
   const realObjects: any[] = parsedMesh?.objects || [];
-  const poly: PolygonPoint[] = (parsedMesh?.polygon && Array.isArray(parsedMesh.polygon) && parsedMesh.polygon.length >= 3 && parsedMesh.isWatertight)
+  const hasValidPrecomputedPolygon =
+    parsedMesh?.polygon &&
+    Array.isArray(parsedMesh.polygon) &&
+    parsedMesh.polygon.length >= 3 &&
+    parsedMesh.isWatertight &&
+    !GeometryService.isPolygonSelfIntersecting(parsedMesh.polygon);
+
+  const poly: PolygonPoint[] = hasValidPrecomputedPolygon
     ? parsedMesh.polygon
     : GeometryService.buildRoomPolygon(realWalls, room.width_ft || 14, room.length_ft || 16, realObjects);
 
