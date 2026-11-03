@@ -38,3 +38,5 @@ yarn-error.log*
 sandbox/rooms.db
 sandbox/database.sqlite
 sandbox/data/device_dump/Documents/
+__pycache__/
+*.pyc

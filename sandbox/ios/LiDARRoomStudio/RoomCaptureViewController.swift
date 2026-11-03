@@ -192,10 +192,44 @@ class RoomCaptureViewController: UIViewController, RoomCaptureViewDelegate, Room
         if lengthMeters < 1.5 { lengthMeters = 4.5 }
         if avgHeight < 2.0 { avgHeight = 2.6 }
         
-        let widthFt = Double(round(Double(widthMeters * 3.28084) * 10) / 10)
-        let lengthFt = Double(round(Double(lengthMeters * 3.28084) * 10) / 10)
+        var widthFt = Double(round(Double(widthMeters * 3.28084) * 10) / 10)
+        var lengthFt = Double(round(Double(lengthMeters * 3.28084) * 10) / 10)
         let heightFt = Double(round(Double(avgHeight * 3.28084) * 10) / 10)
-        let areaSqFt = Double(round(widthFt * lengthFt * 10) / 10)
+        var areaSqFt = Double(round(widthFt * lengthFt * 10) / 10)
+
+        // OM-TLC RoomGeometryOptimizer (Clean-Room Topological Loop Closure)
+        var polygonPointsData: [[String: Any]] = []
+        var isWatertightResult = false
+        var dominantOrientationDeg = 0.0
+
+        do {
+            var rawSegments: [RawSegment] = []
+            for (idx, wall) in room.walls.enumerated() {
+                let pos = wall.transform.columns.3
+                let dim = wall.dimensions
+                let dir = wall.transform.columns.0
+                let halfL = dim.x / 2.0
+                let p1 = Point2D(x: Double((pos.x - dir.x * halfL) * 3.28084), z: Double((pos.z - dir.z * halfL) * 3.28084))
+                let p2 = Point2D(x: Double((pos.x + dir.x * halfL) * 3.28084), z: Double((pos.z + dir.z * halfL) * 3.28084))
+                rawSegments.append(RawSegment(p1: p1, p2: p2, label: "wall-\(idx)"))
+            }
+
+            if rawSegments.count >= 3 {
+                let optResult = RoomGeometryOptimizer.solve(segments: rawSegments, isClosed: true)
+                dominantOrientationDeg = optResult.dominantOrientationDeg
+                isWatertightResult = optResult.isWatertight
+
+                if optResult.isWatertight && optResult.areaSqFt > 10.0 {
+                    areaSqFt = Double(round(optResult.areaSqFt * 10) / 10)
+                    polygonPointsData = optResult.closedPolygon.map {
+                        ["x": round($0.x * 100) / 100, "z": round($0.z * 100) / 100]
+                    }
+                }
+            }
+        } catch {
+            // Graceful Fallback: keep standard unoptimized room data
+            print("[RoomCaptureViewController] OM-TLC Optimizer fallback triggered: \(error)")
+        }
         
         var doorsData: [[String: Any]] = []
         for (idx, door) in room.doors.enumerated() {
@@ -324,6 +358,9 @@ class RoomCaptureViewController: UIViewController, RoomCaptureViewDelegate, Room
             "usdzPath": usdzURL.path,
             "stlPath": stlURL.path,
             "roomName": roomLabel,
+            "polygon": polygonPointsData,
+            "isWatertight": isWatertightResult,
+            "dominantOrientationDeg": dominantOrientationDeg,
         ]
         
         // Persist room JSON to disk for permanent storage
