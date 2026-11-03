@@ -105,9 +105,10 @@ const BuildBlueprintThumbnail: React.FC<{
     } catch {}
 
     const realWalls = parsedMesh?.walls || [];
+    const realObjects = parsedMesh?.objects || [];
     const poly: PolygonPoint[] = (parsedMesh?.polygon && Array.isArray(parsedMesh.polygon) && parsedMesh.polygon.length >= 3 && parsedMesh.isWatertight)
       ? parsedMesh.polygon
-      : GeometryService.buildRoomPolygon(realWalls, room.width_ft || 16, room.length_ft || 14);
+      : GeometryService.buildRoomPolygon(realWalls, room.width_ft || 16, room.length_ft || 14, realObjects);
     const N = poly.length;
     const centerPoly = {
       x: poly.reduce((acc, p) => acc + p.x, 0) / N,
@@ -602,9 +603,10 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
     } catch {}
 
     const realWalls: any[] = parsedMesh?.walls || [];
+    const realObjects: any[] = parsedMesh?.objects || [];
     const polygon: PolygonPoint[] = (parsedMesh?.polygon && Array.isArray(parsedMesh.polygon) && parsedMesh.polygon.length >= 3 && parsedMesh.isWatertight)
       ? parsedMesh.polygon
-      : GeometryService.buildRoomPolygon(realWalls, node.w, node.l);
+      : GeometryService.buildRoomPolygon(realWalls, node.w, node.l, realObjects);
     const N = polygon.length;
     if (N === 0) {
       const rw = node.rotation % 180 === 0 ? node.w : node.l;
@@ -1220,7 +1222,7 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
 
       const polygon: PolygonPoint[] = (parsedMesh?.polygon && Array.isArray(parsedMesh.polygon) && parsedMesh.polygon.length >= 3 && parsedMesh.isWatertight)
         ? parsedMesh.polygon
-        : GeometryService.buildRoomPolygon(realWalls, node.w, node.l);
+        : GeometryService.buildRoomPolygon(realWalls, node.w, node.l, realObjects);
       const N = polygon.length;
 
       const centerPoly = {
@@ -1774,7 +1776,7 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
 
                     const polygon: PolygonPoint[] = (parsedMesh?.polygon && Array.isArray(parsedMesh.polygon) && parsedMesh.polygon.length >= 3 && parsedMesh.isWatertight)
                       ? parsedMesh.polygon
-                      : GeometryService.buildRoomPolygon(realWalls, n.w, n.l);
+                      : GeometryService.buildRoomPolygon(realWalls, n.w, n.l, realObjects);
                     const N = polygon.length;
                     const centerPoly = {
                       x: polygon.reduce((acc, p) => acc + p.x, 0) / N,

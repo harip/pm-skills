@@ -1,5 +1,16 @@
 // sandbox/test-runner.js
 const assert = require('assert');
+const fs = require('fs');
+const path = require('path');
+const ts = require('typescript');
+
+// Dynamically load production GeometryService directly from TypeScript source
+const geomCode = fs.readFileSync(path.join(__dirname, 'src/services/geometryService.ts'), 'utf8');
+const geomTranspiled = ts.transpileModule(geomCode, { compilerOptions: { module: ts.ModuleKind.CommonJS } });
+const geomMod = { exports: {} };
+const geomFn = new Function('module', 'exports', 'require', geomTranspiled.outputText);
+geomFn(geomMod, geomMod.exports, () => ({}));
+const { GeometryService } = geomMod.exports;
 
 console.log('🧪 Starting Certified QA Verification Suite for LiDAR Room Studio (iOS)...\n');
 
@@ -1146,6 +1157,46 @@ endsolid ${room.name}`;
     }
     area = Math.abs(area) / 2.0;
     assert(area > 115 && area < 155, `Area (${area.toFixed(1)} sq ft) must match physical room bounds`);
+  });
+
+  // EVAL-25: Rule A (Manhattan Gap Synthesis) & Rule B (Furniture Non-Penetration Prior)
+  await it('EVAL-25: Rule A & Rule B synthesize orthogonal occluded walls & prevent diagonal chord cuts through furniture', async () => {
+    // 3 physical walls scanned with back wall occluded by large furniture (12ft gap)
+    const openWalls = [
+      { x1: -6, z1: 4, x2: -6, z2: -6, id: 'left' },
+      { x1: -6, z1: -6, x2: 6, z2: -6, id: 'front' },
+      { x1: 6, z1: -6, x2: 6, z2: 2, id: 'right' },
+    ];
+    // Furniture objects lying in the unobserved back zone:
+    // Bed at (3, 5) extending to z = 7, Wardrobe at (-4, 5.5) extending to z = 7.5
+    const furniture = [
+      { x: 3, z: 5, widthFt: 4, lengthFt: 4, yawDeg: 0, category: 'bed' },
+      { x: -4, z: 5.5, widthFt: 3, lengthFt: 4, yawDeg: 0, category: 'storage' },
+    ];
+
+    // Build room polygon using OM-TLC with Rule A & Rule B
+    const poly = GeometryService.buildRoomPolygon(openWalls, 14, 16, furniture);
+
+    // 1. Must NOT connect (6, 2) to (-6, 4) with a diagonal line
+    // Must produce exactly 4 orthogonal corners!
+    assert.strictEqual(poly.length, 4, 'Open room with occluded back wall must close into 4 orthogonal corners');
+
+    // 2. Synthesized back wall must clear the furniture (z > 7.5)
+    const backCorners = poly.filter((p) => p.z > 0);
+    assert.strictEqual(backCorners.length, 2, 'Must have exactly 2 back corners');
+    for (const c of backCorners) {
+      assert(c.z >= 7.5, `Back wall at z=${c.z} must clear furniture envelope (z=7.5)`);
+    }
+
+    // 3. Walls must be strictly perpendicular (0° and 90°)
+    for (let i = 0; i < poly.length; i++) {
+      const p1 = poly[i];
+      const p2 = poly[(i + 1) % poly.length];
+      const dx = Math.abs(p2.x - p1.x);
+      const dz = Math.abs(p2.z - p1.z);
+      const isOrthogonal = dx < 0.1 || dz < 0.1;
+      assert(isOrthogonal, `Wall segment ${i} must be strictly orthogonal (dx=${dx.toFixed(2)}, dz=${dz.toFixed(2)})`);
+    }
   });
 
   console.log(`\n📊 Verification Summary: ${passedTests}/${totalTests} tests passed.\n`);

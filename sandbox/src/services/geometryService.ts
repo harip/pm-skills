@@ -104,10 +104,12 @@ export const GeometryService = {
   // Uses Orthogonal-Manhattan Topological Loop Closure (OM-TLC) solver:
   // 1. Chaining raw segments sequentially
   // 2. Length-weighted modulo-90 dominant orientation circular mean
-  // 3. Dual-threshold angular quantization (orthogonal squaring + 45° bay preservation)
-  // 4. Collinear segment fusion (merges fragmented / overlapping scans and dropouts)
-  // 5. Exact line-line corner intersection with determinant singularity guard
-  buildRoomPolygon(walls: any[], defaultW = 14, defaultL = 16): PolygonPoint[] {
+  // 3. Rule A: Manhattan Gap Synthesis for unobserved/occluded terminal gaps (prevents diagonal cutting)
+  // 4. Rule B: Physical Non-Penetration Prior (pushes boundary behind furniture envelopes)
+  // 5. Dual-threshold angular quantization (orthogonal squaring + 45° bay preservation)
+  // 6. Collinear segment fusion (merges fragmented / overlapping scans and dropouts)
+  // 7. Exact line-line corner intersection with determinant singularity guard
+  buildRoomPolygon(walls: any[], defaultW = 14, defaultL = 16, objects: any[] = []): PolygonPoint[] {
     const hw = defaultW / 2;
     const hl = defaultL / 2;
     const fallbackRect: PolygonPoint[] = [
@@ -248,8 +250,122 @@ export const GeometryService = {
       totalLen += s.length;
     }
     const domAngle = totalLen > 1e-4 ? Math.atan2(sumSin, sumCos) / 4.0 : 0.0;
+    const cosD = Math.cos(domAngle);
+    const sinD = Math.sin(domAngle);
+    const toUV = (p: { x: number; z: number }) => ({
+      u: p.x * cosD + p.z * sinD,
+      v: -p.x * sinD + p.z * cosD,
+    });
+    const toXZ = (p: { u: number; v: number }) => ({
+      x: p.u * cosD - p.v * sinD,
+      z: p.u * sinD + p.v * cosD,
+    });
 
-    // Step 3: Dual-Threshold Angular Quantization & Line Fitting
+    // Extract all furniture bounding box corners in UV coordinates
+    const furniturePointsUV: { u: number; v: number }[] = [];
+    if (Array.isArray(objects)) {
+      for (const obj of objects) {
+        const hw = (obj.widthFt || 2) / 2;
+        const hl = (obj.lengthFt || 2) / 2;
+        const rad = ((obj.yawDeg || 0) * Math.PI) / 180;
+        const c = Math.cos(rad);
+        const s = Math.sin(rad);
+        const ox = obj.x || 0;
+        const oz = obj.z || 0;
+        const offsets = [
+          { x: -hw, z: -hl },
+          { x: hw, z: -hl },
+          { x: hw, z: hl },
+          { x: -hw, z: hl },
+        ];
+        for (const off of offsets) {
+          furniturePointsUV.push(toUV({
+            x: ox + off.x * c - off.z * s,
+            z: oz + off.x * s + off.z * c,
+          }));
+        }
+      }
+    }
+
+    // Step 3: Rule A - Manhattan Gap Synthesis for unobserved terminal walls (prevents diagonal cuts)
+    const augmentedChained: InternalSeg[] = [];
+    for (let cIdx = 0; cIdx < chained.length; cIdx++) {
+      const cur = chained[cIdx];
+      const nxt = chained[(cIdx + 1) % chained.length];
+      augmentedChained.push(cur);
+
+      const jump = Math.hypot(nxt.p1.x - cur.p2.x, nxt.p1.z - cur.p2.z);
+      if (jump > 3.0) {
+        const curP2UV = toUV(cur.p2);
+        const nxtP1UV = toUV(nxt.p1);
+
+        const curLen = Math.hypot(cur.p2.x - cur.p1.x, cur.p2.z - cur.p1.z) || 1;
+        const vCur = toUV({ x: (cur.p2.x - cur.p1.x) / curLen, z: (cur.p2.z - cur.p1.z) / curLen });
+
+        const nxtLen = Math.hypot(nxt.p2.x - nxt.p1.x, nxt.p2.z - nxt.p1.z) || 1;
+        const vNxt = toUV({ x: (nxt.p1.x - nxt.p2.x) / nxtLen, z: (nxt.p1.z - nxt.p2.z) / nxtLen });
+
+        // Case A1: Parallel terminal walls running along V-axis (synthesize orthogonal wall along U-axis)
+        if (Math.abs(vCur.v) > 0.65 && Math.abs(vNxt.v) > 0.65) {
+          const signV = (vCur.v + vNxt.v) >= 0 ? 1 : -1;
+          let targetV = signV > 0 ? Math.max(curP2UV.v, nxtP1UV.v) : Math.min(curP2UV.v, nxtP1UV.v);
+
+          // Check if furniture extends into the gap
+          const minU = Math.min(curP2UV.u, nxtP1UV.u) - 1.0;
+          const maxU = Math.max(curP2UV.u, nxtP1UV.u) + 1.0;
+          for (const fp of furniturePointsUV) {
+            if (fp.u >= minU && fp.u <= maxU) {
+              if (signV > 0 && fp.v > targetV) targetV = Math.max(targetV, fp.v + 0.25);
+              if (signV < 0 && fp.v < targetV) targetV = Math.min(targetV, fp.v - 0.25);
+            }
+          }
+
+          const cornerA = toXZ({ u: curP2UV.u, v: targetV });
+          const cornerB = toXZ({ u: nxtP1UV.u, v: targetV });
+          augmentedChained.push({
+            p1: cornerA,
+            p2: cornerB,
+            label: 'manhattan-synth-gap',
+            length: Math.hypot(cornerB.x - cornerA.x, cornerB.z - cornerA.z),
+          });
+        }
+        // Case A2: Parallel terminal walls running along U-axis (synthesize orthogonal wall along V-axis)
+        else if (Math.abs(vCur.u) > 0.65 && Math.abs(vNxt.u) > 0.65) {
+          const signU = (vCur.u + vNxt.u) >= 0 ? 1 : -1;
+          let targetU = signU > 0 ? Math.max(curP2UV.u, nxtP1UV.u) : Math.min(curP2UV.u, nxtP1UV.u);
+
+          const minV = Math.min(curP2UV.v, nxtP1UV.v) - 1.0;
+          const maxV = Math.max(curP2UV.v, nxtP1UV.v) + 1.0;
+          for (const fp of furniturePointsUV) {
+            if (fp.v >= minV && fp.v <= maxV) {
+              if (signU > 0 && fp.u > targetU) targetU = Math.max(targetU, fp.u + 0.25);
+              if (signU < 0 && fp.u < targetU) targetU = Math.min(targetU, fp.u - 0.25);
+            }
+          }
+
+          const cornerA = toXZ({ u: targetU, v: curP2UV.v });
+          const cornerB = toXZ({ u: targetU, v: nxtP1UV.v });
+          augmentedChained.push({
+            p1: cornerA,
+            p2: cornerB,
+            label: 'manhattan-synth-gap',
+            length: Math.hypot(cornerB.x - cornerA.x, cornerB.z - cornerA.z),
+          });
+        }
+      }
+    }
+
+    // Approximate centroid of room for true outward normal orientation
+    let centerRawX = 0;
+    let centerRawZ = 0;
+    for (const s of augmentedChained) {
+      centerRawX += (s.p1.x + s.p2.x) / 2.0;
+      centerRawZ += (s.p1.z + s.p2.z) / 2.0;
+    }
+    centerRawX /= augmentedChained.length || 1;
+    centerRawZ /= augmentedChained.length || 1;
+
+    // Step 4: Dual-Threshold Angular Quantization & Line Fitting
     const tauOrthoRad = (7.5 * Math.PI) / 180.0;
     const tauBayRad = (4.0 * Math.PI) / 180.0;
 
@@ -263,7 +379,7 @@ export const GeometryService = {
     }
 
     const snapped: SnappedWallInternal[] = [];
-    for (const s of chained) {
+    for (const s of augmentedChained) {
       const rawAngle = Math.atan2(s.p2.z - s.p1.z, s.p2.x - s.p1.x);
       const relAngle = normAngle(rawAngle - domAngle);
 
@@ -294,14 +410,41 @@ export const GeometryService = {
 
       const A = -Math.sin(snappedAngle);
       const B = Math.cos(snappedAngle);
-      const midX = (s.p1.x + s.p2.x) / 2.0;
-      const midZ = (s.p1.z + s.p2.z) / 2.0;
-      const C = -(A * midX + B * midZ);
+      let midX = (s.p1.x + s.p2.x) / 2.0;
+      let midZ = (s.p1.z + s.p2.z) / 2.0;
 
+      // Determine true outward normal pointing away from room centroid
+      const dCenterX = midX - centerRawX;
+      const dCenterZ = midZ - centerRawZ;
+      const dotOut = A * dCenterX + B * dCenterZ;
+      const outA = dotOut >= 0 ? A : -A;
+      const outB = dotOut >= 0 ? B : -B;
+
+      // Step 5: Rule B - Physical Non-Penetration Prior on each wall
+      // If a wall slices through a detected furniture object, push wall outward
+      if (furniturePointsUV.length > 0 && classification === 'ORTHOGONAL') {
+        let maxPenetration = 0;
+        for (const fp of furniturePointsUV) {
+          const fpXZ = toXZ(fp);
+          const tangentDist = Math.abs(-outB * (fpXZ.x - midX) + outA * (fpXZ.z - midZ));
+          if (tangentDist <= (s.length / 2.0 + 1.0)) {
+            const distOut = outA * (fpXZ.x - midX) + outB * (fpXZ.z - midZ);
+            if (distOut > 0.05 && distOut < 6.0 && distOut > maxPenetration) {
+              maxPenetration = distOut;
+            }
+          }
+        }
+        if (maxPenetration > 0) {
+          midX += outA * (maxPenetration + 0.25);
+          midZ += outB * (maxPenetration + 0.25);
+        }
+      }
+
+      const C = -(A * midX + B * midZ);
       snapped.push({ raw: s, snappedAngle, classification, A, B, C });
     }
 
-    // Step 4: Collinear Wall Fusion (eliminates broken LiDAR fragments and bent kinks)
+    // Step 6: Collinear Wall Fusion (eliminates broken LiDAR fragments and bent kinks)
     const gapTolFt = 0.5; // 6 inches
     const fused: SnappedWallInternal[] = [];
     let i = 0;
@@ -376,7 +519,7 @@ export const GeometryService = {
 
     if (fused.length < 3) return fallbackRect;
 
-    // Step 5: Adjacent Line Intersection with Determinant Singularity Guard
+    // Step 7: Adjacent Line Intersection with Determinant Singularity Guard
     const vertices: PolygonPoint[] = [];
     const fusedCount = fused.length;
 

@@ -141,7 +141,8 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
       : GeometryService.buildRoomPolygon(
           realWalls,
           room.width_ft || 14,
-          room.length_ft || 16
+          room.length_ft || 16,
+          realObjects
         )
   );
   const N = polygon.length;

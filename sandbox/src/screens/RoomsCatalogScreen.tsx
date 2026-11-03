@@ -28,9 +28,10 @@ const RoomBlueprintThumbnail: React.FC<{ room: Room; width?: number; height?: nu
   const realWalls: any[] = parsedMesh?.walls || [];
   const realDoors: any[] = parsedMesh?.doors || [];
   const realWindows: any[] = parsedMesh?.windows || [];
+  const realObjects: any[] = parsedMesh?.objects || [];
   const poly: PolygonPoint[] = (parsedMesh?.polygon && Array.isArray(parsedMesh.polygon) && parsedMesh.polygon.length >= 3 && parsedMesh.isWatertight)
     ? parsedMesh.polygon
-    : GeometryService.buildRoomPolygon(realWalls, room.width_ft || 14, room.length_ft || 16);
+    : GeometryService.buildRoomPolygon(realWalls, room.width_ft || 14, room.length_ft || 16, realObjects);
 
   let minX = Infinity;
   let maxX = -Infinity;
