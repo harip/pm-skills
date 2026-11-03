@@ -34,7 +34,9 @@ const RoomBlueprintThumbnail: React.FC<{ room: Room; width?: number; height?: nu
     Array.isArray(parsedMesh.polygon) &&
     parsedMesh.polygon.length >= 3 &&
     parsedMesh.isWatertight &&
-    !GeometryService.isPolygonSelfIntersecting(parsedMesh.polygon);
+    !GeometryService.isPolygonSelfIntersecting(parsedMesh.polygon) &&
+    !GeometryService.polygonCutsThroughFurniture(parsedMesh.polygon, realObjects) &&
+    !GeometryService.hasInteriorChords(parsedMesh.polygon);
 
   const poly: PolygonPoint[] = hasValidPrecomputedPolygon
     ? parsedMesh.polygon

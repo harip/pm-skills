@@ -70,6 +70,23 @@ interface LayersConfig {
   furniture: boolean;
 }
 
+function getWatertightRoomPolygon(parsedMesh: any, widthFt: number, lengthFt: number): PolygonPoint[] {
+  const realWalls = parsedMesh?.walls || [];
+  const realObjects = parsedMesh?.objects || [];
+  const hasValid =
+    parsedMesh?.polygon &&
+    Array.isArray(parsedMesh.polygon) &&
+    parsedMesh.polygon.length >= 3 &&
+    parsedMesh.isWatertight &&
+    !GeometryService.isPolygonSelfIntersecting(parsedMesh.polygon) &&
+    !GeometryService.polygonCutsThroughFurniture(parsedMesh.polygon, realObjects) &&
+    !GeometryService.hasInteriorChords(parsedMesh.polygon);
+
+  return hasValid
+    ? parsedMesh.polygon
+    : GeometryService.buildRoomPolygon(realWalls, widthFt || 16, lengthFt || 14, realObjects);
+}
+
 const BuildBlueprintThumbnail: React.FC<{
   build: HouseBuild;
   allRooms: Room[];
@@ -104,11 +121,7 @@ const BuildBlueprintThumbnail: React.FC<{
       if (room.mesh_json) parsedMesh = JSON.parse(room.mesh_json);
     } catch {}
 
-    const realWalls = parsedMesh?.walls || [];
-    const realObjects = parsedMesh?.objects || [];
-    const poly: PolygonPoint[] = (parsedMesh?.polygon && Array.isArray(parsedMesh.polygon) && parsedMesh.polygon.length >= 3 && parsedMesh.isWatertight && !GeometryService.isPolygonSelfIntersecting(parsedMesh.polygon))
-      ? parsedMesh.polygon
-      : GeometryService.buildRoomPolygon(realWalls, room.width_ft || 16, room.length_ft || 14, realObjects);
+    const poly = getWatertightRoomPolygon(parsedMesh, room.width_ft || 16, room.length_ft || 14);
     const N = poly.length;
     const centerPoly = {
       x: poly.reduce((acc, p) => acc + p.x, 0) / N,
@@ -602,11 +615,7 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
       if (node.room.mesh_json) parsedMesh = JSON.parse(node.room.mesh_json);
     } catch {}
 
-    const realWalls: any[] = parsedMesh?.walls || [];
-    const realObjects: any[] = parsedMesh?.objects || [];
-    const polygon: PolygonPoint[] = (parsedMesh?.polygon && Array.isArray(parsedMesh.polygon) && parsedMesh.polygon.length >= 3 && parsedMesh.isWatertight && !GeometryService.isPolygonSelfIntersecting(parsedMesh.polygon))
-      ? parsedMesh.polygon
-      : GeometryService.buildRoomPolygon(realWalls, node.w, node.l, realObjects);
+    const polygon: PolygonPoint[] = getWatertightRoomPolygon(parsedMesh, node.w, node.l);
     const N = polygon.length;
     if (N === 0) {
       const rw = node.rotation % 180 === 0 ? node.w : node.l;
@@ -1220,9 +1229,7 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
       const realClosets: any[] = parsedMesh?.closets || [];
       const realObjects: any[] = parsedMesh?.objects || [];
 
-      const polygon: PolygonPoint[] = (parsedMesh?.polygon && Array.isArray(parsedMesh.polygon) && parsedMesh.polygon.length >= 3 && parsedMesh.isWatertight && !GeometryService.isPolygonSelfIntersecting(parsedMesh.polygon))
-        ? parsedMesh.polygon
-        : GeometryService.buildRoomPolygon(realWalls, node.w, node.l, realObjects);
+      const polygon: PolygonPoint[] = getWatertightRoomPolygon(parsedMesh, node.w, node.l);
       const N = polygon.length;
 
       const centerPoly = {
@@ -1774,9 +1781,7 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
                     const realClosets: any[] = parsedMesh?.closets || [];
                     const realObjects: any[] = parsedMesh?.objects || [];
 
-                    const polygon: PolygonPoint[] = (parsedMesh?.polygon && Array.isArray(parsedMesh.polygon) && parsedMesh.polygon.length >= 3 && parsedMesh.isWatertight && !GeometryService.isPolygonSelfIntersecting(parsedMesh.polygon))
-                      ? parsedMesh.polygon
-                      : GeometryService.buildRoomPolygon(realWalls, n.w, n.l, realObjects);
+                    const polygon: PolygonPoint[] = getWatertightRoomPolygon(parsedMesh, n.w, n.l);
                     const N = polygon.length;
                     const centerPoly = {
                       x: polygon.reduce((acc, p) => acc + p.x, 0) / N,
