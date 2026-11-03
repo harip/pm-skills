@@ -1243,6 +1243,58 @@ endsolid ${room.name}`;
     assert(!GeometryService.isPolygonSelfIntersecting(untangled), 'Untangled polygon must NOT be self-intersecting');
   });
 
+  // EVAL-27: Polycam Structural Solver automatically suppresses interior chords & doorway loop closure gaps
+  await it('EVAL-27: Polycam Structural Solver automatically suppresses interior chords & doorway loop closure gaps', async () => {
+    // Exact user scan scenario from screenshot media_1793679313837_9e1d32d5.png:
+    // Left, top, right (with door gap), and bottom walls.
+    // Plus two interior diagonal walls detected along the bed / grazing returns slicing across center.
+    const rawWalls = [
+      { x1: -7.0, z1: -7.5, x2: -7.0, z2: 7.5, id: 'wall-left' },
+      { x1: -7.0, z1: 7.5, x2: 7.0, z2: 7.5, id: 'wall-top' },
+      { x1: 7.0, z1: 7.5, x2: 7.0, z2: -3.5, id: 'wall-right' }, // Doorway opening from z=-3.5 to z=-7.5
+      { x1: 7.0, z1: -7.5, x2: -7.0, z2: -7.5, id: 'wall-bottom' },
+      // 2 interior phantom diagonal chords slicing across the room
+      { x1: -6.5, z1: -2.0, x2: 6.5, z2: 4.0, id: 'phantom-bed-chord-1' },
+      { x1: -6.0, z1: -2.5, x2: 6.0, z2: 3.5, id: 'phantom-bed-chord-2' },
+    ];
+    const furniture = [
+      { x: 3.0, z: 2.0, widthFt: 5.0, lengthFt: 6.5, category: 'bed' },
+      { x: -1.0, z: 0.5, widthFt: 2.5, lengthFt: 2.5, category: 'table' },
+    ];
+
+    // 1. Automatic solver buildRoomPolygon must discard both interior chords with ZERO user interaction
+    const autoPoly = GeometryService.buildRoomPolygon(rawWalls, 14, 15, furniture);
+
+    // Must be a clean 4-corner room with zero diagonal chords
+    assert.strictEqual(autoPoly.length, 4, `Expected 4-corner exterior boundary, got ${autoPoly.length} corners`);
+    assert(!GeometryService.isPolygonSelfIntersecting(autoPoly), 'Boundary must not be self-intersecting');
+
+    // Area must match the room dimensions (~210 sq ft)
+    let area = 0;
+    for (let i = 0; i < autoPoly.length; i++) {
+      const j = (i + 1) % autoPoly.length;
+      area += autoPoly[i].x * autoPoly[j].z - autoPoly[j].x * autoPoly[i].z;
+    }
+    area = Math.abs(area) / 2.0;
+    assert(area >= 200 && area <= 225, `Expected area ~210 sq ft, got ${area.toFixed(1)} sq ft`);
+
+    // 2. Test autoSquareRoom
+    const squared = GeometryService.autoSquareRoom(rawWalls, 14, 15, furniture);
+    assert.strictEqual(squared.length, 4, 'Squared room must have 4 orthogonal corners');
+
+    // 3. Test deleteWallFromPolygon
+    // Artificially add a 5th wall (kink) and delete it
+    const fiveGon = [
+      { x: -7, z: -7.5 },
+      { x: -7, z: 7.5 },
+      { x: 7, z: 7.5 },
+      { x: 7, z: -7.5 },
+      { x: 0, z: -7.5 }, // Extra collinear vertex / wall
+    ];
+    const healed = GeometryService.deleteWallFromPolygon(fiveGon, 4);
+    assert.strictEqual(healed.length, 4, 'Deleting wall from 5-gon must heal to 4 corners');
+  });
+
   console.log(`\n📊 Verification Summary: ${passedTests}/${totalTests} tests passed.\n`);
 }
 

@@ -357,6 +357,54 @@ public final class RoomGeometryOptimizer {
         return result
     }
 
+    /// Filters out phantom interior chords (e.g. bed edges, grazing LiDAR returns slicing through room interior)
+    public static func filterInteriorChords(segments: [RawSegment]) -> [RawSegment] {
+        guard segments.count > 3 else { return segments }
+
+        var cX = 0.0
+        var cZ = 0.0
+        for s in segments {
+            cX += (s.p1.x + s.p2.x) / 2.0
+            cZ += (s.p1.z + s.p2.z) / 2.0
+        }
+        let centroidX = cX / Double(segments.count)
+        let centroidZ = cZ / Double(segments.count)
+
+        var radii: [Double] = []
+        var maxR = 0.0
+        for s in segments {
+            let mx = (s.p1.x + s.p2.x) / 2.0
+            let mz = (s.p1.z + s.p2.z) / 2.0
+            let r = hypot(mx - centroidX, mz - centroidZ)
+            radii.append(r)
+            if r > maxR { maxR = r }
+        }
+
+        guard maxR >= 2.0 else { return segments }
+
+        var filtered: [RawSegment] = []
+        for (idx, s) in segments.enumerated() {
+            let r = radii[idx]
+            let rRatio = r / maxR
+
+            let v1x = s.p1.x - centroidX
+            let v1z = s.p1.z - centroidZ
+            let v2x = s.p2.x - centroidX
+            let v2z = s.p2.z - centroidZ
+            let dot = v1x * v2x + v1z * v2z
+            let len1 = hypot(v1x, v1z)
+            let len2 = hypot(v2x, v2z)
+            let cosAngle = (len1 * len2 > 1e-4) ? (dot / (len1 * len2)) : 1.0
+
+            let isCentroidSpanningChord = (rRatio < 0.45 && cosAngle < -0.25)
+            if !isCentroidSpanningChord {
+                filtered.append(s)
+            }
+        }
+
+        return filtered.count >= 3 ? filtered : segments
+    }
+
     /// Chains segments sequentially into a continuous perimeter
     public static func chainSegments(segments: [RawSegment]) -> [RawSegment] {
         guard segments.count > 1 else { return segments }
@@ -497,7 +545,8 @@ public final class RoomGeometryOptimizer {
         }
 
         let deduped = deduplicateOverlappingWalls(segments: segments)
-        let chained = chainSegments(segments: deduped)
+        let filtered = filterInteriorChords(segments: deduped)
+        let chained = chainSegments(segments: filtered)
 
         guard chained.count >= 3 else {
             return OptimizerResult(

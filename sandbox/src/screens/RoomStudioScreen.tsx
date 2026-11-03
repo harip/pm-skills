@@ -639,6 +639,72 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
     wallAnchorInfoRef.current = info;
   };
 
+  const handleDeleteSelectedWall = async () => {
+    if (selectedWallIdx === null) return;
+    const curPoly = activePolygonRef.current || activePolygon || polygon;
+    if (curPoly.length <= 3) {
+      Alert.alert('Cannot Delete Wall', 'A room boundary requires at least 3 walls.');
+      return;
+    }
+
+    const updatedPoly = GeometryService.deleteWallFromPolygon(curPoly, selectedWallIdx);
+    setActivePolygon(updatedPoly);
+    activePolygonRef.current = updatedPoly;
+    setSelectedWallIdx(null);
+    selectedWallIdxRef.current = null;
+    setWallAnchorInfo(null);
+    wallAnchorInfoRef.current = null;
+
+    await handleSaveUpdatedPolygon(updatedPoly);
+  };
+
+  const handleSnapSelectedWall90 = async () => {
+    if (selectedWallIdx === null) return;
+    const curPoly = activePolygonRef.current || activePolygon || polygon;
+    const n = curPoly.length;
+    const p1 = curPoly[selectedWallIdx];
+    const p2 = curPoly[(selectedWallIdx + 1) % n];
+
+    const dx = p2.x - p1.x;
+    const dz = p2.z - p1.z;
+    const rad = Math.atan2(dz, dx);
+    const k = Math.round(rad / (Math.PI / 2.0));
+    const snappedRad = k * (Math.PI / 2.0);
+    const len = Math.hypot(dx, dz);
+
+    const newP2 = {
+      x: +(p1.x + Math.cos(snappedRad) * len).toFixed(2),
+      z: +(p1.z + Math.sin(snappedRad) * len).toFixed(2),
+    };
+
+    const updatedPoly = [...curPoly];
+    updatedPoly[(selectedWallIdx + 1) % n] = newP2;
+
+    setActivePolygon(updatedPoly);
+    activePolygonRef.current = updatedPoly;
+    await handleSaveUpdatedPolygon(updatedPoly);
+  };
+
+  const handleSquareUpRoom = async () => {
+    const squared = GeometryService.autoSquareRoom(
+      realWalls,
+      room.width_ft || 14.0,
+      room.length_ft || 14.0,
+      realObjects
+    );
+
+    if (squared && squared.length >= 3) {
+      setActivePolygon(squared);
+      activePolygonRef.current = squared;
+      setSelectedWallIdx(null);
+      selectedWallIdxRef.current = null;
+      setWallAnchorInfo(null);
+      wallAnchorInfoRef.current = null;
+      await handleSaveUpdatedPolygon(squared);
+      Alert.alert('Square Up Room', 'Interior chords removed. Room snapped to clean rectangular boundary.');
+    }
+  };
+
   const handleSaveWallChanges = async () => {
     const finalPoly = activePolygonRef.current || activePolygon;
     if (finalPoly && finalPoly.length >= 3) {
@@ -1343,6 +1409,42 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
                 </TouchableOpacity>
               </View>
             </View>
+          ) : selectedWallIdx !== null && viewMode === '2d' ? (
+            <View style={styles.floatingApertureCapsuleWrap} pointerEvents="box-none">
+              <View style={styles.floatingApertureCapsule}>
+                <TouchableOpacity
+                  style={styles.apertureSegBtn}
+                  onPress={handleSnapSelectedWall90}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.apertureSegText}>📐 Snap 90°</Text>
+                </TouchableOpacity>
+
+                <View style={styles.apertureDivider} />
+
+                <TouchableOpacity
+                  style={styles.apertureSegBtn}
+                  onPress={handleDeleteSelectedWall}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.apertureSegText, { color: '#ff3b30' }]}>🗑️ Delete Wall</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.apertureCloseBtn}
+                  onPress={() => {
+                    setSelectedWallIdx(null);
+                    selectedWallIdxRef.current = null;
+                    setWallAnchorInfo(null);
+                    wallAnchorInfoRef.current = null;
+                  }}
+                  activeOpacity={0.8}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Text style={styles.apertureCloseText}>✕</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
           ) : (
             <View style={styles.floatingHudCapsule} pointerEvents="none">
               <Text style={styles.floatingHudText}>
@@ -1957,9 +2059,20 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
             </View>
           </View>
 
-          {/* Lower-Left Floating Action Bar: Reset Icon & Dynamic Save Icon (Story 3) */}
+          {/* Lower-Left Floating Action Bar: Square Up Icon, Reset Icon & Dynamic Save Icon */}
           {viewMode === '2d' && (
             <View style={styles.lowerLeftActionWrap} pointerEvents="box-none">
+              {/* Square Up Icon Button (Polycam / Magicplan Auto-Enclose) */}
+              <TouchableOpacity
+                style={styles.lowerLeftIconBtn}
+                onPress={handleSquareUpRoom}
+                activeOpacity={0.8}
+                accessibilityLabel="Square up room and remove interior chords"
+                accessibilityRole="button"
+              >
+                <Text style={styles.resetIconText}>🪄</Text>
+              </TouchableOpacity>
+
               {/* Reset Icon Button (Reverts to original LiDAR scan) */}
               <TouchableOpacity
                 style={styles.lowerLeftIconBtn}

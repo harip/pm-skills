@@ -40,6 +40,13 @@ export interface WallSubPrism {
   yMax: number;
 }
 
+export interface InternalSeg {
+  p1: PolygonPoint;
+  p2: PolygonPoint;
+  label: string;
+  length: number;
+}
+
 export const GeometryService = {
   // Certified Architectural Standards (IRC 2024 / AIA CAD)
   EXTERIOR_WALL_THICKNESS_M: 0.1651, // 6.50 inches (2x6 studs + 0.5" OSB + 0.5" drywall)
@@ -130,13 +137,6 @@ export const GeometryService = {
       while (r < -Math.PI) r += 2.0 * Math.PI;
       return r;
     };
-
-    interface InternalSeg {
-      p1: PolygonPoint;
-      p2: PolygonPoint;
-      label: string;
-      length: number;
-    }
 
     const rawSegments: InternalSeg[] = [];
     for (let i = 0; i < walls.length; i++) {
@@ -262,28 +262,33 @@ export const GeometryService = {
       return fallbackRect;
     }
 
+    // Step 0.5: Exterior Envelope & Interior Chord Pruning (Polycam Structural Solver)
+    // Filters out phantom walls that slice through the room interior or intersect detected furniture
+    const exteriorSegments = this.filterInteriorChords(dedupedSegments, objects);
+    const segmentsToChain = exteriorSegments.length >= 3 ? exteriorSegments : dedupedSegments;
+
     // Step 1: Cyclic Chaining (Start from longest wall for numerical stability)
     let startIdx = 0;
     let maxLen = -Infinity;
-    for (let i = 0; i < dedupedSegments.length; i++) {
-      if (dedupedSegments[i].length > maxLen) {
-        maxLen = dedupedSegments[i].length;
+    for (let i = 0; i < segmentsToChain.length; i++) {
+      if (segmentsToChain[i].length > maxLen) {
+        maxLen = segmentsToChain[i].length;
         startIdx = i;
       }
     }
 
-    const chained: InternalSeg[] = [{ ...dedupedSegments[startIdx] }];
+    const chained: InternalSeg[] = [{ ...segmentsToChain[startIdx] }];
     const used = new Set<number>([startIdx]);
-    let currPt = dedupedSegments[startIdx].p2;
+    let currPt = segmentsToChain[startIdx].p2;
 
-    while (chained.length < dedupedSegments.length) {
+    while (chained.length < segmentsToChain.length) {
       let bestIdx = -1;
       let bestDist = Infinity;
       let flip = false;
 
-      for (let i = 0; i < dedupedSegments.length; i++) {
+      for (let i = 0; i < segmentsToChain.length; i++) {
         if (used.has(i)) continue;
-        const s = dedupedSegments[i];
+        const s = segmentsToChain[i];
         const d1 = Math.hypot(currPt.x - s.p1.x, currPt.z - s.p1.z);
         const d2 = Math.hypot(currPt.x - s.p2.x, currPt.z - s.p2.z);
         if (d1 < bestDist) {
@@ -300,7 +305,7 @@ export const GeometryService = {
 
       if (bestIdx < 0) break;
       used.add(bestIdx);
-      const chosen = dedupedSegments[bestIdx];
+      const chosen = segmentsToChain[bestIdx];
       if (flip) {
         chained.push({
           p1: { ...chosen.p2 },
@@ -1221,6 +1226,158 @@ export const GeometryService = {
       }
     }
     return simplified.length >= 3 ? simplified : pts;
+  },
+
+  // Filters out phantom interior chords (e.g. bed edges, grazing LiDAR returns slicing through room interior)
+  filterInteriorChords(segments: InternalSeg[], objects?: any[]): InternalSeg[] {
+    if (segments.length <= 3) return segments;
+
+    let cx = 0, cz = 0;
+    for (const s of segments) {
+      cx += (s.p1.x + s.p2.x) / 2;
+      cz += (s.p1.z + s.p2.z) / 2;
+    }
+    cx /= segments.length;
+    cz /= segments.length;
+
+    const radii = segments.map((s) => {
+      const mx = (s.p1.x + s.p2.x) / 2;
+      const mz = (s.p1.z + s.p2.z) / 2;
+      return Math.hypot(mx - cx, mz - cz);
+    });
+    const maxR = Math.max(...radii);
+    if (maxR < 2.0) return segments;
+
+    const filtered = segments.filter((s, idx) => {
+      const mx = (s.p1.x + s.p2.x) / 2;
+      const mz = (s.p1.z + s.p2.z) / 2;
+      const r = radii[idx];
+      const rRatio = r / maxR;
+
+      // Check if segment spans across opposing quadrants through room center
+      const v1x = s.p1.x - cx;
+      const v1z = s.p1.z - cz;
+      const v2x = s.p2.x - cx;
+      const v2z = s.p2.z - cz;
+      const dot = v1x * v2x + v1z * v2z;
+      const len1 = Math.hypot(v1x, v1z);
+      const len2 = Math.hypot(v2x, v2z);
+      const cosAngle = (len1 * len2 > 1e-4) ? (dot / (len1 * len2)) : 1;
+
+      // Interior chord passes near room centroid (rRatio < 0.45) AND spans across center (cosAngle < -0.25)
+      const isCentroidSpanningChord = (rRatio < 0.45 && cosAngle < -0.25);
+
+      // Check if wall slices through detected interior furniture (bed, table, desk, storage)
+      let cutsThroughFurniture = false;
+      if (Array.isArray(objects) && objects.length > 0) {
+        for (const obj of objects) {
+          const hw = (obj.widthFt || 3) / 2;
+          const hl = (obj.lengthFt || 3) / 2;
+          const ox = obj.x || 0;
+          const oz = obj.z || 0;
+          if (Math.abs(mx - ox) <= hw && Math.abs(mz - oz) <= hl) {
+            cutsThroughFurniture = true;
+            break;
+          }
+        }
+      }
+
+      return !(isCentroidSpanningChord || cutsThroughFurniture);
+    });
+
+    return filtered.length >= 3 ? filtered : segments;
+  },
+
+  // Deletes a wall from a polygon and heals the boundary between the adjacent walls
+  deleteWallFromPolygon(polygon: PolygonPoint[], wallIdx: number): PolygonPoint[] {
+    const n = polygon.length;
+    if (n <= 3) return polygon; // Can't reduce below a triangle
+
+    const prevWallIdx = (wallIdx - 1 + n) % n;
+    const nextWallIdx = (wallIdx + 1) % n;
+
+    // Wall i-1: from polygon[prevWallIdx] to polygon[wallIdx]
+    const pPrev1 = polygon[prevWallIdx];
+    const pPrev2 = polygon[wallIdx];
+
+    // Wall i+1: from polygon[(wallIdx + 1) % n] to polygon[(wallIdx + 2) % n]
+    const pNext1 = polygon[(wallIdx + 1) % n];
+    const pNext2 = polygon[(wallIdx + 2) % n];
+
+    // Compute line equations for wall i-1 and wall i+1
+    const dx1 = pPrev2.x - pPrev1.x;
+    const dz1 = pPrev2.z - pPrev1.z;
+    const A1 = -dz1;
+    const B1 = dx1;
+    const C1 = -(A1 * pPrev1.x + B1 * pPrev1.z);
+
+    const dx2 = pNext2.x - pNext1.x;
+    const dz2 = pNext2.z - pNext1.z;
+    const A2 = -dz2;
+    const B2 = dx2;
+    const C2 = -(A2 * pNext1.x + B2 * pNext1.z);
+
+    const det = A1 * B2 - A2 * B1;
+    let newCorner: PolygonPoint;
+
+    if (Math.abs(det) >= 1e-4) {
+      newCorner = {
+        x: Math.round(((B1 * C2 - B2 * C1) / det) * 100) / 100,
+        z: Math.round(((A2 * C1 - A1 * C2) / det) * 100) / 100,
+      };
+    } else {
+      // Parallel lines: bridge with midpoint
+      newCorner = {
+        x: Math.round(((pPrev2.x + pNext1.x) / 2) * 100) / 100,
+        z: Math.round(((pPrev2.z + pNext1.z) / 2) * 100) / 100,
+      };
+    }
+
+    // Build new polygon replacing vertex wallIdx and (wallIdx+1)%n with newCorner
+    const newPoly: PolygonPoint[] = [];
+    for (let i = 0; i < n; i++) {
+      if (i === wallIdx) {
+        newPoly.push(newCorner);
+      } else if (i === (wallIdx + 1) % n) {
+        // Skip second deleted vertex
+        continue;
+      } else {
+        newPoly.push(polygon[i]);
+      }
+    }
+
+    return newPoly.length >= 3 ? newPoly : polygon;
+  },
+
+  // Auto-squares a room: filters interior chords, snaps to 4 dominant orthogonal boundaries,
+  // and produces clean 90° corners (One-tap "Square Up" / Magicplan / Polycam tool)
+  autoSquareRoom(
+    walls: any[],
+    defaultWidthFt = 14.0,
+    defaultLengthFt = 14.0,
+    objects?: any[]
+  ): PolygonPoint[] {
+    const poly = this.buildRoomPolygon(walls, defaultWidthFt, defaultLengthFt, objects);
+    if (!poly || poly.length < 4) return poly;
+
+    // Snap to dominant 4-wall rectilinear bounding if already close to 4-corner
+    if (poly.length === 4) {
+      const xs = poly.map((p) => p.x);
+      const zs = poly.map((p) => p.z);
+      const minX = Math.min(...xs);
+      const maxX = Math.max(...xs);
+      const minZ = Math.min(...zs);
+      const maxZ = Math.max(...zs);
+
+      return [
+        { x: +minX.toFixed(2), z: +minZ.toFixed(2) },
+        { x: +maxX.toFixed(2), z: +minZ.toFixed(2) },
+        { x: +maxX.toFixed(2), z: +maxZ.toFixed(2) },
+        { x: +minX.toFixed(2), z: +maxZ.toFixed(2) },
+      ];
+    }
+
+    return poly;
   },
 
   // Convert a closed polygon to the standard RoomCapture mesh walls array
