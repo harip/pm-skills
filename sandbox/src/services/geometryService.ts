@@ -101,40 +101,106 @@ export const GeometryService = {
   },
 
   // Builds a continuous, watertight closed boundary polygon from scanned walls
+  // Uses Orthogonal-Manhattan Topological Loop Closure (OM-TLC) solver:
+  // 1. Chaining raw segments sequentially
+  // 2. Length-weighted modulo-90 dominant orientation circular mean
+  // 3. Dual-threshold angular quantization (orthogonal squaring + 45° bay preservation)
+  // 4. Collinear segment fusion (merges fragmented / overlapping scans and dropouts)
+  // 5. Exact line-line corner intersection with determinant singularity guard
   buildRoomPolygon(walls: any[], defaultW = 14, defaultL = 16): PolygonPoint[] {
+    const hw = defaultW / 2;
+    const hl = defaultL / 2;
+    const fallbackRect: PolygonPoint[] = [
+      { x: -hw, z: -hl },
+      { x: hw, z: -hl },
+      { x: hw, z: hl },
+      { x: -hw, z: hl },
+    ];
+
     if (!walls || walls.length < 3) {
-      const hw = defaultW / 2;
-      const hl = defaultL / 2;
-      return [
-        { x: -hw, z: -hl },
-        { x: hw, z: -hl },
-        { x: hw, z: hl },
-        { x: -hw, z: hl },
-      ];
+      return fallbackRect;
     }
 
-    // Extract wall segments
-    const segments = walls.map((w) => ({
-      p1: { x: w.x1 ?? (w.x - 2), z: w.z1 ?? (w.z - 2) },
-      p2: { x: w.x2 ?? (w.x + 2), z: w.z2 ?? (w.z + 2) },
-      used: false,
-    }));
+    // Helper: Normalize angle to [-PI, PI]
+    const normAngle = (a: number): number => {
+      let r = a;
+      while (r > Math.PI) r -= 2.0 * Math.PI;
+      while (r < -Math.PI) r += 2.0 * Math.PI;
+      return r;
+    };
 
-    const poly: PolygonPoint[] = [];
-    const currentSeg = segments[0];
-    currentSeg.used = true;
-    poly.push({ x: currentSeg.p1.x, z: currentSeg.p1.z });
-    let currentPt = currentSeg.p2;
+    interface InternalSeg {
+      p1: PolygonPoint;
+      p2: PolygonPoint;
+      label: string;
+      length: number;
+    }
 
-    for (let step = 1; step < segments.length; step++) {
+    const rawSegments: InternalSeg[] = [];
+    for (let i = 0; i < walls.length; i++) {
+      const w = walls[i];
+      let p1x: number, p1z: number, p2x: number, p2z: number;
+
+      if (w.x1 !== undefined && w.z1 !== undefined && w.x2 !== undefined && w.z2 !== undefined) {
+        p1x = w.x1;
+        p1z = w.z1;
+        p2x = w.x2;
+        p2z = w.z2;
+      } else if (w.lengthFt && w.yawDeg !== undefined && w.x !== undefined && w.z !== undefined) {
+        const halfL = (w.lengthFt || 4) / 2;
+        const rad = ((w.yawDeg || 0) * Math.PI) / 180;
+        const c = Math.cos(rad);
+        const s = Math.sin(rad);
+        p1x = w.x - halfL * c;
+        p1z = w.z - halfL * s;
+        p2x = w.x + halfL * c;
+        p2z = w.z + halfL * s;
+      } else {
+        p1x = w.x1 ?? ((w.x ?? 0) - 2);
+        p1z = w.z1 ?? ((w.z ?? 0) - 2);
+        p2x = w.x2 ?? ((w.x ?? 0) + 2);
+        p2z = w.z2 ?? ((w.z ?? 0) + 2);
+      }
+
+      const len = Math.hypot(p2x - p1x, p2z - p1z);
+      if (len >= 0.2) {
+        rawSegments.push({
+          p1: { x: p1x, z: p1z },
+          p2: { x: p2x, z: p2z },
+          label: w.id || `wall-${i}`,
+          length: len,
+        });
+      }
+    }
+
+    if (rawSegments.length < 3) {
+      return fallbackRect;
+    }
+
+    // Step 1: Cyclic Chaining (Start from longest wall for numerical stability)
+    let startIdx = 0;
+    let maxLen = -Infinity;
+    for (let i = 0; i < rawSegments.length; i++) {
+      if (rawSegments[i].length > maxLen) {
+        maxLen = rawSegments[i].length;
+        startIdx = i;
+      }
+    }
+
+    const chained: InternalSeg[] = [{ ...rawSegments[startIdx] }];
+    const used = new Set<number>([startIdx]);
+    let currPt = rawSegments[startIdx].p2;
+
+    while (chained.length < rawSegments.length) {
       let bestIdx = -1;
       let bestDist = Infinity;
       let flip = false;
 
-      for (let i = 0; i < segments.length; i++) {
-        if (segments[i].used) continue;
-        const d1 = Math.hypot(currentPt.x - segments[i].p1.x, currentPt.z - segments[i].p1.z);
-        const d2 = Math.hypot(currentPt.x - segments[i].p2.x, currentPt.z - segments[i].p2.z);
+      for (let i = 0; i < rawSegments.length; i++) {
+        if (used.has(i)) continue;
+        const s = rawSegments[i];
+        const d1 = Math.hypot(currPt.x - s.p1.x, currPt.z - s.p1.z);
+        const d2 = Math.hypot(currPt.x - s.p2.x, currPt.z - s.p2.z);
         if (d1 < bestDist) {
           bestDist = d1;
           bestIdx = i;
@@ -147,31 +213,226 @@ export const GeometryService = {
         }
       }
 
-      if (bestIdx >= 0) {
-        const seg = segments[bestIdx];
-        seg.used = true;
-        if (flip) {
-          poly.push({ x: (currentPt.x + seg.p2.x) / 2, z: (currentPt.z + seg.p2.z) / 2 });
-          currentPt = seg.p1;
-        } else {
-          poly.push({ x: (currentPt.x + seg.p1.x) / 2, z: (currentPt.z + seg.p1.z) / 2 });
-          currentPt = seg.p2;
-        }
+      if (bestIdx < 0) break;
+      used.add(bestIdx);
+      const chosen = rawSegments[bestIdx];
+      if (flip) {
+        chained.push({
+          p1: { ...chosen.p2 },
+          p2: { ...chosen.p1 },
+          label: chosen.label,
+          length: chosen.length,
+        });
+        currPt = chosen.p1;
+      } else {
+        chained.push({
+          p1: { ...chosen.p1 },
+          p2: { ...chosen.p2 },
+          label: chosen.label,
+          length: chosen.length,
+        });
+        currPt = chosen.p2;
       }
     }
 
-    if (poly.length >= 3) {
-      return poly;
+    if (chained.length < 3) return fallbackRect;
+
+    // Step 2: Compute Dominant Orientation θ_dom via length-weighted modulo-90 circular mean
+    let sumSin = 0;
+    let sumCos = 0;
+    let totalLen = 0;
+    for (const s of chained) {
+      const angle = Math.atan2(s.p2.z - s.p1.z, s.p2.x - s.p1.x);
+      sumSin += s.length * Math.sin(4.0 * angle);
+      sumCos += s.length * Math.cos(4.0 * angle);
+      totalLen += s.length;
+    }
+    const domAngle = totalLen > 1e-4 ? Math.atan2(sumSin, sumCos) / 4.0 : 0.0;
+
+    // Step 3: Dual-Threshold Angular Quantization & Line Fitting
+    const tauOrthoRad = (7.5 * Math.PI) / 180.0;
+    const tauBayRad = (4.0 * Math.PI) / 180.0;
+
+    interface SnappedWallInternal {
+      raw: InternalSeg;
+      snappedAngle: number;
+      classification: 'ORTHOGONAL' | 'BAY_45' | 'CUSTOM';
+      A: number;
+      B: number;
+      C: number;
     }
 
-    const hw = defaultW / 2;
-    const hl = defaultL / 2;
-    return [
-      { x: -hw, z: -hl },
-      { x: hw, z: -hl },
-      { x: hw, z: hl },
-      { x: -hw, z: hl },
-    ];
+    const snapped: SnappedWallInternal[] = [];
+    for (const s of chained) {
+      const rawAngle = Math.atan2(s.p2.z - s.p1.z, s.p2.x - s.p1.x);
+      const relAngle = normAngle(rawAngle - domAngle);
+
+      // Orthogonal check (0, 90, 180, 270)
+      const k = Math.round(relAngle / (Math.PI / 2.0));
+      const targetOrthoRel = k * (Math.PI / 2.0);
+      const distOrtho = Math.abs(normAngle(relAngle - targetOrthoRel));
+
+      // 45-degree bay check (45, 135, 225, 315)
+      const relMinus45 = relAngle - (Math.PI / 4.0);
+      const m = Math.round(relMinus45 / (Math.PI / 2.0));
+      const targetBayRel = m * (Math.PI / 2.0) + (Math.PI / 4.0);
+      const distBay = Math.abs(normAngle(relAngle - targetBayRel));
+
+      let snappedAngle: number;
+      let classification: 'ORTHOGONAL' | 'BAY_45' | 'CUSTOM';
+
+      if (distOrtho <= tauOrthoRad) {
+        snappedAngle = normAngle(targetOrthoRel + domAngle);
+        classification = 'ORTHOGONAL';
+      } else if (distBay <= tauBayRad) {
+        snappedAngle = normAngle(targetBayRel + domAngle);
+        classification = 'BAY_45';
+      } else {
+        snappedAngle = rawAngle;
+        classification = 'CUSTOM';
+      }
+
+      const A = -Math.sin(snappedAngle);
+      const B = Math.cos(snappedAngle);
+      const midX = (s.p1.x + s.p2.x) / 2.0;
+      const midZ = (s.p1.z + s.p2.z) / 2.0;
+      const C = -(A * midX + B * midZ);
+
+      snapped.push({ raw: s, snappedAngle, classification, A, B, C });
+    }
+
+    // Step 4: Collinear Wall Fusion (eliminates broken LiDAR fragments and bent kinks)
+    const gapTolFt = 0.5; // 6 inches
+    const fused: SnappedWallInternal[] = [];
+    let i = 0;
+    const N = snapped.length;
+
+    while (i < N) {
+      let current = snapped[i];
+      if (i + 1 < N) {
+        const nxt = snapped[i + 1];
+        const dot = current.A * nxt.A + current.B * nxt.B;
+        const isParallel = Math.abs(dot) >= 1.0 - 1e-4;
+        const isCoplanar = Math.abs(current.C - (dot > 0 ? nxt.C : -nxt.C)) <= gapTolFt;
+
+        if (isParallel && isCoplanar) {
+          const mergedRaw: InternalSeg = {
+            p1: { ...current.raw.p1 },
+            p2: { ...nxt.raw.p2 },
+            label: `${current.raw.label}+fused`,
+            length: Math.hypot(nxt.raw.p2.x - current.raw.p1.x, nxt.raw.p2.z - current.raw.p1.z),
+          };
+          const midX = (mergedRaw.p1.x + mergedRaw.p2.x) / 2.0;
+          const midZ = (mergedRaw.p1.z + mergedRaw.p2.z) / 2.0;
+          const A = current.A;
+          const B = current.B;
+          const C = -(A * midX + B * midZ);
+          current = {
+            raw: mergedRaw,
+            snappedAngle: current.snappedAngle,
+            classification: current.classification,
+            A,
+            B,
+            C,
+          };
+          i += 1;
+        }
+      }
+      fused.push(current);
+      i += 1;
+    }
+
+    // Cyclic wrap-around fusion
+    if (fused.length > 2) {
+      const first = fused[0];
+      const last = fused[fused.length - 1];
+      const dot = first.A * last.A + first.B * last.B;
+      const isParallel = Math.abs(dot) >= 1.0 - 1e-4;
+      const isCoplanar = Math.abs(first.C - (dot > 0 ? last.C : -last.C)) <= gapTolFt;
+
+      if (isParallel && isCoplanar) {
+        const mergedRaw: InternalSeg = {
+          p1: { ...last.raw.p1 },
+          p2: { ...first.raw.p2 },
+          label: `${last.raw.label}+fused`,
+          length: Math.hypot(first.raw.p2.x - last.raw.p1.x, first.raw.p2.z - last.raw.p1.z),
+        };
+        const midX = (mergedRaw.p1.x + mergedRaw.p2.x) / 2.0;
+        const midZ = (mergedRaw.p1.z + mergedRaw.p2.z) / 2.0;
+        const A = first.A;
+        const B = first.B;
+        const C = -(A * midX + B * midZ);
+        fused[0] = {
+          raw: mergedRaw,
+          snappedAngle: first.snappedAngle,
+          classification: first.classification,
+          A,
+          B,
+          C,
+        };
+        fused.pop();
+      }
+    }
+
+    if (fused.length < 3) return fallbackRect;
+
+    // Step 5: Adjacent Line Intersection with Determinant Singularity Guard
+    const vertices: PolygonPoint[] = [];
+    const fusedCount = fused.length;
+
+    for (let j = 0; j < fusedCount; j++) {
+      const w1 = fused[j];
+      const w2 = fused[(j + 1) % fusedCount];
+
+      const det = w1.A * w2.B - w2.A * w1.B;
+      if (Math.abs(det) >= 1e-4) {
+        const x = (w1.B * w2.C - w2.B * w1.C) / det;
+        const z = (w2.A * w1.C - w1.A * w2.C) / det;
+        vertices.push({
+          x: Math.round(x * 100) / 100,
+          z: Math.round(z * 100) / 100,
+        });
+      } else {
+        const midX = (w1.raw.p2.x + w2.raw.p1.x) / 2.0;
+        const midZ = (w1.raw.p2.z + w2.raw.p1.z) / 2.0;
+        vertices.push({
+          x: Math.round(midX * 100) / 100,
+          z: Math.round(midZ * 100) / 100,
+        });
+      }
+    }
+
+    // Deduplicate consecutive identical vertices (< 0.05 ft)
+    const cleanedVertices: PolygonPoint[] = [];
+    for (let k = 0; k < vertices.length; k++) {
+      const cur = vertices[k];
+      const prev = cleanedVertices[cleanedVertices.length - 1];
+      if (!prev || Math.hypot(cur.x - prev.x, cur.z - prev.z) > 0.05) {
+        cleanedVertices.push(cur);
+      }
+    }
+    if (cleanedVertices.length > 2) {
+      const first = cleanedVertices[0];
+      const last = cleanedVertices[cleanedVertices.length - 1];
+      if (Math.hypot(first.x - last.x, first.z - last.z) <= 0.05) {
+        cleanedVertices.pop();
+      }
+    }
+
+    // Validate polygon area
+    let area = 0;
+    const vLen = cleanedVertices.length;
+    for (let m = 0; m < vLen; m++) {
+      const nextIdx = (m + 1) % vLen;
+      area += cleanedVertices[m].x * cleanedVertices[nextIdx].z - cleanedVertices[nextIdx].x * cleanedVertices[m].z;
+    }
+    area = Math.abs(area) / 2.0;
+
+    if (vLen >= 3 && area >= 5.0) {
+      return cleanedVertices;
+    }
+
+    return fallbackRect;
   },
 
   // Subdivides a wall run into discrete watertight sub-prisms around door and window openings

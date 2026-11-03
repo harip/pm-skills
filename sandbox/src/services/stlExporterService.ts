@@ -1,6 +1,6 @@
 // sandbox/src/services/stlExporterService.ts
 import { Room } from '../types/room';
-import { GeometryService, WallSubPrism } from './geometryService';
+import { GeometryService, WallSubPrism, PolygonPoint } from './geometryService';
 import { StitchEngine, StitchedRoomLayout } from './stitchEngine';
 
 export interface PlacedStlNode {
@@ -37,7 +37,9 @@ export const StlExporterService = {
     }
 
     const walls: any[] = parsedMesh?.walls || [];
-    const polygon = GeometryService.buildRoomPolygon(walls, room.width_ft || 14, room.length_ft || 16);
+    const polygon: PolygonPoint[] = (parsedMesh?.polygon && Array.isArray(parsedMesh.polygon) && parsedMesh.polygon.length >= 3 && parsedMesh.isWatertight)
+      ? parsedMesh.polygon
+      : GeometryService.buildRoomPolygon(walls, room.width_ft || 14, room.length_ft || 16);
     const N = polygon.length;
     const heightM = (room.height_ft || 8.1) * 0.3048;
     const floorSlabM = 0.08; // 8cm solid floor slab
@@ -399,7 +401,9 @@ export const StlExporterService = {
         if (node.room.mesh_json) parsedMesh = JSON.parse(node.room.mesh_json);
       } catch {}
       const walls: any[] = parsedMesh?.walls || [];
-      const polygon = GeometryService.buildRoomPolygon(walls, node.w, node.l);
+      const polygon: PolygonPoint[] = (parsedMesh?.polygon && Array.isArray(parsedMesh.polygon) && parsedMesh.polygon.length >= 3 && parsedMesh.isWatertight)
+        ? parsedMesh.polygon
+        : GeometryService.buildRoomPolygon(walls, node.w, node.l);
       const N = polygon.length;
       const centerPoly = {
         x: polygon.reduce((acc, p) => acc + p.x, 0) / N,
@@ -460,7 +464,9 @@ export const StlExporterService = {
       } catch {}
 
       const walls: any[] = parsedMesh?.walls || [];
-      const polygon = GeometryService.buildRoomPolygon(walls, node.w, node.l);
+      const polygon: PolygonPoint[] = (parsedMesh?.polygon && Array.isArray(parsedMesh.polygon) && parsedMesh.polygon.length >= 3 && parsedMesh.isWatertight)
+        ? parsedMesh.polygon
+        : GeometryService.buildRoomPolygon(walls, node.w, node.l);
       const N = polygon.length;
       if (N < 3) return;
       const openWallIndices: number[] = parsedMesh?.openWallIndices || (walls.length === 3 ? [1] : []);

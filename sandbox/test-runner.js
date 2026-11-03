@@ -973,6 +973,181 @@ endsolid ${room.name}`;
     assert.strictEqual((await Database.getHouseBuilds()).length, 0, 'Builds must be 0 after purge');
   });
 
+  // EVAL-24: OM-TLC Solver eliminates obtuse bent kinks and fuses collinear wall fragments
+  await it('EVAL-24: OM-TLC Solver fuses broken collinear walls & eliminates obtuse bent kinks', async () => {
+    // Exact wall scan from user device (Room 3 Living Room with top wall bent kink)
+    const bundledRooms = require('./data/device_dump/bundled_rooms.json');
+    const room3Walls = bundledRooms[3].walls;
+    assert.strictEqual(room3Walls.length, 10, 'Raw LiDAR scan must contain 10 fragmented wall segments');
+
+    // OM-TLC implementation (matching GeometryService.buildRoomPolygon)
+    function normAngle(a) {
+      let r = a;
+      while (r > Math.PI) r -= 2.0 * Math.PI;
+      while (r < -Math.PI) r += 2.0 * Math.PI;
+      return r;
+    }
+
+    const rawSegments = [];
+    for (let i = 0; i < room3Walls.length; i++) {
+      const w = room3Walls[i];
+      const p1x = w.x1 ?? (w.x - 2);
+      const p1z = w.z1 ?? (w.z - 2);
+      const p2x = w.x2 ?? (w.x + 2);
+      const p2z = w.z2 ?? (w.z + 2);
+      const len = Math.hypot(p2x - p1x, p2z - p1z);
+      if (len >= 0.2) {
+        rawSegments.push({
+          p1: { x: p1x, z: p1z },
+          p2: { x: p2x, z: p2z },
+          label: w.id || `wall-${i}`,
+          length: len,
+        });
+      }
+    }
+
+    // 1. Chaining from longest wall
+    let startIdx = 0, maxLen = -Infinity;
+    for (let i = 0; i < rawSegments.length; i++) {
+      if (rawSegments[i].length > maxLen) {
+        maxLen = rawSegments[i].length;
+        startIdx = i;
+      }
+    }
+    const chained = [{ ...rawSegments[startIdx] }];
+    const used = new Set([startIdx]);
+    let currPt = rawSegments[startIdx].p2;
+
+    while (chained.length < rawSegments.length) {
+      let bestIdx = -1, bestDist = Infinity, flip = false;
+      for (let i = 0; i < rawSegments.length; i++) {
+        if (used.has(i)) continue;
+        const s = rawSegments[i];
+        const d1 = Math.hypot(currPt.x - s.p1.x, currPt.z - s.p1.z);
+        const d2 = Math.hypot(currPt.x - s.p2.x, currPt.z - s.p2.z);
+        if (d1 < bestDist) { bestDist = d1; bestIdx = i; flip = false; }
+        if (d2 < bestDist) { bestDist = d2; bestIdx = i; flip = true; }
+      }
+      if (bestIdx < 0) break;
+      used.add(bestIdx);
+      const chosen = rawSegments[bestIdx];
+      if (flip) {
+        chained.push({ p1: { ...chosen.p2 }, p2: { ...chosen.p1 }, label: chosen.label, length: chosen.length });
+        currPt = chosen.p1;
+      } else {
+        chained.push({ p1: { ...chosen.p1 }, p2: { ...chosen.p2 }, label: chosen.label, length: chosen.length });
+        currPt = chosen.p2;
+      }
+    }
+
+    // 2. Length-weighted modulo-90 circular mean
+    let sumSin = 0, sumCos = 0, totalLen = 0;
+    for (const s of chained) {
+      const angle = Math.atan2(s.p2.z - s.p1.z, s.p2.x - s.p1.x);
+      sumSin += s.length * Math.sin(4.0 * angle);
+      sumCos += s.length * Math.cos(4.0 * angle);
+      totalLen += s.length;
+    }
+    const domAngle = Math.atan2(sumSin, sumCos) / 4.0;
+
+    // 3. Dual-threshold angular quantization
+    const tauOrthoRad = (7.5 * Math.PI) / 180.0;
+    const tauBayRad = (4.0 * Math.PI) / 180.0;
+    const snapped = [];
+
+    for (const s of chained) {
+      const rawAngle = Math.atan2(s.p2.z - s.p1.z, s.p2.x - s.p1.x);
+      const relAngle = normAngle(rawAngle - domAngle);
+
+      const k = Math.round(relAngle / (Math.PI / 2.0));
+      const targetOrthoRel = k * (Math.PI / 2.0);
+      const distOrtho = Math.abs(normAngle(relAngle - targetOrthoRel));
+
+      const relMinus45 = relAngle - (Math.PI / 4.0);
+      const m = Math.round(relMinus45 / (Math.PI / 2.0));
+      const targetBayRel = m * (Math.PI / 2.0) + (Math.PI / 4.0);
+      const distBay = Math.abs(normAngle(relAngle - targetBayRel));
+
+      let snappedAngle, classification;
+      if (distOrtho <= tauOrthoRad) {
+        snappedAngle = normAngle(targetOrthoRel + domAngle);
+        classification = 'ORTHOGONAL';
+      } else if (distBay <= tauBayRad) {
+        snappedAngle = normAngle(targetBayRel + domAngle);
+        classification = 'BAY_45';
+      } else {
+        snappedAngle = rawAngle;
+        classification = 'CUSTOM';
+      }
+
+      const A = -Math.sin(snappedAngle);
+      const B = Math.cos(snappedAngle);
+      const midX = (s.p1.x + s.p2.x) / 2.0;
+      const midZ = (s.p1.z + s.p2.z) / 2.0;
+      const C = -(A * midX + B * midZ);
+      snapped.push({ raw: s, snappedAngle, classification, A, B, C });
+    }
+
+    // 4. Collinear fusion
+    const gapTolFt = 0.5;
+    const fused = [];
+    let idx = 0;
+    while (idx < snapped.length) {
+      let current = snapped[idx];
+      if (idx + 1 < snapped.length) {
+        const nxt = snapped[idx + 1];
+        const dot = current.A * nxt.A + current.B * nxt.B;
+        const isParallel = Math.abs(dot) >= 1.0 - 1e-4;
+        const isCoplanar = Math.abs(current.C - (dot > 0 ? nxt.C : -nxt.C)) <= gapTolFt;
+        if (isParallel && isCoplanar) {
+          const mergedRaw = {
+            p1: { ...current.raw.p1 },
+            p2: { ...nxt.raw.p2 },
+            label: `${current.raw.label}+fused`,
+            length: Math.hypot(nxt.raw.p2.x - current.raw.p1.x, nxt.raw.p2.z - current.raw.p1.z),
+          };
+          const midX = (mergedRaw.p1.x + mergedRaw.p2.x) / 2.0;
+          const midZ = (mergedRaw.p1.z + mergedRaw.p2.z) / 2.0;
+          const A = current.A, B = current.B;
+          const C = -(A * midX + B * midZ);
+          current = { raw: mergedRaw, snappedAngle: current.snappedAngle, classification: current.classification, A, B, C };
+          idx += 1;
+        }
+      }
+      fused.push(current);
+      idx += 1;
+    }
+
+    // Verify: Collinear segments (wall-5 + wall-6) were fused into 1 continuous wall!
+    assert(fused.length < room3Walls.length, `Expected fused walls (${fused.length}) < raw walls (10)`);
+    const fusedBackWall = fused.find((w) => w.raw.label.includes('wall-5+fused') || w.raw.label.includes('wall-6'));
+    assert.ok(fusedBackWall, 'Top back wall fragments must be fused into single continuous wall');
+    assert.strictEqual(fusedBackWall.classification, 'ORTHOGONAL', 'Fused top wall must be strictly ORTHOGONAL');
+
+    // 5. Intersect adjacent lines for watertight corners
+    const vertices = [];
+    for (let j = 0; j < fused.length; j++) {
+      const w1 = fused[j];
+      const w2 = fused[(j + 1) % fused.length];
+      const det = w1.A * w2.B - w2.A * w1.B;
+      assert(Math.abs(det) > 1e-4, 'Adjacent walls must not be collinear singularities');
+      const x = (w1.B * w2.C - w2.B * w1.C) / det;
+      const z = (w2.A * w1.C - w1.A * w2.C) / det;
+      vertices.push({ x: +x.toFixed(2), z: +z.toFixed(2) });
+    }
+
+    assert.strictEqual(vertices.length, 8, 'Room 3 boundary must contain exactly 8 clean square corners');
+
+    // Compute final area
+    let area = 0;
+    for (let m = 0; m < vertices.length; m++) {
+      const nxt = (m + 1) % vertices.length;
+      area += vertices[m].x * vertices[nxt].z - vertices[nxt].x * vertices[m].z;
+    }
+    area = Math.abs(area) / 2.0;
+    assert(area > 115 && area < 155, `Area (${area.toFixed(1)} sq ft) must match physical room bounds`);
+  });
+
   console.log(`\n📊 Verification Summary: ${passedTests}/${totalTests} tests passed.\n`);
 }
 

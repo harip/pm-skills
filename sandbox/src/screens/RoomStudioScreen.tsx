@@ -135,10 +135,14 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
   const currentFloor = room.floor_level || parsedMesh?.floorLevel || 'Ground Floor';
 
   // Build the continuous closed boundary polygon from LiDAR wall segments
-  const polygon: PolygonPoint[] = activePolygon || GeometryService.buildRoomPolygon(
-    realWalls,
-    room.width_ft || 14,
-    room.length_ft || 16
+  const polygon: PolygonPoint[] = activePolygon || (
+    parsedMesh?.polygon && Array.isArray(parsedMesh.polygon) && parsedMesh.polygon.length >= 3 && parsedMesh.isWatertight
+      ? parsedMesh.polygon
+      : GeometryService.buildRoomPolygon(
+          realWalls,
+          room.width_ft || 14,
+          room.length_ft || 16
+        )
   );
   const N = polygon.length;
 

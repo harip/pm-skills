@@ -21,7 +21,7 @@ import {
 } from 'react-native';
 import Svg, { Polygon, Line, Rect, Circle, Text as SvgText, G, Path } from 'react-native-svg';
 import { Room, HouseBuild, PlacedRoomNodeData } from '../types/room';
-import { GeometryService, ProjectedPoint } from '../services/geometryService';
+import { GeometryService, ProjectedPoint, PolygonPoint } from '../services/geometryService';
 import { StlExporterService } from '../services/stlExporterService';
 import { Database } from '../db/database';
 
@@ -105,7 +105,9 @@ const BuildBlueprintThumbnail: React.FC<{
     } catch {}
 
     const realWalls = parsedMesh?.walls || [];
-    const poly = GeometryService.buildRoomPolygon(realWalls, room.width_ft || 16, room.length_ft || 14);
+    const poly: PolygonPoint[] = (parsedMesh?.polygon && Array.isArray(parsedMesh.polygon) && parsedMesh.polygon.length >= 3 && parsedMesh.isWatertight)
+      ? parsedMesh.polygon
+      : GeometryService.buildRoomPolygon(realWalls, room.width_ft || 16, room.length_ft || 14);
     const N = poly.length;
     const centerPoly = {
       x: poly.reduce((acc, p) => acc + p.x, 0) / N,
@@ -600,7 +602,9 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
     } catch {}
 
     const realWalls: any[] = parsedMesh?.walls || [];
-    const polygon = GeometryService.buildRoomPolygon(realWalls, node.w, node.l);
+    const polygon: PolygonPoint[] = (parsedMesh?.polygon && Array.isArray(parsedMesh.polygon) && parsedMesh.polygon.length >= 3 && parsedMesh.isWatertight)
+      ? parsedMesh.polygon
+      : GeometryService.buildRoomPolygon(realWalls, node.w, node.l);
     const N = polygon.length;
     if (N === 0) {
       const rw = node.rotation % 180 === 0 ? node.w : node.l;
@@ -1214,7 +1218,9 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
       const realClosets: any[] = parsedMesh?.closets || [];
       const realObjects: any[] = parsedMesh?.objects || [];
 
-      const polygon = GeometryService.buildRoomPolygon(realWalls, node.w, node.l);
+      const polygon: PolygonPoint[] = (parsedMesh?.polygon && Array.isArray(parsedMesh.polygon) && parsedMesh.polygon.length >= 3 && parsedMesh.isWatertight)
+        ? parsedMesh.polygon
+        : GeometryService.buildRoomPolygon(realWalls, node.w, node.l);
       const N = polygon.length;
 
       const centerPoly = {
@@ -1766,7 +1772,9 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
                     const realClosets: any[] = parsedMesh?.closets || [];
                     const realObjects: any[] = parsedMesh?.objects || [];
 
-                    const polygon = GeometryService.buildRoomPolygon(realWalls, n.w, n.l);
+                    const polygon: PolygonPoint[] = (parsedMesh?.polygon && Array.isArray(parsedMesh.polygon) && parsedMesh.polygon.length >= 3 && parsedMesh.isWatertight)
+                      ? parsedMesh.polygon
+                      : GeometryService.buildRoomPolygon(realWalls, n.w, n.l);
                     const N = polygon.length;
                     const centerPoly = {
                       x: polygon.reduce((acc, p) => acc + p.x, 0) / N,

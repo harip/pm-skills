@@ -13,7 +13,7 @@ import {
 import Svg, { Polygon, Line } from 'react-native-svg';
 import { Room } from '../types/room';
 import { Database } from '../db/database';
-import { GeometryService } from '../services/geometryService';
+import { GeometryService, PolygonPoint } from '../services/geometryService';
 
 const RoomBlueprintThumbnail: React.FC<{ room: Room; width?: number; height?: number }> = ({
   room,
@@ -28,7 +28,9 @@ const RoomBlueprintThumbnail: React.FC<{ room: Room; width?: number; height?: nu
   const realWalls: any[] = parsedMesh?.walls || [];
   const realDoors: any[] = parsedMesh?.doors || [];
   const realWindows: any[] = parsedMesh?.windows || [];
-  const poly = GeometryService.buildRoomPolygon(realWalls, room.width_ft || 14, room.length_ft || 16);
+  const poly: PolygonPoint[] = (parsedMesh?.polygon && Array.isArray(parsedMesh.polygon) && parsedMesh.polygon.length >= 3 && parsedMesh.isWatertight)
+    ? parsedMesh.polygon
+    : GeometryService.buildRoomPolygon(realWalls, room.width_ft || 14, room.length_ft || 16);
 
   let minX = Infinity;
   let maxX = -Infinity;
