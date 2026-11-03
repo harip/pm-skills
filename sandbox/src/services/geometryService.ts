@@ -1389,57 +1389,21 @@ export const GeometryService = {
       // Interior chord passes near room centroid (rRatio < 0.50) AND spans across center (cosAngle < -0.15)
       const isCentroidSpanningChord = (rRatio < 0.50 && cosAngle < -0.15);
 
-      // Check if wall slices through detected interior furniture (bed, table, desk, storage) using full Liang-Barsky
-      let cutsThroughFurniture = false;
-      if (Array.isArray(objects) && objects.length > 0) {
+      // Check if wall slices through free-standing interior furniture (bed, table, sofa in center of room)
+      let cutsThroughInteriorFurniture = false;
+      if (rRatio < 0.60 && Array.isArray(objects) && objects.length > 0) {
         for (const obj of objects) {
-          if (this.segmentIntersectsOBB(s.p1, s.p2, obj)) {
-            cutsThroughFurniture = true;
-            break;
-          }
-        }
-      }
-
-      // Check for multi-pass interior corner-cutting chord (e.g. top wall diagonal truss):
-      // If another segment exists in the same quadrant that is significantly further from the centroid (> 1.2 ft)
-      // and spans across the same coordinate interval, then this segment is an internal artifact
-      let isInteriorShortcut = false;
-      for (let j = 0; j < segments.length; j++) {
-        if (j === idx) continue;
-        const other = segments[j];
-        const otherR = radii[j];
-
-        // Is other segment further out from centroid along the exterior perimeter?
-        if (otherR > r + 1.2) {
-          const sMinX = Math.min(s.p1.x, s.p2.x);
-          const sMaxX = Math.max(s.p1.x, s.p2.x);
-          const sMinZ = Math.min(s.p1.z, s.p2.z);
-          const sMaxZ = Math.max(s.p1.z, s.p2.z);
-
-          const oMinX = Math.min(other.p1.x, other.p2.x);
-          const oMaxX = Math.max(other.p1.x, other.p2.x);
-          const oMinZ = Math.min(other.p1.z, other.p2.z);
-          const oMaxZ = Math.max(other.p1.z, other.p2.z);
-
-          const xOverlap = Math.max(0, Math.min(sMaxX, oMaxX) - Math.max(sMinX, oMinX));
-          const zOverlap = Math.max(0, Math.min(sMaxZ, oMaxZ) - Math.max(sMinZ, oMinZ));
-          const sSpanX = Math.max(0.1, sMaxX - sMinX);
-          const sSpanZ = Math.max(0.1, sMaxZ - sMinZ);
-
-          // If s overlaps heavily in X or Z with an outer perimeter wall, and cuts inward
-          if ((xOverlap / sSpanX > 0.6) || (zOverlap / sSpanZ > 0.6)) {
-            // Check if s connects inward (towards centroid)
-            const dStart = Math.hypot(s.p1.x - cx, s.p1.z - cz);
-            const dEnd = Math.hypot(s.p2.x - cx, s.p2.z - cz);
-            if (Math.min(dStart, dEnd) < otherR - 1.5) {
-              isInteriorShortcut = true;
+          const cat = (obj.category || '').toLowerCase();
+          if (cat.includes('bed') || cat.includes('table') || cat.includes('sofa')) {
+            if (this.segmentIntersectsOBB(s.p1, s.p2, obj)) {
+              cutsThroughInteriorFurniture = true;
               break;
             }
           }
         }
       }
 
-      return !(isCentroidSpanningChord || cutsThroughFurniture || isInteriorShortcut);
+      return !(isCentroidSpanningChord || cutsThroughInteriorFurniture);
     });
 
     return filtered.length >= 3 ? filtered : segments;
@@ -1507,7 +1471,7 @@ export const GeometryService = {
   },
 
   // Auto-squares a room: filters interior chords, snaps to 4 dominant orthogonal boundaries,
-  // and produces clean 90° corners (One-tap "Square Up" / Magicplan / Polycam tool)
+  // and produces clean 90° corners along the room's true dominant orientation (One-tap "Square Up" / Magicplan / Polycam tool)
   autoSquareRoom(
     walls: any[],
     defaultWidthFt = 14.0,
@@ -1517,19 +1481,60 @@ export const GeometryService = {
     const poly = this.buildRoomPolygon(walls, defaultWidthFt, defaultLengthFt, objects);
     if (!poly || poly.length < 3) return poly;
 
-    const xs = poly.map((p) => p.x);
-    const zs = poly.map((p) => p.z);
-    const minX = Math.min(...xs);
-    const maxX = Math.max(...xs);
-    const minZ = Math.min(...zs);
-    const maxZ = Math.max(...zs);
+    // 1. Compute dominant room orientation from wall angles or polygon edges
+    let sumSin = 0;
+    let sumCos = 0;
+    let totalLen = 0;
+
+    if (Array.isArray(walls) && walls.length >= 3) {
+      for (const w of walls) {
+        const rad = ((w.yawDeg || 0) * Math.PI) / 180;
+        const len = w.lengthFt || 1.0;
+        sumSin += len * Math.sin(4.0 * rad);
+        sumCos += len * Math.cos(4.0 * rad);
+        totalLen += len;
+      }
+    } else {
+      const n = poly.length;
+      for (let i = 0; i < n; i++) {
+        const p1 = poly[i];
+        const p2 = poly[(i + 1) % n];
+        const rad = Math.atan2(p2.z - p1.z, p2.x - p1.x);
+        const len = Math.hypot(p2.x - p1.x, p2.z - p1.z);
+        sumSin += len * Math.sin(4.0 * rad);
+        sumCos += len * Math.cos(4.0 * rad);
+        totalLen += len;
+      }
+    }
+
+    const domAngle = totalLen > 0.01 ? Math.atan2(sumSin, sumCos) / 4.0 : 0.0;
+    const cosD = Math.cos(-domAngle);
+    const sinD = Math.sin(-domAngle);
+
+    // 2. Project points onto canonical dominant Manhattan frame
+    const rot = poly.map((p) => ({
+      u: p.x * cosD - p.z * sinD,
+      v: p.x * sinD + p.z * cosD,
+    }));
+
+    const minU = Math.min(...rot.map((p) => p.u));
+    const maxU = Math.max(...rot.map((p) => p.u));
+    const minV = Math.min(...rot.map((p) => p.v));
+    const maxV = Math.max(...rot.map((p) => p.v));
+
+    // 3. Rotate 4 orthogonal corners back to physical world coordinates
+    const cosB = Math.cos(domAngle);
+    const sinB = Math.sin(domAngle);
 
     return [
-      { x: +minX.toFixed(2), z: +minZ.toFixed(2) },
-      { x: +maxX.toFixed(2), z: +minZ.toFixed(2) },
-      { x: +maxX.toFixed(2), z: +maxZ.toFixed(2) },
-      { x: +minX.toFixed(2), z: +maxZ.toFixed(2) },
-    ];
+      { u: minU, v: minV },
+      { u: maxU, v: minV },
+      { u: maxU, v: maxV },
+      { u: minU, v: maxV },
+    ].map((p) => ({
+      x: +(p.u * cosB - p.v * sinB).toFixed(2),
+      z: +(p.u * sinB + p.v * cosB).toFixed(2),
+    }));
   },
 
   // Convert a closed polygon to the standard RoomCapture mesh walls array

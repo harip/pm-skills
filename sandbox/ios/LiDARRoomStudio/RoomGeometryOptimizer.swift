@@ -397,40 +397,7 @@ public final class RoomGeometryOptimizer {
             let cosAngle = (len1 * len2 > 1e-4) ? (dot / (len1 * len2)) : 1.0
 
             let isCentroidSpanningChord = (rRatio < 0.50 && cosAngle < -0.15)
-
-            // Multi-pass interior corner/wall shortcut check (e.g. top wall diagonal truss)
-            var isInteriorShortcut = false
-            for (j, other) in segments.enumerated() {
-                if j == idx { continue }
-                let otherR = radii[j]
-                if otherR > r + 1.2 {
-                    let sMinX = min(s.p1.x, s.p2.x)
-                    let sMaxX = max(s.p1.x, s.p2.x)
-                    let sMinZ = min(s.p1.z, s.p2.z)
-                    let sMaxZ = max(s.p1.z, s.p2.z)
-
-                    let oMinX = min(other.p1.x, other.p2.x)
-                    let oMaxX = max(other.p1.x, other.p2.x)
-                    let oMinZ = min(other.p1.z, other.p2.z)
-                    let oMaxZ = max(other.p1.z, other.p2.z)
-
-                    let xOverlap = max(0.0, min(sMaxX, oMaxX) - max(sMinX, oMinX))
-                    let zOverlap = max(0.0, min(sMaxZ, oMaxZ) - max(sMinZ, oMinZ))
-                    let sSpanX = max(0.1, sMaxX - sMinX)
-                    let sSpanZ = max(0.1, sMaxZ - sMinZ)
-
-                    if (xOverlap / sSpanX > 0.6) || (zOverlap / sSpanZ > 0.6) {
-                        let dStart = hypot(s.p1.x - centroidX, s.p1.z - centroidZ)
-                        let dEnd = hypot(s.p2.x - centroidX, s.p2.z - centroidZ)
-                        if min(dStart, dEnd) < otherR - 1.5 {
-                            isInteriorShortcut = true
-                            break
-                        }
-                    }
-                }
-            }
-
-            if !isCentroidSpanningChord && !isInteriorShortcut {
+            if !isCentroidSpanningChord {
                 filtered.append(s)
             }
         }
