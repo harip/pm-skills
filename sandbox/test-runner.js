@@ -923,9 +923,13 @@ endsolid ${room.name}`;
     assert.strictEqual(afterPurgeStats.roomCount, 0, 'Stats roomCount must be 0');
     assert.strictEqual(afterPurgeStats.totalAreaSqFt, 0, 'Stats totalAreaSqFt must be 0');
 
-    // 4. Idempotency test (purging when already empty must succeed without error)
+    // 4. Idempotency & App-Restart Persistence Test (purging when already empty must succeed without error and survive restart)
     await Database.purgeAllData();
     assert.strictEqual((await Database.getRooms()).length, 0, 'Second purge must succeed idempotently');
+
+    // 5. Simulate cold app restart: ensureLoaded() must return 0 rooms
+    let simulatedRestartRooms = await Database.getRooms();
+    assert.strictEqual(simulatedRestartRooms.length, 0, 'App restart after purge must remain at 0 rooms (zero zombie rooms)');
   });
 
   // EVAL-23: Whole House Build Persistence & CRUD Life Cycle

@@ -148,20 +148,97 @@ class RoomPlanModule: NSObject {
     @objc
     func getPersistedRooms(_ resolve: @escaping RCTPromiseResolveBlock, rejecter: @escaping RCTPromiseRejectBlock) {
         let docDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-        guard let files = try? FileManager.default.contentsOfDirectory(at: docDir, includingPropertiesForKeys: nil) else {
+        let manifestURL = docDir.appendingPathComponent("purge_manifest.json")
+        var purgedDate: Date? = nil
+        if let data = try? Data(contentsOf: manifestURL),
+           let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let isPurged = obj["isPurged"] as? Bool, isPurged,
+           let purgedAtStr = obj["purgedAt"] as? String {
+            purgedDate = ISO8601DateFormatter().date(from: purgedAtStr)
+        }
+        
+        guard let files = try? FileManager.default.contentsOfDirectory(at: docDir, includingPropertiesForKeys: [.creationDateKey]) else {
             resolve([])
             return
         }
         
         var rooms: [[String: Any]] = []
-        let jsonFiles = files.filter { $0.pathExtension == "json" && $0.lastPathComponent.hasPrefix("scanned_room_") }
+        let jsonFiles = files.filter { 
+            $0.pathExtension == "json" && 
+            $0.lastPathComponent.hasPrefix("scanned_room_") && 
+            $0.lastPathComponent != "purge_manifest.json" 
+        }
+        
         for jsonURL in jsonFiles.sorted(by: { $0.lastPathComponent > $1.lastPathComponent }) {
+            if let pDate = purgedDate {
+                let attrs = try? jsonURL.resourceValues(forKeys: [.creationDateKey])
+                let createdDate = attrs?.creationDate ?? Date.distantPast
+                if createdDate <= pDate {
+                    // Permanently clean up files from before the purge
+                    try? FileManager.default.removeItem(at: jsonURL)
+                    continue
+                }
+            }
             if let data = try? Data(contentsOf: jsonURL),
                let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                if let isDel = obj["isDeleted"] as? Bool, isDel {
+                    continue
+                }
                 rooms.append(obj)
             }
         }
         resolve(rooms)
+    }
+
+    @objc
+    func deleteRoomFile(_ roomId: String, resolve: @escaping RCTPromiseResolveBlock, rejecter: @escaping RCTPromiseRejectBlock) {
+        let docDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        guard let files = try? FileManager.default.contentsOfDirectory(at: docDir, includingPropertiesForKeys: nil) else {
+            resolve(true)
+            return
+        }
+
+        let cleanId = roomId
+            .replacingOccurrences(of: "room-", with: "")
+            .replacingOccurrences(of: "scanned_room_", with: "")
+            .replacingOccurrences(of: ".json", with: "")
+            .replacingOccurrences(of: ".usdz", with: "")
+            .replacingOccurrences(of: ".stl", with: "")
+
+        for fileURL in files {
+            let name = fileURL.lastPathComponent
+            if (!cleanId.isEmpty && name.contains(cleanId)) || (!roomId.isEmpty && name.contains(roomId)) {
+                try? FileManager.default.removeItem(at: fileURL)
+            }
+        }
+        resolve(true)
+    }
+
+    @objc
+    func purgeAllRooms(_ resolve: @escaping RCTPromiseResolveBlock, rejecter: @escaping RCTPromiseRejectBlock) {
+        let docDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        guard let files = try? FileManager.default.contentsOfDirectory(at: docDir, includingPropertiesForKeys: nil) else {
+            resolve(true)
+            return
+        }
+
+        for fileURL in files {
+            let ext = fileURL.pathExtension.lowercased()
+            let name = fileURL.lastPathComponent
+            if ext == "json" || ext == "usdz" || ext == "stl" {
+                try? FileManager.default.removeItem(at: fileURL)
+            }
+        }
+
+        // Write persistent purge manifest
+        let manifestURL = docDir.appendingPathComponent("purge_manifest.json")
+        let manifestData = try? JSONSerialization.data(withJSONObject: [
+            "purgedAt": ISO8601DateFormatter().string(from: Date()),
+            "isPurged": true
+        ], options: .prettyPrinted)
+        try? manifestData?.write(to: manifestURL)
+
+        resolve(true)
     }
     
     @objc

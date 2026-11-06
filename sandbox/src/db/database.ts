@@ -15,6 +15,13 @@ async function ensureLoaded(): Promise<void> {
   if (loadPromise) return loadPromise;
 
   loadPromise = (async () => {
+    let isPurged = false;
+    if (typeof localStorage !== 'undefined') {
+      try {
+        isPurged = localStorage.getItem('roomos_is_purged') === 'true';
+      } catch {}
+    }
+
     if (Platform.OS === 'ios' && NativeModules?.RoomPlanModule?.getPersistedRooms) {
       try {
         const persisted = await NativeModules.RoomPlanModule.getPersistedRooms();
@@ -44,8 +51,8 @@ async function ensureLoaded(): Promise<void> {
       } catch (err) {
         console.warn('Failed to load persisted rooms from disk:', err);
       }
-    } else {
-      // Local Fast Loop: Hydrate from real device dump for Web / Node / Desktop development
+    } else if (!isPurged) {
+      // Local Fast Loop: Hydrate from real device dump for Web / Node / Desktop development (only if not factory purged!)
       try {
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const bundled = require('../../data/device_dump/bundled_rooms.json');
@@ -116,6 +123,12 @@ export const Database = {
   },
 
   async saveRoom(room: Room): Promise<void> {
+    if (typeof localStorage !== 'undefined') {
+      try {
+        localStorage.removeItem('roomos_is_purged');
+      } catch {}
+    }
+
     const idx = inMemoryRooms.findIndex((r) => r.id === room.id);
     if (idx >= 0) {
       inMemoryRooms[idx] = room;
@@ -149,48 +162,43 @@ export const Database = {
       proj.room_ids = proj.room_ids.filter((rId) => rId !== id);
     });
 
-    if (Platform.OS === 'ios' && NativeModules?.RoomPlanModule?.saveRoomJson) {
+    if (Platform.OS === 'ios' && NativeModules?.RoomPlanModule) {
       try {
+        if (NativeModules.RoomPlanModule.deleteRoomFile) {
+          await NativeModules.RoomPlanModule.deleteRoomFile(id);
+        }
         const filename = id.startsWith('scanned_room_') ? id : `scanned_room_${id}`;
-        await NativeModules.RoomPlanModule.saveRoomJson(
-          filename,
-          JSON.stringify({ id, isDeleted: true, deletedAt: new Date().toISOString() })
-        );
+        if (NativeModules.RoomPlanModule.saveRoomJson) {
+          await NativeModules.RoomPlanModule.saveRoomJson(
+            filename,
+            JSON.stringify({ id, isDeleted: true, deletedAt: new Date().toISOString() })
+          );
+        }
       } catch (e) {
-        console.warn('Failed marking room deleted on disk:', e);
+        console.warn('Failed deleting room file on disk:', e);
       }
     }
   },
 
   async purgeAllData(): Promise<void> {
-    const ids = inMemoryRooms.map((r) => r.id);
     inMemoryRooms = [];
     inMemoryFurniture = [];
     inMemoryProjects = [];
     inMemoryBuilds = [];
     hasLoadedFromDisk = true; // Lock cache so deleted rooms are never reloaded
 
-    if (Platform.OS === 'web' && typeof localStorage !== 'undefined') {
+    if (typeof localStorage !== 'undefined') {
       try {
+        localStorage.setItem('roomos_is_purged', 'true');
         localStorage.removeItem('roomos_house_builds');
       } catch {}
     }
 
-    if (Platform.OS === 'ios' && NativeModules?.RoomPlanModule?.saveRoomJson) {
+    if (Platform.OS === 'ios' && NativeModules?.RoomPlanModule?.purgeAllRooms) {
       try {
-        for (const id of ids) {
-          const filename = id.startsWith('scanned_room_') ? id : `scanned_room_${id}`;
-          await NativeModules.RoomPlanModule.saveRoomJson(
-            filename,
-            JSON.stringify({ id, isDeleted: true, deletedAt: new Date().toISOString() })
-          );
-        }
-        await NativeModules.RoomPlanModule.saveRoomJson(
-          'purge_manifest',
-          JSON.stringify({ purgedAt: new Date().toISOString(), status: 'clean_factory_state' })
-        );
+        await NativeModules.RoomPlanModule.purgeAllRooms();
       } catch (e) {
-        console.warn('Failed recording purge manifest on disk:', e);
+        console.warn('Failed executing native purgeAllRooms:', e);
       }
     }
   },
