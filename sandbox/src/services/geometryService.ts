@@ -179,6 +179,10 @@ export const GeometryService = {
       return fallbackRect;
     }
 
+    // Filter out minor aperture jambs and door stubs (< 2.2 ft / ~0.67m) when sufficient primary boundary walls exist
+    const longSegments = rawSegments.filter((s) => s.length >= 2.2);
+    const candidateSegments = longSegments.length >= 3 ? longSegments : rawSegments;
+
     // Step 0: Global Duplicate Wall De-Duplication (Multi-pass scan overlap resolution)
     // When an operator scans the same physical wall from two different positions/passes,
     // RoomPlan generates two overlapping/parallel segments. Merge them into one!
@@ -186,21 +190,21 @@ export const GeometryService = {
     const mergedIndices = new Set<number>();
 
     // Approximate centroid of raw walls
-    const rawCentroidX = rawSegments.reduce((sum, s) => sum + (s.p1.x + s.p2.x) / 2, 0) / (rawSegments.length || 1);
-    const rawCentroidZ = rawSegments.reduce((sum, s) => sum + (s.p1.z + s.p2.z) / 2, 0) / (rawSegments.length || 1);
+    const rawCentroidX = candidateSegments.reduce((sum, s) => sum + (s.p1.x + s.p2.x) / 2, 0) / (candidateSegments.length || 1);
+    const rawCentroidZ = candidateSegments.reduce((sum, s) => sum + (s.p1.z + s.p2.z) / 2, 0) / (candidateSegments.length || 1);
 
-    for (let i = 0; i < rawSegments.length; i++) {
+    for (let i = 0; i < candidateSegments.length; i++) {
       if (mergedIndices.has(i)) continue;
-      let s1 = { ...rawSegments[i] };
+      let s1 = { ...candidateSegments[i] };
       let len1 = s1.length || Math.hypot(s1.p2.x - s1.p1.x, s1.p2.z - s1.p1.z) || 1;
       let ux = (s1.p2.x - s1.p1.x) / len1;
       let uz = (s1.p2.z - s1.p1.z) / len1;
       let nx = -uz;
       let nz = ux;
 
-      for (let j = i + 1; j < rawSegments.length; j++) {
+      for (let j = i + 1; j < candidateSegments.length; j++) {
         if (mergedIndices.has(j)) continue;
-        const s2 = rawSegments[j];
+        const s2 = candidateSegments[j];
         const len2 = s2.length || Math.hypot(s2.p2.x - s2.p1.x, s2.p2.z - s2.p1.z) || 1;
         const ux2 = (s2.p2.x - s2.p1.x) / len2;
         const uz2 = (s2.p2.z - s2.p1.z) / len2;
@@ -650,8 +654,25 @@ export const GeometryService = {
       }
     }
 
+    // Simplify collinear points along straight wall runs
+    const simplifiedVertices: PolygonPoint[] = [];
+    const nClean = cleanedVertices.length;
+    for (let k = 0; k < nClean; k++) {
+      const prev = cleanedVertices[(k - 1 + nClean) % nClean];
+      const cur = cleanedVertices[k];
+      const next = cleanedVertices[(k + 1) % nClean];
+      const cross = (cur.x - prev.x) * (next.z - cur.z) - (cur.z - prev.z) * (next.x - cur.x);
+      const l1 = Math.hypot(cur.x - prev.x, cur.z - prev.z);
+      const l2 = Math.hypot(next.x - cur.x, next.z - cur.z);
+      const sinTheta = (l1 * l2 > 1e-4) ? Math.abs(cross) / (l1 * l2) : 0;
+      if (sinTheta > 0.087) { // > 5 degrees angle bend
+        simplifiedVertices.push(cur);
+      }
+    }
+    const finalClean = simplifiedVertices.length >= 3 ? simplifiedVertices : cleanedVertices;
+
     // If self-intersecting bowtie or truss loop detected, untangle via 2-opt moves
-    let finalVertices = cleanedVertices;
+    let finalVertices = finalClean;
     if (this.isPolygonSelfIntersecting(finalVertices)) {
       finalVertices = this.untanglePolygon(finalVertices);
     }

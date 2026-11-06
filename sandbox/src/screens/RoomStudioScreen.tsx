@@ -2096,8 +2096,8 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
                   />
                 ))}
 
-                {/* Ceiling Wireframe Canopy (Excludes Open Boundary) */}
-                {polygon.map((_, i) => {
+                {/* Ceiling Wireframe Canopy (Excludes Open Boundary, rendered only at full ceiling height) */}
+                {!sectionCut4Ft && polygon.map((_, i) => {
                   if (openWallIndices.includes(i)) return null;
                   const cp1 = ceilingProjected[i];
                   const cp2 = ceilingProjected[(i + 1) % N];

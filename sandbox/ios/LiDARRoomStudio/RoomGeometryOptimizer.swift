@@ -917,7 +917,14 @@ public final class RoomGeometryOptimizer {
 
         let deduped = deduplicateOverlappingWalls(segments: segments)
         let filtered = filterInteriorChords(segments: deduped)
-        let chained = chainSegments(segments: filtered)
+
+        // Filter out minor aperture jambs and door stubs (< 2.2 ft / ~0.67m) when sufficient primary boundary walls exist
+        var structural = filtered
+        let longWalls = structural.filter { $0.length >= 2.2 }
+        if longWalls.count >= 3 {
+            structural = longWalls
+        }
+        let chained = chainSegments(segments: structural)
 
         guard chained.count >= 3 else {
             return OptimizerResult(
@@ -961,6 +968,27 @@ public final class RoomGeometryOptimizer {
         var finalVertices = vertices
         if isClosed && isPolygonSelfIntersecting(points: finalVertices) {
             finalVertices = untanglePolygon(points: finalVertices)
+        }
+
+        // Simplify collinear points along straight continuous walls
+        if isClosed && finalVertices.count >= 4 {
+            var simplified: [Point2D] = []
+            let nV = finalVertices.count
+            for k in 0..<nV {
+                let prev = finalVertices[(k - 1 + nV) % nV]
+                let cur = finalVertices[k]
+                let next = finalVertices[(k + 1) % nV]
+                let cross = (cur.x - prev.x) * (next.z - cur.z) - (cur.z - prev.z) * (next.x - cur.x)
+                let l1 = cur.distance(to: prev)
+                let l2 = next.distance(to: cur)
+                let sinTheta = (l1 * l2 > 1e-4) ? abs(cross) / (l1 * l2) : 0.0
+                if sinTheta > 0.087 {
+                    simplified.append(cur)
+                }
+            }
+            if simplified.count >= 3 {
+                finalVertices = simplified
+            }
         }
 
         let isSelfIntersecting = isClosed && isPolygonSelfIntersecting(points: finalVertices)
