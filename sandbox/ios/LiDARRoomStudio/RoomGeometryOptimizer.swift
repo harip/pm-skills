@@ -813,7 +813,7 @@ public final class RoomGeometryOptimizer {
         return chained
     }
 
-    /// Self-intersection detector to reject bowtie geometries
+    /// Self-intersection detector to reject bowtie geometries (Zero range operator dependencies)
     public static func isPolygonSelfIntersecting(points: [Point2D]) -> Bool {
         let n = points.count
         guard n >= 4 else { return false }
@@ -826,17 +826,22 @@ public final class RoomGeometryOptimizer {
             return ccw(p1, p3, p4) != ccw(p2, p3, p4) && ccw(p1, p2, p3) != ccw(p1, p2, p4)
         }
 
-        for i in 0..<(n - 2) {
+        var i = 0
+        while i < n - 2 {
             let a1 = points[i]
             let a2 = points[(i + 1) % n]
-            for j in (i + 2)..<n {
-                if i == 0 && j == n - 1 { continue }
-                let b1 = points[j]
-                let b2 = points[(j + 1) % n]
-                if segmentsIntersect(a1, a2, b1, b2) {
-                    return true
+            var j = i + 2
+            while j < n {
+                if !(i == 0 && j == n - 1) {
+                    let b1 = points[j]
+                    let b2 = points[(j + 1) % n]
+                    if segmentsIntersect(a1, a2, b1, b2) {
+                        return true
+                    }
                 }
+                j += 1
             }
+            i += 1
         }
         return false
     }
@@ -861,21 +866,31 @@ public final class RoomGeometryOptimizer {
             iters += 1
             let n = pts.count
             guard n >= 4 else { break }
-            for i in 0..<(n - 2) {
+
+            var i = 0
+            while i < n - 2 {
                 let a1 = pts[i]
                 let a2 = pts[(i + 1) % n]
-                for j in (i + 2)..<n {
-                    if i == 0 && j == n - 1 { continue }
-                    let b1 = pts[j]
-                    let b2 = pts[(j + 1) % n]
-                    if segmentsIntersect(a1, a2, b1, b2) {
-                        let sub = Array(pts[(i + 1)...j].reversed())
-                        pts = Array(pts[0...i]) + sub + Array(pts[(j + 1)..<n])
-                        changed = true
-                        break
+                var j = i + 2
+                while j < n {
+                    if !(i == 0 && j == n - 1) {
+                        let b1 = pts[j]
+                        let b2 = pts[(j + 1) % n]
+                        if segmentsIntersect(a1, a2, b1, b2) {
+                            if i + 1 <= j && j < n {
+                                let sub = Array(pts[(i + 1)...j].reversed())
+                                let prefix = Array(pts[0...i])
+                                let suffix = (j + 1 < n) ? Array(pts[(j + 1)..<n]) : []
+                                pts = prefix + sub + suffix
+                                changed = true
+                                break
+                            }
+                        }
                     }
+                    j += 1
                 }
                 if changed { break }
+                i += 1
             }
         }
 

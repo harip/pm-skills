@@ -30,6 +30,7 @@ npx expo export:embed \
 
 # Step 3: Codesign with Apple Development Identity & Entitlements
 echo "🔏 3/5 Codesigning app bundle with Apple Development identity..."
+find "${APP_DIR}" -depth \( -name "*.dylib" -o -name "*.framework" \) -exec /usr/bin/codesign --force --sign "${SIGNING_ID}" --timestamp=none {} +
 /usr/bin/codesign --force --sign "${SIGNING_ID}" \
   --entitlements "${XCENT_PATH}" \
   --timestamp=none --generate-entitlement-der \
@@ -42,7 +43,7 @@ xcrun devicectl device install app --device "${DEVICE_UDID}" "${APP_DIR}"
 # Step 5: Launch & Capture Visual Verification
 echo "⚡ 5/5 Launching ${BUNDLE_ID} on device..."
 xcrun devicectl device process launch --device "${DEVICE_UDID}" --terminate-existing "${BUNDLE_ID}"
-sleep 2.5
+sleep 3
 
 SCREENSHOT_PATH="/Users/gootyboy/.gemini/antigravity/brain/9f6fadf7-a772-4c8e-93ca-a8021c824f6f/device_uat_verified_$(date +%s).png"
 echo "📸 Capturing hardware UAT verification screenshot..."
