@@ -826,7 +826,7 @@ public final class RoomGeometryOptimizer {
             return ccw(p1, p3, p4) != ccw(p2, p3, p4) && ccw(p1, p2, p3) != ccw(p1, p2, p4)
         }
 
-        for i in 0..<n {
+        for i in 0..<(n - 2) {
             let a1 = points[i]
             let a2 = points[(i + 1) % n]
             for j in (i + 2)..<n {
@@ -860,7 +860,8 @@ public final class RoomGeometryOptimizer {
             changed = false
             iters += 1
             let n = pts.count
-            for i in 0..<n {
+            guard n >= 4 else { break }
+            for i in 0..<(n - 2) {
                 let a1 = pts[i]
                 let a2 = pts[(i + 1) % n]
                 for j in (i + 2)..<n {
