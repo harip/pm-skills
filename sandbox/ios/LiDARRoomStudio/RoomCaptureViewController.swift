@@ -13,6 +13,12 @@ class RoomCaptureViewController: UIViewController, RoomCaptureViewDelegate, Room
     private var cancelButton: UIButton!
     private var statusPill: UILabel!
 
+    // Asynchronous RoomBuilder with global object beautification & loop closure
+    private let roomBuilder = RoomBuilder(options: [.beautifyObjects])
+    // Hardened real-time semantic deduplication & 90° orthogonal snapping layer
+    private let deduplicationLayer = HardenedSemanticDeduplicationLayer()
+    private var hasEndedWithData = false
+
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .black
@@ -92,6 +98,8 @@ class RoomCaptureViewController: UIViewController, RoomCaptureViewDelegate, Room
     }
     
     private func startScanning() {
+        hasEndedWithData = false
+        deduplicationLayer.reset()
         let config = RoomCaptureSession.Configuration()
         roomCaptureView.captureSession.run(configuration: config)
     }
@@ -101,6 +109,7 @@ class RoomCaptureViewController: UIViewController, RoomCaptureViewDelegate, Room
     }
     
     @objc private func handleCancel() {
+        deduplicationLayer.reset()
         stopScanning()
         dismiss(animated: true) { [weak self] in
             self?.onComplete?(nil)
@@ -109,22 +118,80 @@ class RoomCaptureViewController: UIViewController, RoomCaptureViewDelegate, Room
     
     @objc private func handleDone() {
         doneButton.isEnabled = false
-        statusPill.text = "Building Watertight 3D Mesh..."
+        statusPill.text = "Optimizing (RoomBuilder)..."
         statusPill.textColor = .yellow
         stopScanning()
     }
     
+    // MARK: - RoomCaptureSessionDelegate (Live Real-Time Deduplication & Concurrency Pipeline)
+    func captureSession(_ session: RoomCaptureSession, didUpdate room: CapturedRoom) {
+        self.finalRoom = room
+        deduplicationLayer.updateWithLiveSurfaces(room.walls)
+    }
+
+    func captureSession(_ session: RoomCaptureSession, didAdd room: CapturedRoom) {
+        self.finalRoom = room
+        deduplicationLayer.updateWithLiveSurfaces(room.walls)
+    }
+
+    func captureSession(_ session: RoomCaptureSession, didChange room: CapturedRoom) {
+        self.finalRoom = room
+        deduplicationLayer.updateWithLiveSurfaces(room.walls)
+    }
+
+    func captureSession(_ session: RoomCaptureSession, didRemove room: CapturedRoom) {}
+
+    func captureSession(_ session: RoomCaptureSession, didEndWith data: CapturedRoomData, error: (Error)?) {
+        guard !hasEndedWithData else { return }
+        hasEndedWithData = true
+
+        if let error = error {
+            print("[RoomCaptureViewController] Capture session ended with error: \(error)")
+        }
+
+        DispatchQueue.main.async { [weak self] in
+            self?.statusPill.text = "Optimizing (RoomBuilder)..."
+            self?.statusPill.textColor = .yellow
+        }
+
+        // Section 1: Asynchronous RoomBuilder Global Loop Closure Block
+        Task.detached(priority: .userInitiated) { [weak self] in
+            guard let self = self else { return }
+            do {
+                // Pass raw CapturedRoomData to offline global optimizer
+                let optimizedRoom = try await self.roomBuilder.capturedRoom(from: data)
+                
+                // Discard live-scanning data arrays and apply hardened deduplication & 90° corner snapping
+                self.deduplicationLayer.reset()
+                let finalizedWalls = HardenedSemanticDeduplicationLayer.finalizeRoomSurfaces(optimizedRoom.walls)
+                
+                await MainActor.run {
+                    self.statusPill.text = "Finalizing Watertight Model..."
+                    self.processAndFinish(room: optimizedRoom, finalizedWalls: finalizedWalls)
+                }
+            } catch {
+                print("[RoomCaptureViewController] RoomBuilder error: \(error). Falling back to session finalRoom.")
+                await MainActor.run {
+                    if let lastRoom = self.finalRoom {
+                        let fallbackWalls = HardenedSemanticDeduplicationLayer.finalizeRoomSurfaces(lastRoom.walls)
+                        self.processAndFinish(room: lastRoom, finalizedWalls: fallbackWalls)
+                    }
+                }
+            }
+        }
+    }
+
     // MARK: - RoomCaptureViewDelegate
     func captureView(shouldPresent roomDataForProcessing: CapturedRoomData, error: (Error)?) -> Bool {
-        return true
+        // Return false to let custom asynchronous RoomBuilder(options: [.beautifyObjects]) execute directly
+        return false
     }
     
     func captureView(didPresent processedResult: CapturedRoom, error: (Error)?) {
         self.finalRoom = processedResult
-        self.processAndFinish(room: processedResult)
     }
     
-    private func processAndFinish(room: CapturedRoom) {
+    private func processAndFinish(room: CapturedRoom, finalizedWalls: [ParametricWall]? = nil) {
         var minX: Float = .greatestFiniteMagnitude
         var maxX: Float = -.greatestFiniteMagnitude
         var minZ: Float = .greatestFiniteMagnitude
@@ -133,40 +200,50 @@ class RoomCaptureViewController: UIViewController, RoomCaptureViewDelegate, Room
         var heights: [Float] = []
         var elevationsY: [Float] = []
         
+        let effectiveWalls: [ParametricWall]
+        if let fw = finalizedWalls, !fw.isEmpty {
+            effectiveWalls = fw
+        } else {
+            effectiveWalls = room.walls.map { ParametricWall(surface: $0) }
+        }
+
         var wallsData: [[String: Any]] = []
-        for (idx, wall) in room.walls.enumerated() {
-            let pos = wall.transform.columns.3
+        var rawSegments: [RawSegment] = []
+
+        for (idx, wall) in effectiveWalls.enumerated() {
+            let pos = wall.center
             let dim = wall.dimensions
-            let dir = wall.transform.columns.0
+            let dir = wall.tangent
             heights.append(dim.y)
             elevationsY.append(pos.y)
-            
-            let halfL = dim.x / 2.0
-            let startX = pos.x - dir.x * halfL
-            let startZ = pos.z - dir.z * halfL
-            let endX = pos.x + dir.x * halfL
-            let endZ = pos.z + dir.z * halfL
-            
-            minX = min(minX, min(startX, endX))
-            maxX = max(maxX, max(startX, endX))
-            minZ = min(minZ, min(startZ, endZ))
-            maxZ = max(maxZ, max(startZ, endZ))
-            
-            let yaw = atan2(wall.transform.columns.0.z, wall.transform.columns.0.x)
+
+            let p1 = wall.p1
+            let p2 = wall.p2
+
+            minX = min(minX, min(p1.x, p2.x))
+            maxX = max(maxX, max(p1.x, p2.x))
+            minZ = min(minZ, min(p1.z, p2.z))
+            maxZ = max(maxZ, max(p1.z, p2.z))
+
+            let yaw = atan2(dir.z, dir.x)
             wallsData.append([
                 "id": "wall-\(idx)",
                 "x": Double(round(pos.x * 3.28084 * 100) / 100),
                 "y": Double(round(pos.y * 3.28084 * 100) / 100),
                 "z": Double(round(pos.z * 3.28084 * 100) / 100),
-                "x1": Double(round(startX * 3.28084 * 100) / 100),
-                "z1": Double(round(startZ * 3.28084 * 100) / 100),
-                "x2": Double(round(endX * 3.28084 * 100) / 100),
-                "z2": Double(round(endZ * 3.28084 * 100) / 100),
+                "x1": Double(round(p1.x * 3.28084 * 100) / 100),
+                "z1": Double(round(p1.z * 3.28084 * 100) / 100),
+                "x2": Double(round(p2.x * 3.28084 * 100) / 100),
+                "z2": Double(round(p2.z * 3.28084 * 100) / 100),
                 "lengthFt": Double(round(dim.x * 3.28084 * 10) / 10),
                 "heightFt": Double(round(dim.y * 3.28084 * 10) / 10),
                 "thicknessFt": Double(round(dim.z * 3.28084 * 100) / 100),
                 "yawDeg": Double(round(yaw * 180.0 / .pi)),
             ])
+
+            let pt1 = Point2D(x: Double(p1.x * 3.28084), z: Double(p1.z * 3.28084))
+            let pt2 = Point2D(x: Double(p2.x * 3.28084), z: Double(p2.z * 3.28084))
+            rawSegments.append(RawSegment(p1: pt1, p2: pt2, label: "wall-\(idx)"))
         }
         
         if !heights.isEmpty {
@@ -192,8 +269,8 @@ class RoomCaptureViewController: UIViewController, RoomCaptureViewDelegate, Room
         if lengthMeters < 1.5 { lengthMeters = 4.5 }
         if avgHeight < 2.0 { avgHeight = 2.6 }
         
-        var widthFt = Double(round(Double(widthMeters * 3.28084) * 10) / 10)
-        var lengthFt = Double(round(Double(lengthMeters * 3.28084) * 10) / 10)
+        let widthFt = Double(round(Double(widthMeters * 3.28084) * 10) / 10)
+        let lengthFt = Double(round(Double(lengthMeters * 3.28084) * 10) / 10)
         let heightFt = Double(round(Double(avgHeight * 3.28084) * 10) / 10)
         var areaSqFt = Double(round(widthFt * lengthFt * 10) / 10)
 
@@ -202,35 +279,19 @@ class RoomCaptureViewController: UIViewController, RoomCaptureViewDelegate, Room
         var isWatertightResult = false
         var dominantOrientationDeg = 0.0
 
-        do {
-            var rawSegments: [RawSegment] = []
-            for (idx, wall) in room.walls.enumerated() {
-                let pos = wall.transform.columns.3
-                let dim = wall.dimensions
-                let dir = wall.transform.columns.0
-                let halfL = dim.x / 2.0
-                let p1 = Point2D(x: Double((pos.x - dir.x * halfL) * 3.28084), z: Double((pos.z - dir.z * halfL) * 3.28084))
-                let p2 = Point2D(x: Double((pos.x + dir.x * halfL) * 3.28084), z: Double((pos.z + dir.z * halfL) * 3.28084))
-                rawSegments.append(RawSegment(p1: p1, p2: p2, label: "wall-\(idx)"))
-            }
+        if rawSegments.count >= 3 {
+            let optResult = RoomGeometryOptimizer.solve(segments: rawSegments, isClosed: true)
+            dominantOrientationDeg = optResult.dominantOrientationDeg
+            isWatertightResult = optResult.isWatertight
 
-            if rawSegments.count >= 3 {
-                let optResult = RoomGeometryOptimizer.solve(segments: rawSegments, isClosed: true)
-                dominantOrientationDeg = optResult.dominantOrientationDeg
-                isWatertightResult = optResult.isWatertight
-
-                if optResult.isWatertight && optResult.areaSqFt > 10.0 {
-                    areaSqFt = Double(round(optResult.areaSqFt * 10) / 10)
-                    polygonPointsData = optResult.closedPolygon.map { pt -> [String: Any] in
-                        let px = Double(round(pt.x * 100) / 100)
-                        let pz = Double(round(pt.z * 100) / 100)
-                        return ["x": px, "z": pz]
-                    }
+            if optResult.isWatertight && optResult.areaSqFt > 10.0 {
+                areaSqFt = Double(round(optResult.areaSqFt * 10) / 10)
+                polygonPointsData = optResult.closedPolygon.map { pt -> [String: Any] in
+                    let px = Double(round(pt.x * 100) / 100)
+                    let pz = Double(round(pt.z * 100) / 100)
+                    return ["x": px, "z": pz]
                 }
             }
-        } catch {
-            // Graceful Fallback: keep standard unoptimized room data
-            print("[RoomCaptureViewController] OM-TLC Optimizer fallback triggered: \(error)")
         }
         
         var doorsData: [[String: Any]] = []
@@ -264,9 +325,7 @@ class RoomCaptureViewController: UIViewController, RoomCaptureViewDelegate, Room
             let heightFt = Double(round(Double(dimY * 3.28084) * 10) / 10)
             let widthFt = Double(round(Double(win.dimensions.x * 3.28084) * 10) / 10)
 
-            // Solution A: Geometric Disambiguation
-            // A closed closet (or floor-level door panel) starts at floor level (< 16" / 0.40m)
-            // and reaches full door height (> 6'5" / 1.95m). It is NOT an exterior window opening.
+            // Closed closet (floor-level door panel) disambiguation
             if sillFt < 1.33 && heightFt > 6.4 {
                 closetsData.append([
                     "id": "closet-\(idx)",
@@ -330,9 +389,9 @@ class RoomCaptureViewController: UIViewController, RoomCaptureViewDelegate, Room
         let usdzURL = docDir.appendingPathComponent("scanned_room_\(timestamp).usdz")
         try? room.export(to: usdzURL)
         
-        // Also export native watertight 3D STL file directly from CapturedRoom surfaces & objects
+        // Export native watertight 3D STL file directly from deduplicated surfaces & objects
         let stlURL = docDir.appendingPathComponent("scanned_room_\(timestamp).stl")
-        self.exportSTL(room: room, to: stlURL)
+        self.exportSTL(walls: effectiveWalls, objects: room.objects, to: stlURL)
         
         let roomLabel = floorLevel == "Ground Floor"
             ? "Physical Room (\(Int(round(lengthFt)))' × \(Int(round(widthFt)))')"
@@ -347,7 +406,7 @@ class RoomCaptureViewController: UIViewController, RoomCaptureViewDelegate, Room
             "lengthFt": lengthFt,
             "heightFt": heightFt,
             "areaSqFt": areaSqFt,
-            "wallCount": room.walls.count,
+            "wallCount": effectiveWalls.count,
             "doorCount": room.doors.count,
             "windowCount": windowsData.count,
             "closetCount": closetsData.count,
@@ -380,11 +439,11 @@ class RoomCaptureViewController: UIViewController, RoomCaptureViewDelegate, Room
     
     // Generates an ASCII STL file in standard 3D printer Z-up coordinate space
     // Anchors all walls and furniture objects directly to build plate Z=0 (Certified No Empty Initial Layer)
-    private func exportSTL(room: CapturedRoom, to url: URL) {
+    private func exportSTL(walls: [ParametricWall], objects: [CapturedRoom.Object], to url: URL) {
         var stl = "solid RoomPlan_LiDAR_Room\n"
         
         // Find minimum floor elevation across all walls
-        let minY: Float = room.walls.map { $0.transform.columns.3.y - $0.dimensions.y / 2.0 }.min() ?? 0.0
+        let minY: Float = walls.map { $0.center.y - $0.dimensions.y / 2.0 }.min() ?? 0.0
         
         // Helper to append a triangle facet in standard 3D printing Z-up (X=x, Y=z, Z=y-minY)
         func addFacet(_ a: SIMD4<Float>, _ b: SIMD4<Float>, _ c: SIMD4<Float>) {
@@ -404,7 +463,7 @@ class RoomCaptureViewController: UIViewController, RoomCaptureViewDelegate, Room
             stl += "    endloop\n  endfacet\n"
         }
         
-        for wall in room.walls {
+        for wall in walls {
             let pos = wall.transform.columns.3
             let dim = wall.dimensions
             let dx = wall.transform.columns.0 * (dim.x / 2.0)
@@ -430,7 +489,7 @@ class RoomCaptureViewController: UIViewController, RoomCaptureViewDelegate, Room
             addFacet(c1, c2, c6); addFacet(c1, c6, c5) // Right face
         }
         
-        for obj in room.objects {
+        for obj in objects {
             let pos = obj.transform.columns.3
             let dim = obj.dimensions
             let dx = obj.transform.columns.0 * (dim.x / 2.0)
