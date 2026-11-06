@@ -18,6 +18,7 @@ class RoomCaptureViewController: UIViewController, RoomCaptureViewDelegate, Room
     // Hardened real-time semantic deduplication & 90° orthogonal snapping layer
     private let deduplicationLayer = HardenedSemanticDeduplicationLayer()
     private var hasEndedWithData = false
+    private var lastTelemetryWriteTime: TimeInterval = 0
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -100,12 +101,15 @@ class RoomCaptureViewController: UIViewController, RoomCaptureViewDelegate, Room
     private func startScanning() {
         hasEndedWithData = false
         deduplicationLayer.reset()
+        lastTelemetryWriteTime = 0
+        writeLiveStatus(isScanning: true)
         let config = RoomCaptureSession.Configuration()
         roomCaptureView.captureSession.run(configuration: config)
     }
     
     private func stopScanning() {
         roomCaptureView.captureSession.stop()
+        writeLiveStatus(isScanning: false)
     }
     
     @objc private func handleCancel() {
@@ -123,23 +127,155 @@ class RoomCaptureViewController: UIViewController, RoomCaptureViewDelegate, Room
         stopScanning()
     }
     
-    // MARK: - RoomCaptureSessionDelegate (Live Real-Time Deduplication & Concurrency Pipeline)
+    // MARK: - RoomCaptureSessionDelegate (Live Real-Time Deduplication & Telemetry Pipeline)
     func captureSession(_ session: RoomCaptureSession, didUpdate room: CapturedRoom) {
         self.finalRoom = room
         deduplicationLayer.updateWithLiveSurfaces(room.walls)
+        throttleWriteLiveTelemetry(room: room)
     }
 
     func captureSession(_ session: RoomCaptureSession, didAdd room: CapturedRoom) {
         self.finalRoom = room
         deduplicationLayer.updateWithLiveSurfaces(room.walls)
+        throttleWriteLiveTelemetry(room: room)
     }
 
     func captureSession(_ session: RoomCaptureSession, didChange room: CapturedRoom) {
         self.finalRoom = room
         deduplicationLayer.updateWithLiveSurfaces(room.walls)
+        throttleWriteLiveTelemetry(room: room)
     }
 
     func captureSession(_ session: RoomCaptureSession, didRemove room: CapturedRoom) {}
+
+    private func throttleWriteLiveTelemetry(room: CapturedRoom) {
+        let now = Date().timeIntervalSince1970
+        if now - lastTelemetryWriteTime >= 0.25 {
+            lastTelemetryWriteTime = now
+            writeLiveTelemetry(room: room)
+        }
+    }
+
+    private func writeLiveStatus(isScanning: Bool) {
+        let docDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        let liveURL = docDir.appendingPathComponent("live_scan_telemetry.json")
+        let payload: [String: Any] = [
+            "timestamp": Date().timeIntervalSince1970,
+            "isScanning": isScanning,
+            "wallCount": 0,
+            "objectCount": 0,
+            "walls": [],
+            "objects": [],
+            "misalignments": [],
+        ]
+        if let data = try? JSONSerialization.data(withJSONObject: payload) {
+            try? data.write(to: liveURL, options: .atomic)
+        }
+    }
+
+    private func writeLiveTelemetry(room: CapturedRoom) {
+        let docDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        let liveURL = docDir.appendingPathComponent("live_scan_telemetry.json")
+
+        var surfacesData: [[String: Any]] = []
+        for (idx, wall) in room.walls.enumerated() {
+            let pos = wall.transform.columns.3
+            let dim = wall.dimensions
+            let dir = wall.transform.columns.0
+            let norm = wall.transform.columns.2
+            let halfL = dim.x / 2.0
+
+            let p1x = Double(pos.x - dir.x * halfL)
+            let p1z = Double(pos.z - dir.z * halfL)
+            let p2x = Double(pos.x + dir.x * halfL)
+            let p2z = Double(pos.z + dir.z * halfL)
+
+            surfacesData.append([
+                "index": idx,
+                "confidence": "\(wall.confidence)",
+                "lengthM": Double(round(dim.x * 100) / 100),
+                "lengthFt": Double(round(dim.x * 3.28084 * 10) / 10),
+                "centerX": Double(round(pos.x * 100) / 100),
+                "centerZ": Double(round(pos.z * 100) / 100),
+                "normalX": Double(round(norm.x * 1000) / 1000),
+                "normalZ": Double(round(norm.z * 1000) / 1000),
+                "p1": ["x": Double(round(p1x * 100) / 100), "z": Double(round(p1z * 100) / 100)],
+                "p2": ["x": Double(round(p2x * 100) / 100), "z": Double(round(p2z * 100) / 100)],
+            ])
+        }
+
+        // Real-time misalignment detector
+        var misalignments: [[String: Any]] = []
+        let walls = room.walls
+        for i in 0..<walls.count {
+            for j in (i + 1)..<walls.count {
+                let w1 = walls[i]
+                let w2 = walls[j]
+                let n1 = SIMD3<Float>(w1.transform.columns.2.x, w1.transform.columns.2.y, w1.transform.columns.2.z)
+                let n2 = SIMD3<Float>(w2.transform.columns.2.x, w2.transform.columns.2.y, w2.transform.columns.2.z)
+                let p1 = SIMD3<Float>(w1.transform.columns.3.x, w1.transform.columns.3.y, w1.transform.columns.3.z)
+                let p2 = SIMD3<Float>(w2.transform.columns.3.x, w2.transform.columns.3.y, w2.transform.columns.3.z)
+
+                let dot = abs(simd_dot(n1, n2))
+                if dot >= 0.95 { // Parallel
+                    let dPerp = abs(simd_dot(p2 - p1, n1))
+                    if dPerp > 0.04 && dPerp < 0.60 {
+                        misalignments.append([
+                            "type": "PARALLEL_OVERLAP_DRIFT",
+                            "wallA": i,
+                            "wallB": j,
+                            "offsetInches": Double(round(Double(dPerp * 39.3701) * 10) / 10),
+                            "severity": dPerp > 0.15 ? "HIGH" : "MEDIUM",
+                            "message": "Wall \(i) and Wall \(j) are duplicate parallel walls shifted by \(Int(round(Double(dPerp * 39.3701)))) inches"
+                        ])
+                    }
+                } else if dot <= 0.15 { // Near 90° corner
+                    let angleDeg = Double(round(acos(Double(dot)) * 180.0 / .pi * 10) / 10)
+                    let devDeg = abs(angleDeg - 90.0)
+                    if devDeg > 3.5 && devDeg < 25.0 {
+                        misalignments.append([
+                            "type": "NON_ORTHOGONAL_CORNER",
+                            "wallA": i,
+                            "wallB": j,
+                            "cornerAngleDeg": angleDeg,
+                            "deviationDeg": Double(round(devDeg * 10) / 10),
+                            "severity": devDeg > 6.0 ? "HIGH" : "LOW",
+                            "message": "Corner between Wall \(i) and Wall \(j) is bent at \(angleDeg)° (\(Int(round(devDeg)))° off 90°)"
+                        ])
+                    }
+                }
+            }
+        }
+
+        var objectsData: [[String: Any]] = []
+        for (idx, obj) in room.objects.enumerated() {
+            let pos = obj.transform.columns.3
+            objectsData.append([
+                "index": idx,
+                "category": "\(obj.category)",
+                "x": Double(round(pos.x * 100) / 100),
+                "z": Double(round(pos.z * 100) / 100),
+                "widthFt": Double(round(obj.dimensions.x * 3.28084 * 10) / 10),
+                "lengthFt": Double(round(obj.dimensions.z * 3.28084 * 10) / 10),
+            ])
+        }
+
+        let payload: [String: Any] = [
+            "timestamp": Date().timeIntervalSince1970,
+            "isScanning": true,
+            "wallCount": room.walls.count,
+            "objectCount": room.objects.count,
+            "doorCount": room.doors.count,
+            "windowCount": room.windows.count,
+            "walls": surfacesData,
+            "objects": objectsData,
+            "misalignments": misalignments,
+        ]
+
+        if let data = try? JSONSerialization.data(withJSONObject: payload) {
+            try? data.write(to: liveURL, options: .atomic)
+        }
+    }
 
     func captureSession(_ session: RoomCaptureSession, didEndWith data: CapturedRoomData, error: (Error)?) {
         guard !hasEndedWithData else { return }
