@@ -630,7 +630,31 @@ public final class RoomGeometryOptimizer {
         return perim
     }
 
-    /// Global duplicate wall de-duplication (fuses multi-pass scans of the same physical wall)
+    /// Tests whether two parallel walls are connected by a real perpendicular return wall (closet recess / alcove)
+    public static func hasPerpendicularConnectingWall(s1: RawSegment, s2: RawSegment, segments: [RawSegment]) -> Bool {
+        let len1 = s1.length > 0.001 ? s1.length : 1.0
+        let u1x = (s1.p2.x - s1.p1.x) / len1
+        let u1z = (s1.p2.z - s1.p1.z) / len1
+        for w in segments {
+            if w.label == s1.label || w.label == s2.label { continue }
+            let len = w.length > 0.001 ? w.length : 1.0
+            let wx = (w.p2.x - w.p1.x) / len
+            let wz = (w.p2.z - w.p1.z) / len
+            if abs(u1x * wx + u1z * wz) <= 0.25 {
+                let d1_p1 = min(hypot(w.p1.x - s1.p1.x, w.p1.z - s1.p1.z), hypot(w.p1.x - s1.p2.x, w.p1.z - s1.p2.z))
+                let d1_p2 = min(hypot(w.p2.x - s1.p1.x, w.p2.z - s1.p1.z), hypot(w.p2.x - s1.p2.x, w.p2.z - s1.p2.z))
+                let d2_p1 = min(hypot(w.p1.x - s2.p1.x, w.p1.z - s2.p1.z), hypot(w.p1.x - s2.p2.x, w.p1.z - s2.p2.z))
+                let d2_p2 = min(hypot(w.p2.x - s2.p1.x, w.p2.z - s2.p1.z), hypot(w.p2.x - s2.p2.x, w.p2.z - s2.p2.z))
+                if (d1_p1 < 1.5 && d2_p2 < 1.5) || (d1_p2 < 1.5 && d2_p1 < 1.5) {
+                    return true
+                }
+            }
+        }
+        return false
+    }
+
+    /// Global duplicate wall de-duplication (fuses multi-pass drift artifacts < 0.50 ft / 15 cm or phantom trusses < 3.5 ft)
+    /// Preserves true architectural closet recesses and alcoves with perpendicular return walls
     public static func deduplicateOverlappingWalls(segments: [RawSegment], maxDist: Double = 3.5) -> [RawSegment] {
         guard segments.count > 1 else { return segments }
         var result: [RawSegment] = []
@@ -678,7 +702,11 @@ public final class RoomGeometryOptimizer {
 
                     let hasOverlap = (minT2 <= len1 + 2.0) && (maxT2 >= -2.0)
 
-                    if perpDist <= maxDist && hasOverlap {
+                    let isTightDrift = perpDist <= 0.50
+                    let isRecess = perpDist <= maxDist && hasPerpendicularConnectingWall(s1: s1, s2: s2, segments: segments)
+                    let shouldMerge = isTightDrift || (perpDist <= maxDist && !isRecess)
+
+                    if shouldMerge && hasOverlap {
                         let d1 = hypot(mid1x - centroidX, mid1z - centroidZ)
                         let d2 = hypot(mid2x - centroidX, mid2z - centroidZ)
                         let baseSeg = d2 > d1 ? s2 : s1
@@ -918,9 +946,10 @@ public final class RoomGeometryOptimizer {
         let deduped = deduplicateOverlappingWalls(segments: segments)
         let filtered = filterInteriorChords(segments: deduped)
 
-        // Filter out minor aperture jambs and door stubs (< 2.2 ft / ~0.67m) when sufficient primary boundary walls exist
+        // Filter out minor aperture jambs and door stubs (< 1.5 ft / ~0.45m) when sufficient primary boundary walls exist
+        // Preserves closet return walls and alcove depth (typically 1.5 to 2.5 ft)
         var structural = filtered
-        let longWalls = structural.filter { $0.length >= 2.2 }
+        let longWalls = structural.filter { $0.length >= 1.5 }
         if longWalls.count >= 3 {
             structural = longWalls
         }

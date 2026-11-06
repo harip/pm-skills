@@ -116,7 +116,37 @@ export const GeometryService = {
   // 5. Dual-threshold angular quantization (orthogonal squaring + 45° bay preservation)
   // 6. Collinear segment fusion (merges fragmented / overlapping scans and dropouts)
   // 7. Exact line-line corner intersection with determinant singularity guard
-  buildRoomPolygon(walls: any[], defaultW = 14, defaultL = 16, objects: any[] = []): PolygonPoint[] {
+  // Checks if two parallel walls are connected by a real perpendicular return wall (closet recess / alcove)
+  hasPerpendicularConnectingWall(s1: any, s2: any, segments: any[]): boolean {
+    const len1 = s1.length || Math.hypot(s1.p2.x - s1.p1.x, s1.p2.z - s1.p1.z) || 1;
+    const u1x = (s1.p2.x - s1.p1.x) / len1;
+    const u1z = (s1.p2.z - s1.p1.z) / len1;
+    for (const w of segments) {
+      if (w === s1 || w === s2) continue;
+      const len = w.length || Math.hypot(w.p2.x - w.p1.x, w.p2.z - w.p1.z) || 1;
+      const wx = (w.p2.x - w.p1.x) / len;
+      const wz = (w.p2.z - w.p1.z) / len;
+      // Must be perpendicular (|dot| <= 0.25)
+      if (Math.abs(u1x * wx + u1z * wz) <= 0.25) {
+        const d1_p1 = Math.min(Math.hypot(w.p1.x - s1.p1.x, w.p1.z - s1.p1.z), Math.hypot(w.p1.x - s1.p2.x, w.p1.z - s1.p2.z));
+        const d1_p2 = Math.min(Math.hypot(w.p2.x - s1.p1.x, w.p2.z - s1.p1.z), Math.hypot(w.p2.x - s1.p2.x, w.p2.z - s1.p2.z));
+        const d2_p1 = Math.min(Math.hypot(w.p1.x - s2.p1.x, w.p1.z - s2.p1.z), Math.hypot(w.p1.x - s2.p2.x, w.p1.z - s2.p2.z));
+        const d2_p2 = Math.min(Math.hypot(w.p2.x - s2.p1.x, w.p2.z - s2.p1.z), Math.hypot(w.p2.x - s2.p2.x, w.p2.z - s2.p2.z));
+        if ((d1_p1 < 1.5 && d2_p2 < 1.5) || (d1_p2 < 1.5 && d2_p1 < 1.5)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  },
+
+  buildRoomPolygon(
+    walls: any[],
+    defaultW = 14,
+    defaultL = 16,
+    objects: any[] = [],
+    doors: any[] = []
+  ): PolygonPoint[] {
     const hw = defaultW / 2;
     const hl = defaultL / 2;
     const fallbackRect: PolygonPoint[] = [
@@ -179,13 +209,40 @@ export const GeometryService = {
       return fallbackRect;
     }
 
-    // Filter out minor aperture jambs and door stubs (< 2.2 ft / ~0.67m) when sufficient primary boundary walls exist
-    const longSegments = rawSegments.filter((s) => s.length >= 2.2);
-    const candidateSegments = longSegments.length >= 3 ? longSegments : rawSegments;
+    // Filter out minor aperture jambs and door stubs (< 1.5 ft / ~0.45m) when sufficient primary boundary walls exist
+    const longSegments = rawSegments.filter((s) => s.length >= 1.5);
+    const candidatePool = longSegments.length >= 3 ? longSegments : rawSegments;
+
+    // Dominant orientation from longest wall to assess orthogonal grid alignment
+    let dominantAngleDeg = 0;
+    if (candidatePool.length > 0) {
+      const longest = candidatePool.reduce((max, s) => (s.length > max.length ? s : max), candidatePool[0]);
+      dominantAngleDeg = (Math.atan2(longest.p2.z - longest.p1.z, longest.p2.x - longest.p1.x) * 180) / Math.PI;
+    }
+
+    const nonDoorLeaves = candidatePool.filter((s) => {
+      // Filter out non-orthogonal door-swing panels (leaves) near doors
+      const midX = (s.p1.x + s.p2.x) / 2;
+      const midZ = (s.p1.z + s.p2.z) / 2;
+      const deg = (Math.atan2(s.p2.z - s.p1.z, s.p2.x - s.p1.x) * 180) / Math.PI;
+      let diffDeg = Math.abs(deg - dominantAngleDeg);
+      let mod90 = diffDeg % 90;
+      if (mod90 > 45) mod90 = 90 - mod90;
+
+      for (const d of doors) {
+        const dist = Math.hypot(midX - (d.x ?? 0), midZ - (d.z ?? 0));
+        const dWidth = d.widthFt || 2.5;
+        if (dist < 2.0 && Math.abs(s.length - dWidth) < 0.8 && mod90 > 5.0) {
+          return false;
+        }
+      }
+      return true;
+    });
+    const candidateSegments = nonDoorLeaves.length >= 3 ? nonDoorLeaves : rawSegments;
 
     // Step 0: Global Duplicate Wall De-Duplication (Multi-pass scan overlap resolution)
-    // When an operator scans the same physical wall from two different positions/passes,
-    // RoomPlan generates two overlapping/parallel segments. Merge them into one!
+    // Merges multi-pass parallel drift artifacts of the exact same physical wall (< 0.50 ft / 15 cm)
+    // Preserves closet recesses, alcoves, and corridors (>= 1.5 ft depth)
     const dedupedSegments: InternalSeg[] = [];
     const mergedIndices = new Set<number>();
 
@@ -226,8 +283,13 @@ export const GeometryService = {
 
           const hasOverlap = (minT2 <= len1 + 2.0) && (maxT2 >= -2.0);
 
-          // Allow merging multi-pass parallel walls separated by up to 3.5 ft (furniture depth)
-          if (perpDist <= 3.5 && hasOverlap) {
+          // Merge duplicate drift artifacts (< 0.50 ft / 15 cm) OR phantom multi-pass trusses without perpendicular returns (< 3.5 ft)
+          // Preserves true architectural closet recesses and alcoves with perpendicular return walls
+          const isTightDrift = perpDist <= 0.50;
+          const isRecessWithConnectingWalls = perpDist <= 3.5 && this.hasPerpendicularConnectingWall(s1, s2, candidateSegments);
+          const shouldMerge = isTightDrift || (perpDist <= 3.5 && !isRecessWithConnectingWalls);
+
+          if (shouldMerge && hasOverlap) {
             // Favor the wall segment that is further from room center (true exterior perimeter)
             const dist1Center = Math.hypot(mid1x - rawCentroidX, mid1z - rawCentroidZ);
             const dist2Center = Math.hypot(mid2x - rawCentroidX, mid2z - rawCentroidZ);
@@ -1728,5 +1790,31 @@ export const GeometryService = {
       isParallel: false,
       isDiverging: false,
     };
+  },
+
+  computeConvexHull(points: PolygonPoint[]): PolygonPoint[] {
+    if (points.length <= 3) return points;
+    const pts = [...points].sort((a, b) => a.x === b.x ? a.z - b.z : a.x - b.x);
+    const cross = (o: PolygonPoint, a: PolygonPoint, b: PolygonPoint) =>
+      (a.x - o.x) * (b.z - o.z) - (a.z - o.z) * (b.x - o.x);
+
+    const lower: PolygonPoint[] = [];
+    for (const p of pts) {
+      while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) {
+        lower.pop();
+      }
+      lower.push(p);
+    }
+    const upper: PolygonPoint[] = [];
+    for (let i = pts.length - 1; i >= 0; i--) {
+      const p = pts[i];
+      while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0) {
+        upper.pop();
+      }
+      upper.push(p);
+    }
+    upper.pop();
+    lower.pop();
+    return lower.concat(upper);
   },
 };

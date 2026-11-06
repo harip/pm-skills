@@ -141,6 +141,35 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
   const realObjects: any[] = parsedMesh?.objects || [];
   const currentFloor = room.floor_level || parsedMesh?.floorLevel || 'Ground Floor';
 
+  // Find dominant room angle from longest wall to assess orthogonal grid alignment
+  const longestWall = (realWalls && realWalls.length > 0)
+    ? realWalls.reduce((max, w) => ((w.lengthFt || 0) > (max.lengthFt || 0) ? w : max), realWalls[0])
+    : null;
+  const dominantYaw = longestWall?.yawDeg ?? 0;
+
+  // Filter real structural walls and closet returns from LiDAR scan (excluding open swinging door leaves)
+  const filteredRealWalls = (realWalls && realWalls.length >= 3)
+    ? realWalls.filter((w) => {
+        if ((w.lengthFt || 0) < 1.5) return false;
+        const midX = (w.x1 + w.x2) / 2;
+        const midZ = (w.z1 + w.z2) / 2;
+        const wLen = w.lengthFt || 0;
+        const wYaw = w.yawDeg ?? ((Math.atan2(w.z2 - w.z1, w.x2 - w.x1) * 180) / Math.PI);
+        let diffDeg = Math.abs(wYaw - dominantYaw);
+        let mod90 = diffDeg % 90;
+        if (mod90 > 45) mod90 = 90 - mod90;
+
+        for (const d of realDoors) {
+          const dist = Math.hypot(midX - (d.x ?? 0), midZ - (d.z ?? 0));
+          const dWidth = d.widthFt || 2.5;
+          if (dist < 2.0 && Math.abs(wLen - dWidth) < 0.8 && mod90 > 5.0) {
+            return false;
+          }
+        }
+        return true;
+      })
+    : [];
+
   // Build the continuous closed boundary polygon from LiDAR wall segments
   const hasValidPrecomputedPolygon =
     parsedMesh?.polygon &&
@@ -158,20 +187,25 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
           realWalls,
           room.width_ft || 14,
           room.length_ft || 16,
-          realObjects
+          realObjects,
+          realDoors
         )
   );
   const N = polygon.length;
 
+  const pointsForBounds = (filteredRealWalls.length >= 3 && !activePolygon)
+    ? filteredRealWalls.flatMap(w => [{ x: w.x1, z: w.z1 }, { x: w.x2, z: w.z2 }])
+    : polygon;
+
   // Center of the room polygon
   const centerPoly = {
-    x: polygon.reduce((acc, p) => acc + p.x, 0) / N,
-    z: polygon.reduce((acc, p) => acc + p.z, 0) / N,
+    x: pointsForBounds.reduce((acc, p) => acc + p.x, 0) / (pointsForBounds.length || 1),
+    z: pointsForBounds.reduce((acc, p) => acc + p.z, 0) / (pointsForBounds.length || 1),
   };
 
   // Span of the room in feet
   let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
-  for (const p of polygon) {
+  for (const p of pointsForBounds) {
     minX = Math.min(minX, p.x);
     maxX = Math.max(maxX, p.x);
     minZ = Math.min(minZ, p.z);
@@ -1021,15 +1055,24 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
   const lx = lightDir.x / lightLen, lz = lightDir.z / lightLen;
 
   // --- Certified CAD Parametric Solid Model Construction ---
-  // Convert polygon to meters for exact aperture projection
+  // When realWalls are present from LiDAR scan, render the physical structural walls & closet returns directly!
   const wallSegmentsM: { p1: { x: number; z: number }; p2: { x: number; z: number } }[] = [];
-  for (let i = 0; i < N; i++) {
-    const cur = polygon[i];
-    const nxt = polygon[(i + 1) % N];
-    wallSegmentsM.push({
-      p1: { x: cur.x * 0.3048, z: cur.z * 0.3048 },
-      p2: { x: nxt.x * 0.3048, z: nxt.z * 0.3048 },
-    });
+  if (filteredRealWalls.length >= 3 && !activePolygon) {
+    for (const w of filteredRealWalls) {
+      wallSegmentsM.push({
+        p1: { x: w.x1 * 0.3048, z: w.z1 * 0.3048 },
+        p2: { x: w.x2 * 0.3048, z: w.z2 * 0.3048 },
+      });
+    }
+  } else {
+    for (let i = 0; i < N; i++) {
+      const cur = polygon[i];
+      const nxt = polygon[(i + 1) % N];
+      wallSegmentsM.push({
+        p1: { x: cur.x * 0.3048, z: cur.z * 0.3048 },
+        p2: { x: nxt.x * 0.3048, z: nxt.z * 0.3048 },
+      });
+    }
   }
 
   const isKitchen = /kitchen|dining/i.test(room.name || '');
@@ -1089,10 +1132,13 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
   const faces3D: Face3D[] = [];
 
   // 1. Watertight Solid Floor Polygon
-  const floorProjected = polygon.map((p) =>
+  const floorBasePoints = (filteredRealWalls.length >= 3 && !activePolygon)
+    ? GeometryService.computeConvexHull(pointsForBounds)
+    : polygon;
+  const floorProjected = floorBasePoints.map((p) =>
     toScreen3D(p.x * 0.3048, 0, p.z * 0.3048)
   );
-  const floorAvgDepth = floorProjected.reduce((acc, p) => acc + p.depth, 0) / N;
+  const floorAvgDepth = floorProjected.reduce((acc, p) => acc + p.depth, 0) / (floorBasePoints.length || 1);
   faces3D.push({
     points: floorProjected,
     avgDepth: floorAvgDepth,
@@ -1103,7 +1149,7 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
   });
 
   // 2. Parametric Watertight Wall Sub-Prisms with Real Cutouts
-  for (let i = 0; i < N; i++) {
+  for (let i = 0; i < wallSegmentsM.length; i++) {
     if (openWallIndices.includes(i)) {
       // Open concept boundary: zero 3D wall prisms extruded!
       continue;
@@ -1613,8 +1659,21 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
                 />
 
                 {/* Wall Segments with Interactive Touch Selection & Option A Dashed Open Boundary */}
-                {polygon.map((p1, idx) => {
-                  const p2 = polygon[(idx + 1) % N];
+                {(filteredRealWalls.length >= 3 && !activePolygon
+                  ? filteredRealWalls.map((w, idx) => ({
+                      p1: { x: w.x1, z: w.z1 },
+                      p2: { x: w.x2, z: w.z2 },
+                      idx,
+                    }))
+                  : polygon.map((p1, idx) => ({
+                      p1,
+                      p2: polygon[(idx + 1) % N],
+                      idx,
+                    }))
+                ).map((seg) => {
+                  const p1 = seg.p1;
+                  const p2 = seg.p2;
+                  const idx = seg.idx;
                   const x1 = p1.x * scale2D + offset2DX;
                   const y1 = p1.z * scale2D + offset2DZ;
                   const x2 = p2.x * scale2D + offset2DX;
