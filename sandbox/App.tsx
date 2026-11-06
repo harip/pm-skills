@@ -49,8 +49,8 @@ if (Platform.OS === 'web' && typeof window !== 'undefined') {
 type Tab = 'catalog' | 'scanner' | 'studio' | 'assembly' | 'settings';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<Tab>('catalog');
-  const [selectedRoom, setSelectedRoom] = useState<Room>(GeometryService.getSampleRooms()[0]);
+  const [activeTab, setActiveTab] = useState<Tab>('scanner');
+  const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
   const [catalogRefreshKey, setCatalogRefreshKey] = useState(0);
 
   React.useEffect(() => {
@@ -58,6 +58,8 @@ export default function App() {
       const myRooms = await Database.getRooms();
       if (myRooms.length > 0) {
         setSelectedRoom(myRooms[0]);
+      } else {
+        setSelectedRoom(GeometryService.getSampleRooms()[0]);
       }
     })();
   }, []);
@@ -95,7 +97,7 @@ export default function App() {
             onScanFinished={handleScanFinished}
           />
         )}
-        {activeTab === 'studio' && (
+        {activeTab === 'studio' && selectedRoom && (
           <RoomStudioScreen
             room={selectedRoom}
             onBack={handleBackToCatalog}

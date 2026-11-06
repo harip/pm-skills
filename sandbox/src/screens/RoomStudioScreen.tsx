@@ -1,5 +1,5 @@
 // sandbox/src/screens/RoomStudioScreen.tsx
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -170,6 +170,51 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
       })
     : [];
 
+  // Connect minor corner gaps (< 2.5 ft) between adjacent walls (closet jogs & return walls)
+  const connectedWalls = useMemo(() => {
+    const list = [...filteredRealWalls];
+    if (list.length < 3) return list;
+
+    for (let i = 0; i < filteredRealWalls.length; i++) {
+      const w1 = filteredRealWalls[i];
+      const p2 = { x: w1.x2, z: w1.z2 };
+      let hasNear = false;
+      for (let j = 0; j < filteredRealWalls.length; j++) {
+        if (i === j) continue;
+        const w2 = filteredRealWalls[j];
+        if (Math.hypot(p2.x - w2.x1, p2.z - w2.z1) < 0.25 || Math.hypot(p2.x - w2.x2, p2.z - w2.z2) < 0.25) {
+          hasNear = true;
+          break;
+        }
+      }
+      if (!hasNear) {
+        let closestPt: { x: number; z: number } | null = null;
+        let minD = Infinity;
+        for (let j = 0; j < filteredRealWalls.length; j++) {
+          if (i === j) continue;
+          const w2 = filteredRealWalls[j];
+          const d1 = Math.hypot(p2.x - w2.x1, p2.z - w2.z1);
+          const d2 = Math.hypot(p2.x - w2.x2, p2.z - w2.z2);
+          if (d1 < minD && d1 < 2.5) { minD = d1; closestPt = { x: w2.x1, z: w2.z1 }; }
+          if (d2 < minD && d2 < 2.5) { minD = d2; closestPt = { x: w2.x2, z: w2.z2 }; }
+        }
+        if (closestPt && minD >= 0.25) {
+          list.push({
+            id: `jog-${i}`,
+            x1: p2.x,
+            z1: p2.z,
+            x2: closestPt.x,
+            z2: closestPt.z,
+            lengthFt: minD,
+            heightFt: w1.heightFt || 8.1,
+            yawDeg: (Math.atan2(closestPt.z - p2.z, closestPt.x - p2.x) * 180) / Math.PI,
+          });
+        }
+      }
+    }
+    return list;
+  }, [filteredRealWalls]);
+
   // Build the continuous closed boundary polygon from LiDAR wall segments
   const hasValidPrecomputedPolygon =
     parsedMesh?.polygon &&
@@ -180,28 +225,164 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
     !GeometryService.polygonCutsThroughFurniture(parsedMesh.polygon, realObjects) &&
     !GeometryService.hasInteriorChords(parsedMesh.polygon);
 
+  const topologicalResult = useMemo(() => {
+    return GeometryService.solveTopologicalRoom(realWalls, realDoors, realWindows, realObjects);
+  }, [realWalls, realDoors, realWindows, realObjects]);
+
   const polygon: PolygonPoint[] = activePolygon || (
     hasValidPrecomputedPolygon
       ? parsedMesh.polygon
-      : GeometryService.buildRoomPolygon(
-          realWalls,
-          room.width_ft || 14,
-          room.length_ft || 16,
-          realObjects,
-          realDoors
-        )
+      : (topologicalResult.exteriorPolygon && topologicalResult.exteriorPolygon.length >= 3
+          ? topologicalResult.exteriorPolygon
+          : GeometryService.buildRoomPolygon(
+              realWalls,
+              room.width_ft || 14,
+              room.length_ft || 16,
+              realObjects,
+              realDoors
+            ))
   );
   const N = polygon.length;
 
-  const pointsForBounds = (filteredRealWalls.length >= 3 && !activePolygon)
-    ? filteredRealWalls.flatMap(w => [{ x: w.x1, z: w.z1 }, { x: w.x2, z: w.z2 }])
+  const pointsForBounds: PolygonPoint[] = (connectedWalls.length >= 3 && !activePolygon)
+    ? connectedWalls.flatMap((w: any) => [{ x: w.x1, z: w.z1 }, { x: w.x2, z: w.z2 }])
     : polygon;
 
   // Center of the room polygon
   const centerPoly = {
-    x: pointsForBounds.reduce((acc, p) => acc + p.x, 0) / (pointsForBounds.length || 1),
-    z: pointsForBounds.reduce((acc, p) => acc + p.z, 0) / (pointsForBounds.length || 1),
+    x: pointsForBounds.reduce((acc: number, p: PolygonPoint) => acc + p.x, 0) / (pointsForBounds.length || 1),
+    z: pointsForBounds.reduce((acc: number, p: PolygonPoint) => acc + p.z, 0) / (pointsForBounds.length || 1),
   };
+
+  // Watertight Solid Floor Base Points (spans entire room + closet)
+  const floorBasePoints = (topologicalResult.exteriorPolygon && topologicalResult.exteriorPolygon.length >= 3 && !activePolygon)
+    ? topologicalResult.exteriorPolygon
+    : ((connectedWalls.length >= 3 && !activePolygon)
+        ? GeometryService.computeConvexHull(pointsForBounds)
+        : polygon);
+
+  // True Physical Room Area (Square Feet)
+  const computedAreaSqFt = useMemo(() => {
+    if (topologicalResult.areaSqFt > 0 && !activePolygon) {
+      return topologicalResult.areaSqFt;
+    }
+    if (floorBasePoints && floorBasePoints.length >= 3) {
+      let a = 0;
+      const n = floorBasePoints.length;
+      for (let i = 0; i < n; i++) {
+        const j = (i + 1) % n;
+        a += floorBasePoints[i].x * floorBasePoints[j].z - floorBasePoints[j].x * floorBasePoints[i].z;
+      }
+      return Math.round(Math.abs(a) / 2.0);
+    }
+    return Math.round(room.area_sqft || 120);
+  }, [topologicalResult, floorBasePoints, activePolygon, room.area_sqft]);
+
+  // Filter doors to only those hosted on real walls (strictly eliminates floating door arcs)
+  const validHostedDoors = useMemo(() => {
+    const hosted: any[] = [];
+    const wallsPool = (connectedWalls.length >= 3 && !activePolygon)
+      ? connectedWalls
+      : polygon.map((p, i) => ({
+          x1: p.x,
+          z1: p.z,
+          x2: polygon[(i + 1) % N].x,
+          z2: polygon[(i + 1) % N].z,
+        }));
+
+    for (let idx = 0; idx < realDoors.length; idx++) {
+      const d = realDoors[idx];
+      let cx = d.x;
+      let cz = d.z;
+      if (cx === undefined || cz === undefined) {
+        if (d.x1 !== undefined && d.x2 !== undefined) {
+          cx = (d.x1 + d.x2) / 2;
+          cz = (d.z1 + d.z2) / 2;
+        } else {
+          continue;
+        }
+      }
+
+      const doorDx = (d.x2 !== undefined && d.x1 !== undefined) ? (d.x2 - d.x1) : 0;
+      const doorDz = (d.z2 !== undefined && d.z1 !== undefined) ? (d.z2 - d.z1) : 0;
+      const doorLen = Math.hypot(doorDx, doorDz) || 1;
+      const doorUx = doorDx / doorLen;
+      const doorUz = doorDz / doorLen;
+
+      let bestWall: any = null;
+      let minPerp = Infinity;
+      let bestT = 0;
+
+      for (const w of wallsPool) {
+        const dx = w.x2 - w.x1;
+        const dz = w.z2 - w.z1;
+        const len = Math.hypot(dx, dz) || 1;
+        const ux = dx / len;
+        const uz = dz / len;
+
+        // If door has defined direction, verify collinear parallelism with wall (|dot| >= 0.707)
+        if (doorDx !== 0 || doorDz !== 0) {
+          const dotAlign = Math.abs(doorUx * ux + doorUz * uz);
+          if (dotAlign < 0.707) continue;
+        }
+
+        const vx = cx - w.x1;
+        const vz = cz - w.z1;
+        const t = vx * ux + vz * uz;
+        const perp = Math.abs(vx * uz - vz * ux);
+
+        if (perp < minPerp && perp <= 1.5 && t >= -1.5 && t <= len + 1.5) {
+          minPerp = perp;
+          bestWall = w;
+          bestT = Math.max(0, Math.min(len, t));
+        }
+      }
+
+      // Door must project within 1.5 ft of a real wall
+      if (bestWall && minPerp <= 1.5) {
+        const dx = bestWall.x2 - bestWall.x1;
+        const dz = bestWall.z2 - bestWall.z1;
+        const len = Math.hypot(dx, dz) || 1;
+        const ux = dx / len;
+        const uz = dz / len;
+        const nx = -uz;
+        const nz = ux;
+        const dWidth = d.widthFt || 2.5;
+
+        // Position door threshold along the hosting wall centerline
+        const halfW = Math.min(dWidth / 2, len / 2);
+        const clampedT = Math.max(halfW, Math.min(len - halfW, bestT));
+        const hostCenterX = bestWall.x1 + ux * clampedT;
+        const hostCenterZ = bestWall.z1 + uz * clampedT;
+
+        const p1x = hostCenterX - ux * halfW;
+        const p1z = hostCenterZ - uz * halfW;
+        const p2x = hostCenterX + ux * halfW;
+        const p2z = hostCenterZ + uz * halfW;
+
+        // Orient swing leaf into the room (toward centerPoly)
+        let swingNx = nx;
+        let swingNz = nz;
+        if (swingNx * (centerPoly.x - hostCenterX) + swingNz * (centerPoly.z - hostCenterZ) < 0) {
+          swingNx = -swingNx;
+          swingNz = -swingNz;
+        }
+
+        hosted.push({
+          ...d,
+          originalIdx: idx,
+          p1x,
+          p1z,
+          p2x,
+          p2z,
+          swingTipX: p1x + swingNx * dWidth,
+          swingTipZ: p1z + swingNz * dWidth,
+          dWidth,
+        });
+      }
+    }
+    return hosted;
+  }, [realDoors, connectedWalls, polygon, N, activePolygon, centerPoly]);
 
   // Span of the room in feet
   let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
@@ -1055,10 +1236,10 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
   const lx = lightDir.x / lightLen, lz = lightDir.z / lightLen;
 
   // --- Certified CAD Parametric Solid Model Construction ---
-  // When realWalls are present from LiDAR scan, render the physical structural walls & closet returns directly!
+  // When connectedWalls are present from LiDAR scan, render the physical structural walls & closet returns directly!
   const wallSegmentsM: { p1: { x: number; z: number }; p2: { x: number; z: number } }[] = [];
-  if (filteredRealWalls.length >= 3 && !activePolygon) {
-    for (const w of filteredRealWalls) {
+  if (connectedWalls.length >= 3 && !activePolygon) {
+    for (const w of connectedWalls) {
       wallSegmentsM.push({
         p1: { x: w.x1 * 0.3048, z: w.z1 * 0.3048 },
         p2: { x: w.x2 * 0.3048, z: w.z2 * 0.3048 },
@@ -1132,9 +1313,6 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
   const faces3D: Face3D[] = [];
 
   // 1. Watertight Solid Floor Polygon
-  const floorBasePoints = (filteredRealWalls.length >= 3 && !activePolygon)
-    ? GeometryService.computeConvexHull(pointsForBounds)
-    : polygon;
   const floorProjected = floorBasePoints.map((p) =>
     toScreen3D(p.x * 0.3048, 0, p.z * 0.3048)
   );
@@ -1422,8 +1600,8 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
   // Depth sort faces back-to-front (Painters Algorithm for watertight 3D occlusion)
   faces3D.sort((a, b) => b.avgDepth - a.avgDepth);
 
-  // Ceiling Wireframe Canopy
-  const ceilingProjected = polygon.map((p) =>
+  // Ceiling Wireframe Canopy (uses true room + alcove footprint)
+  const ceilingProjected = floorBasePoints.map((p) =>
     toScreen3D(p.x * 0.3048, effectiveHeightM, p.z * 0.3048)
   );
 
@@ -1610,7 +1788,7 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
                   ? `${GeometryService.formatMetric(room.length_ft)} × ${GeometryService.formatMetric(room.width_ft)}`
                   : `${GeometryService.formatFeetInches(room.length_ft)} × ${GeometryService.formatFeetInches(room.width_ft)}`}
                 {'  •  '}
-                {isMetric ? GeometryService.formatAreaMetric(room.area_sqft) : GeometryService.formatAreaSqFt(room.area_sqft)}
+                {isMetric ? GeometryService.formatAreaMetric(computedAreaSqFt) : GeometryService.formatAreaSqFt(computedAreaSqFt)}
                 {'  •  '}
                 {currentFloor}
               </Text>
@@ -1651,26 +1829,28 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
                   </React.Fragment>
                 ))}
 
-                {/* Floor Plate Fill (Watertight solid floor) */}
+                {/* Floor Plate Fill (Watertight solid floor under entire bedroom + closet) */}
                 <Polygon
-                  points={polygon.map((p) => `${p.x * scale2D + offset2DX},${p.z * scale2D + offset2DZ}`).join(' ')}
+                  points={floorBasePoints.map((p) => `${p.x * scale2D + offset2DX},${p.z * scale2D + offset2DZ}`).join(' ')}
                   fill="#ffffff"
                   stroke="none"
                 />
 
                 {/* Wall Segments with Interactive Touch Selection & Option A Dashed Open Boundary */}
-                {(filteredRealWalls.length >= 3 && !activePolygon
-                  ? filteredRealWalls.map((w, idx) => ({
+                {(connectedWalls.length >= 3 && !activePolygon
+                  ? connectedWalls.map((w: any, idx: number) => ({
                       p1: { x: w.x1, z: w.z1 },
                       p2: { x: w.x2, z: w.z2 },
                       idx,
+                      label: w.lengthFt ? (isMetric ? GeometryService.formatMetric(w.lengthFt) : GeometryService.formatFeetInches(w.lengthFt)) : '',
                     }))
-                  : polygon.map((p1, idx) => ({
+                  : polygon.map((p1: PolygonPoint, idx: number) => ({
                       p1,
                       p2: polygon[(idx + 1) % N],
                       idx,
+                      label: '',
                     }))
-                ).map((seg) => {
+                ).map((seg: any) => {
                   const p1 = seg.p1;
                   const p2 = seg.p2;
                   const idx = seg.idx;
@@ -1914,31 +2094,44 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
                   );
                 })}
 
-                {/* Render True Door Openings, Jambs & Swings */}
-                {realDoors.map((d, idx) => {
-                  const dx1 = (d.x1 ?? (d.x - 1.5)) * scale2D + offset2DX;
-                  const dy1 = (d.z1 ?? (d.z - 1.5)) * scale2D + offset2DZ;
-                  const dx2 = (d.x2 ?? (d.x + 1.5)) * scale2D + offset2DX;
-                  const dy2 = (d.z2 ?? (d.z + 1.5)) * scale2D + offset2DZ;
-                  const dLen = Math.hypot(dx2 - dx1, dy2 - dy1) || 24;
-                  const isSel = selectedAperture?.type === 'door' && ((d.id && selectedAperture.id === d.id) || selectedAperture.index === idx);
+                {/* Render True Door Openings, Jambs & Swings (Only for doors hosted on room walls) */}
+                {validHostedDoors.map((d: any, dIdx: number) => {
+                  const x1 = d.p1x * scale2D + offset2DX;
+                  const y1 = d.p1z * scale2D + offset2DZ;
+                  const x2 = d.p2x * scale2D + offset2DX;
+                  const y2 = d.p2z * scale2D + offset2DZ;
+                  const tipX = d.swingTipX * scale2D + offset2DX;
+                  const tipY = d.swingTipZ * scale2D + offset2DZ;
+                  const dLen = Math.hypot(x2 - x1, y2 - y1) || 24;
+                  const isSel = selectedAperture?.type === 'door' && ((d.id && selectedAperture.id === d.id) || selectedAperture.index === d.originalIdx);
+
+                  // Calculate exact SVG sweep direction so arc bows outward towards tip
+                  const dpx = x2 - x1;
+                  const dpy = y2 - y1;
+                  const tpx = tipX - x1;
+                  const tpy = tipY - y1;
+                  const sweep = (dpx * tpy - dpy * tpx) > 0 ? 1 : 0;
 
                   return (
-                    <G key={`door-2d-${idx}`}>
-                      <Line x1={dx1} y1={dy1} x2={dx2} y2={dy2} stroke="#ffffff" strokeWidth={10 * zoom} />
+                    <G key={`door-2d-${dIdx}`}>
+                      {/* Doorway Wall Opening Cutout */}
+                      <Line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#ffffff" strokeWidth={16 * zoom} />
+                      {/* Quarter-Circle Swing Arc */}
                       <Path
-                        d={`M ${dx1} ${dy1} A ${dLen} ${dLen} 0 0 1 ${dx2} ${dy2}`}
+                        d={`M ${x2} ${y2} A ${dLen} ${dLen} 0 0 ${sweep} ${tipX} ${tipY}`}
                         fill="none"
                         stroke={isSel ? '#f97316' : '#007aff'}
                         strokeWidth={isSel ? 2.5 : 1.5}
                         strokeDasharray="3,3"
                       />
-                      <Line x1={dx1} y1={dy1} x2={dx1} y2={dy1 - dLen * 0.7} stroke={isSel ? '#f97316' : '#007aff'} strokeWidth={isSel ? 3.5 : 2.5} />
+                      {/* Open Door Leaf */}
+                      <Line x1={x1} y1={y1} x2={tipX} y2={tipY} stroke={isSel ? '#f97316' : '#007aff'} strokeWidth={isSel ? 3.5 : 2.5} />
+                      {/* Touch Target */}
                       <Line
-                        x1={dx1} y1={dy1} x2={dx2} y2={dy2}
+                        x1={x1} y1={y1} x2={x2} y2={y2}
                         stroke="transparent"
                         strokeWidth={36}
-                        onPress={() => setSelectedAperture({ type: 'door', id: d.id, index: idx, x1: d.x1 ?? (d.x - 1.5), z1: d.z1 ?? (d.z - 1.5), x2: d.x2 ?? (d.x + 1.5), z2: d.z2 ?? (d.z + 1.5), widthFt: d.widthFt || 3.0 })}
+                        onPress={() => setSelectedAperture({ type: 'door', id: d.id, index: d.originalIdx, x1: d.p1x, z1: d.p1z, x2: d.p2x, z2: d.p2z, widthFt: d.dWidth })}
                       />
                     </G>
                   );
@@ -2120,7 +2313,7 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
                   fontWeight="600"
                   textAnchor="middle"
                 >
-                  {isMetric ? GeometryService.formatAreaMetric(room.area_sqft) : GeometryService.formatAreaSqFt(room.area_sqft)}
+                  {isMetric ? GeometryService.formatAreaMetric(computedAreaSqFt) : GeometryService.formatAreaSqFt(computedAreaSqFt)}
                 </SvgText>
               </>
             ) : (

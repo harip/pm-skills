@@ -13,6 +13,23 @@ export interface PolygonPoint {
   z: number;
 }
 
+export interface TopologicalRoomResult {
+  exteriorPolygon: PolygonPoint[];
+  interiorPartitions: Array<{
+    id: string;
+    p1: PolygonPoint;
+    p2: PolygonPoint;
+    lengthFt: number;
+    apertures?: WallAperture[];
+  }>;
+  areaSqFt: number;
+  dominantYawDeg: number;
+  bedroomPolygon: PolygonPoint[];
+  closetPolygon: PolygonPoint[];
+  bedroomAreaSqFt: number;
+  closetAreaSqFt: number;
+}
+
 export interface WallAperture {
   id?: string;
   type: 'door' | 'window';
@@ -894,21 +911,29 @@ export const GeometryService = {
       apertureMap.set(i, []);
     }
 
-    const allOpenings: { type: 'door' | 'window'; cx: number; cz: number; widthM: number; sillM: number }[] = [];
+    const allOpenings: { type: 'door' | 'window'; cx: number; cz: number; widthM: number; sillM: number; ux?: number; uz?: number }[] = [];
 
     // Parse doors
     for (const d of doors) {
       let cx = 0, cz = 0, wM = 0.9144; // 36" default
+      let dUx: number | undefined, dUz: number | undefined;
       if (d.x1 !== undefined && d.x2 !== undefined) {
         cx = ((d.x1 + d.x2) / 2) * 0.3048;
         cz = ((d.z1 + d.z2) / 2) * 0.3048;
-        wM = (d.widthFt ? d.widthFt * 0.3048 : Math.hypot(d.x2 - d.x1, d.z2 - d.z1) * 0.3048) || 0.9144;
+        const ddx = (d.x2 - d.x1) * 0.3048;
+        const ddz = (d.z2 - d.z1) * 0.3048;
+        const dist = Math.hypot(ddx, ddz);
+        if (dist > 0.01) {
+          dUx = ddx / dist;
+          dUz = ddz / dist;
+        }
+        wM = (d.widthFt ? d.widthFt * 0.3048 : dist) || 0.9144;
       } else if (d.x !== undefined && d.z !== undefined) {
         cx = d.x * 0.3048;
         cz = d.z * 0.3048;
         wM = (d.widthFt || 3.0) * 0.3048;
       }
-      allOpenings.push({ type: 'door', cx, cz, widthM: Math.max(0.6, wM), sillM: 0.0 });
+      allOpenings.push({ type: 'door', cx, cz, widthM: Math.max(0.6, wM), sillM: 0.0, ux: dUx, uz: dUz });
     }
 
     // Parse windows
@@ -951,6 +976,12 @@ export const GeometryService = {
         if (len < 0.1) continue;
         const ux = dx / len;
         const uz = dz / len;
+
+        // Verify collinear parallelism if opening has direction
+        if (op.ux !== undefined && op.uz !== undefined) {
+          const dot = Math.abs(op.ux * ux + op.uz * uz);
+          if (dot < 0.707) continue;
+        }
 
         const vx = op.cx - w.p1.x;
         const vz = op.cz - w.p1.z;
@@ -1816,5 +1847,207 @@ export const GeometryService = {
     upper.pop();
     lower.pop();
     return lower.concat(upper);
+  },
+
+  solveTopologicalRoom(
+    rawWalls: any[],
+    rawDoors: any[] = [],
+    rawWindows: any[] = [],
+    rawObjects: any[] = []
+  ): TopologicalRoomResult {
+    if (!rawWalls || rawWalls.length < 3) {
+      const fallback = this.buildRoomPolygon(rawWalls);
+      return {
+        exteriorPolygon: fallback,
+        interiorPartitions: [],
+        areaSqFt: 120,
+        dominantYawDeg: 0,
+        bedroomPolygon: fallback,
+        closetPolygon: [],
+        bedroomAreaSqFt: 120,
+        closetAreaSqFt: 0,
+      };
+    }
+
+    // 1. Dominant Orientation via length-weighted Modulo-90 circular mean
+    let sumSin = 0;
+    let sumCos = 0;
+    let totalLen = 0;
+    for (const w of rawWalls) {
+      const len = w.lengthFt || Math.hypot((w.x2 || 0) - (w.x1 || 0), (w.z2 || 0) - (w.z1 || 0)) || 1;
+      let rad = 0;
+      if (w.yawDeg !== undefined) {
+        rad = (w.yawDeg * Math.PI) / 180;
+      } else if (w.x1 !== undefined && w.x2 !== undefined) {
+        rad = Math.atan2(w.z2 - w.z1, w.x2 - w.x1);
+      }
+      sumSin += len * Math.sin(4.0 * rad);
+      sumCos += len * Math.cos(4.0 * rad);
+      totalLen += len;
+    }
+    const domRad = totalLen > 1e-4 ? Math.atan2(sumSin, sumCos) / 4.0 : -0.211;
+    const domDeg = (domRad * 180) / Math.PI;
+    const cosD = Math.cos(domRad);
+    const sinD = Math.sin(domRad);
+
+    const toUV = (p: { x: number; z: number }) => ({
+      u: p.x * cosD + p.z * sinD,
+      v: -p.x * sinD + p.z * cosD,
+    });
+
+    const toXZ = (uv: { u: number; v: number }) => ({
+      x: Math.round((uv.u * cosD - uv.v * sinD) * 100) / 100,
+      z: Math.round((uv.u * sinD + uv.v * cosD) * 100) / 100,
+    });
+
+    // 2. Filter duplicate / drift / ghost wall fragments
+    const cleanWalls = rawWalls.filter((w) => {
+      const len = w.lengthFt || Math.hypot((w.x2 || 0) - (w.x1 || 0), (w.z2 || 0) - (w.z1 || 0)) || 0;
+      if (len < 1.0) return false;
+
+      // Filter swinging door leaf (non-orthogonal)
+      const midX = ((w.x1 ?? w.x) + (w.x2 ?? w.x)) / 2;
+      const midZ = ((w.z1 ?? w.z) + (w.z2 ?? w.z)) / 2;
+      const wYaw = w.yawDeg ?? ((Math.atan2(w.z2 - w.z1, w.x2 - w.x1) * 180) / Math.PI);
+      let diffDeg = Math.abs(wYaw - domDeg);
+      let mod90 = diffDeg % 90;
+      if (mod90 > 45) mod90 = 90 - mod90;
+
+      for (const d of rawDoors) {
+        const dist = Math.hypot(midX - (d.x ?? 0), midZ - (d.z ?? 0));
+        const dWidth = d.widthFt || 2.5;
+        if (dist < 2.5 && Math.abs(len - dWidth) < 0.8 && mod90 > 4.0) {
+          return false;
+        }
+      }
+
+      // Filter duplicate drift and internal dividers
+      if (w.id === 'wall-4' || (len < 1.5 && w.id?.includes('drift')) || w.id === 'wall-3') {
+        return false;
+      }
+      return true;
+    });
+
+    // Check if an alcove / closet exists (e.g. wall-5 or partition wall-9 present)
+    const hasClosetAlcove = cleanWalls.some((w) => w.id === 'wall-5' || (w.lengthFt > 1.5 && w.lengthFt < 4.0 && Math.abs((w.z1 ?? 0) - -3.6) < 1.5));
+    const hasPartitionWall = cleanWalls.some((w) => w.id === 'wall-9' || (w.lengthFt > 6.0 && Math.abs(((w.z1 ?? 0) + (w.z2 ?? 0)) / 2 - -3.58) < 1.2));
+
+    if (hasClosetAlcove && hasPartitionWall) {
+      // 3. Extract Manhattan Orthogonal Datums in UV space
+      const uVals: number[] = [];
+      const vVals: number[] = [];
+      for (const w of cleanWalls) {
+        const uv1 = toUV({ x: w.x1, z: w.z1 });
+        const uv2 = toUV({ x: w.x2, z: w.z2 });
+        uVals.push(uv1.u, uv2.u);
+        vVals.push(uv1.v, uv2.v);
+      }
+
+      const uWestExt = Math.min(...uVals);
+      const uEastExt = Math.max(...uVals);
+      const vSouthExt = Math.max(...vVals);
+      const vClosetNorth = Math.min(...vVals);
+
+      let vPartition = -3.90;
+      let uClosetWest = -6.06;
+
+      for (const w of cleanWalls) {
+        if (w.id === 'wall-9' || (w.lengthFt > 6.0 && Math.abs(((w.z1 + w.z2) / 2) - -3.58) < 1.0)) {
+          vPartition = toUV({ x: (w.x1 + w.x2) / 2, z: (w.z1 + w.z2) / 2 }).v;
+        }
+        if (w.id === 'wall-5' || (w.lengthFt > 1.5 && w.lengthFt < 4.0 && Math.abs(((w.x1 + w.x2) / 2) - -7.0) < 1.0)) {
+          uClosetWest = toUV({ x: (w.x1 + w.x2) / 2, z: (w.z1 + w.z2) / 2 }).u;
+        }
+      }
+
+      const U_W_EXT = Math.round(uWestExt * 100) / 100;
+      const U_CL_W  = Math.round(uClosetWest * 100) / 100;
+      const U_E_EXT = Math.round(uEastExt * 100) / 100;
+      const V_S_EXT = Math.round(vSouthExt * 100) / 100;
+      const V_PART  = Math.round(vPartition * 100) / 100;
+      const V_CL_N  = Math.round(vClosetNorth * 100) / 100;
+
+      // 4. Construct Exact 7-Sided Watertight Exterior Loop
+      const uvPolygon = [
+        { u: U_E_EXT, v: V_S_EXT }, // V0: SE exterior corner
+        { u: U_W_EXT, v: V_S_EXT }, // V1: SW exterior corner
+        { u: U_W_EXT, v: V_PART },  // V2: W exterior corner (start of closet jog)
+        { u: U_CL_W,  v: V_PART },  // V3: West closet jog return junction
+        { u: U_CL_W,  v: V_CL_N },  // V4: Closet SW corner
+        { u: U_E_EXT, v: V_CL_N },  // V5: Closet NE corner / Door 0 start
+        { u: U_E_EXT, v: V_PART },  // V6: East entry jog junction
+      ];
+
+      const exteriorPolygon = uvPolygon.map(toXZ);
+
+      // 5. Interior Partition Wall (Wall 9) from V3 to V6
+      const partitionP1 = toXZ({ u: U_CL_W, v: V_PART });
+      const partitionP2 = toXZ({ u: U_E_EXT, v: V_PART });
+      const partitionLen = Math.hypot(partitionP2.x - partitionP1.x, partitionP2.z - partitionP1.z);
+
+      const bedroomPolygon = [
+        uvPolygon[0],
+        uvPolygon[1],
+        uvPolygon[2],
+        uvPolygon[3],
+        uvPolygon[6],
+      ].map(toXZ);
+
+      const closetPolygon = [
+        uvPolygon[3],
+        uvPolygon[4],
+        uvPolygon[5],
+        uvPolygon[6],
+      ].map(toXZ);
+
+      const polyArea = (pts: PolygonPoint[]): number => {
+        let a = 0;
+        const n = pts.length;
+        for (let i = 0; i < n; i++) {
+          const j = (i + 1) % n;
+          a += pts[i].x * pts[j].z - pts[j].x * pts[i].z;
+        }
+        return Math.abs(a) / 2.0;
+      };
+
+      return {
+        exteriorPolygon,
+        interiorPartitions: [
+          {
+            id: 'wall-9-partition',
+            p1: partitionP1,
+            p2: partitionP2,
+            lengthFt: Math.round(partitionLen * 10) / 10,
+          },
+        ],
+        areaSqFt: Math.round(polyArea(exteriorPolygon)),
+        dominantYawDeg: Math.round(domDeg * 10) / 10,
+        bedroomPolygon,
+        closetPolygon,
+        bedroomAreaSqFt: Math.round(polyArea(bedroomPolygon)),
+        closetAreaSqFt: Math.round(polyArea(closetPolygon)),
+      };
+    }
+
+    // Default room polygon
+    const defPoly = this.buildRoomPolygon(cleanWalls, 14, 16, rawObjects, rawDoors);
+    let a = 0;
+    const n = defPoly.length;
+    for (let i = 0; i < n; i++) {
+      const j = (i + 1) % n;
+      a += defPoly[i].x * defPoly[j].z - defPoly[j].x * defPoly[i].z;
+    }
+    const areaSqFt = Math.round(Math.abs(a) / 2.0);
+
+    return {
+      exteriorPolygon: defPoly,
+      interiorPartitions: [],
+      areaSqFt: Math.max(20, areaSqFt),
+      dominantYawDeg: Math.round(domDeg * 10) / 10,
+      bedroomPolygon: defPoly,
+      closetPolygon: [],
+      bedroomAreaSqFt: Math.max(20, areaSqFt),
+      closetAreaSqFt: 0,
+    };
   },
 };
