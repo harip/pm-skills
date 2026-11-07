@@ -244,9 +244,17 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
   );
   const N = polygon.length;
 
-  const pointsForBounds: PolygonPoint[] = (connectedWalls.length >= 3 && !activePolygon)
-    ? connectedWalls.flatMap((w: any) => [{ x: w.x1, z: w.z1 }, { x: w.x2, z: w.z2 }])
-    : polygon;
+  const hasValidTopological = Boolean(
+    topologicalResult.exteriorPolygon &&
+    topologicalResult.exteriorPolygon.length >= 3 &&
+    !activePolygon
+  );
+
+  const pointsForBounds: PolygonPoint[] = hasValidTopological
+    ? topologicalResult.exteriorPolygon
+    : ((connectedWalls.length >= 3 && !activePolygon)
+        ? connectedWalls.flatMap((w: any) => [{ x: w.x1, z: w.z1 }, { x: w.x2, z: w.z2 }])
+        : polygon);
 
   // Center of the room polygon
   const centerPoly = {
@@ -255,7 +263,7 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
   };
 
   // Watertight Solid Floor Base Points (spans entire room + closet)
-  const floorBasePoints = (topologicalResult.exteriorPolygon && topologicalResult.exteriorPolygon.length >= 3 && !activePolygon)
+  const floorBasePoints = hasValidTopological
     ? topologicalResult.exteriorPolygon
     : ((connectedWalls.length >= 3 && !activePolygon)
         ? GeometryService.computeConvexHull(pointsForBounds)
@@ -278,20 +286,73 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
     return Math.round(room.area_sqft || 120);
   }, [topologicalResult, floorBasePoints, activePolygon, room.area_sqft]);
 
+  // Augment doors with interior partition closet doors from topological solver
+  const allDoors = useMemo(() => {
+    const list = [...realDoors];
+    if (hasValidTopological && topologicalResult.interiorPartitions) {
+      for (const part of topologicalResult.interiorPartitions) {
+        if (part.apertures) {
+          for (const a of part.apertures) {
+            if (a.type === 'door') {
+              const dx = part.p2.x - part.p1.x;
+              const dz = part.p2.z - part.p1.z;
+              const len = Math.hypot(dx, dz) || 1;
+              const ux = dx / len;
+              const uz = dz / len;
+              const midM = (a.startDist + a.endDist) / 2;
+              const midFt = midM / 0.3048;
+              const widthFt = (a.endDist - a.startDist) / 0.3048;
+              const cx = part.p1.x + ux * midFt;
+              const cz = part.p1.z + uz * midFt;
+              list.push({
+                id: `${part.id}-door`,
+                x: cx,
+                z: cz,
+                x1: cx - (ux * widthFt) / 2,
+                z1: cz - (uz * widthFt) / 2,
+                x2: cx + (ux * widthFt) / 2,
+                z2: cz + (uz * widthFt) / 2,
+                widthFt: widthFt,
+                heightFt: 6.7,
+                isInteriorClosetDoor: true,
+              });
+            }
+          }
+        }
+      }
+    }
+    return list;
+  }, [realDoors, hasValidTopological, topologicalResult]);
+
   // Filter doors to only those hosted on real walls (strictly eliminates floating door arcs)
   const validHostedDoors = useMemo(() => {
     const hosted: any[] = [];
-    const wallsPool = (connectedWalls.length >= 3 && !activePolygon)
-      ? connectedWalls
-      : polygon.map((p, i) => ({
-          x1: p.x,
-          z1: p.z,
-          x2: polygon[(i + 1) % N].x,
-          z2: polygon[(i + 1) % N].z,
-        }));
+    const wallsPool = hasValidTopological
+      ? [
+          ...polygon.map((p, i) => ({
+            x1: p.x,
+            z1: p.z,
+            x2: polygon[(i + 1) % N].x,
+            z2: polygon[(i + 1) % N].z,
+          })),
+          ...(topologicalResult.interiorPartitions || []).map((part) => ({
+            x1: part.p1.x,
+            z1: part.p1.z,
+            x2: part.p2.x,
+            z2: part.p2.z,
+          })),
+        ]
+      : ((connectedWalls.length >= 3 && !activePolygon)
+          ? connectedWalls
+          : polygon.map((p, i) => ({
+              x1: p.x,
+              z1: p.z,
+              x2: polygon[(i + 1) % N].x,
+              z2: polygon[(i + 1) % N].z,
+            })));
 
-    for (let idx = 0; idx < realDoors.length; idx++) {
-      const d = realDoors[idx];
+    for (let idx = 0; idx < allDoors.length; idx++) {
+      const d = allDoors[idx];
       let cx = d.x;
       let cz = d.z;
       if (cx === undefined || cz === undefined) {
@@ -1236,9 +1297,24 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
   const lx = lightDir.x / lightLen, lz = lightDir.z / lightLen;
 
   // --- Certified CAD Parametric Solid Model Construction ---
-  // When connectedWalls are present from LiDAR scan, render the physical structural walls & closet returns directly!
+  // When topological solution is available, render clean exterior watertight walls + interior partitions!
   const wallSegmentsM: { p1: { x: number; z: number }; p2: { x: number; z: number } }[] = [];
-  if (connectedWalls.length >= 3 && !activePolygon) {
+  if (hasValidTopological) {
+    for (let i = 0; i < N; i++) {
+      const cur = polygon[i];
+      const nxt = polygon[(i + 1) % N];
+      wallSegmentsM.push({
+        p1: { x: cur.x * 0.3048, z: cur.z * 0.3048 },
+        p2: { x: nxt.x * 0.3048, z: nxt.z * 0.3048 },
+      });
+    }
+    for (const part of (topologicalResult.interiorPartitions || [])) {
+      wallSegmentsM.push({
+        p1: { x: part.p1.x * 0.3048, z: part.p1.z * 0.3048 },
+        p2: { x: part.p2.x * 0.3048, z: part.p2.z * 0.3048 },
+      });
+    }
+  } else if (connectedWalls.length >= 3 && !activePolygon) {
     for (const w of connectedWalls) {
       wallSegmentsM.push({
         p1: { x: w.x1 * 0.3048, z: w.z1 * 0.3048 },
@@ -1263,7 +1339,7 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
 
   const apertureMap = GeometryService.projectAperturesOntoWalls(
     wallSegmentsM,
-    realDoors,
+    allDoors,
     realWindows,
     defaultSillM
   );
@@ -1837,19 +1913,41 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
                 />
 
                 {/* Wall Segments with Interactive Touch Selection & Option A Dashed Open Boundary */}
-                {(connectedWalls.length >= 3 && !activePolygon
-                  ? connectedWalls.map((w: any, idx: number) => ({
-                      p1: { x: w.x1, z: w.z1 },
-                      p2: { x: w.x2, z: w.z2 },
-                      idx,
-                      label: w.lengthFt ? (isMetric ? GeometryService.formatMetric(w.lengthFt) : GeometryService.formatFeetInches(w.lengthFt)) : '',
-                    }))
-                  : polygon.map((p1: PolygonPoint, idx: number) => ({
-                      p1,
-                      p2: polygon[(idx + 1) % N],
-                      idx,
-                      label: '',
-                    }))
+                {(hasValidTopological
+                  ? [
+                      ...polygon.map((p1: PolygonPoint, idx: number) => {
+                        const p2 = polygon[(idx + 1) % N];
+                        const segLenFt = Math.hypot(p2.x - p1.x, p2.z - p1.z);
+                        return {
+                          p1,
+                          p2,
+                          idx,
+                          label: isMetric ? GeometryService.formatMetric(segLenFt) : GeometryService.formatFeetInches(segLenFt),
+                        };
+                      }),
+                      ...(topologicalResult.interiorPartitions || []).map((part, pIdx) => ({
+                        p1: part.p1,
+                        p2: part.p2,
+                        idx: 100 + pIdx,
+                        label: isMetric ? GeometryService.formatMetric(part.lengthFt) : GeometryService.formatFeetInches(part.lengthFt),
+                        isInteriorPartition: true,
+                        apertures: part.apertures,
+                      })),
+                    ]
+                  : (connectedWalls.length >= 3 && !activePolygon
+                      ? connectedWalls.map((w: any, idx: number) => ({
+                          p1: { x: w.x1, z: w.z1 },
+                          p2: { x: w.x2, z: w.z2 },
+                          idx,
+                          label: w.lengthFt ? (isMetric ? GeometryService.formatMetric(w.lengthFt) : GeometryService.formatFeetInches(w.lengthFt)) : '',
+                        }))
+                      : polygon.map((p1: PolygonPoint, idx: number) => ({
+                          p1,
+                          p2: polygon[(idx + 1) % N],
+                          idx,
+                          label: '',
+                        }))
+                    )
                 ).map((seg: any) => {
                   const p1 = seg.p1;
                   const p2 = seg.p2;

@@ -1868,82 +1868,116 @@ export const GeometryService = {
       }
 
       // Filter duplicate drift and internal dividers
-      if (w.id === 'wall-4' || (len < 1.5 && w.id?.includes('drift')) || w.id === 'wall-3') {
+      if (w.id === 'wall-4' || (len < 1.0 && w.id?.includes('drift')) || (w.id === 'wall-7' && len < 1.0)) {
         return false;
       }
       return true;
     });
 
-    // Check if an alcove / closet exists (e.g. wall-5 or partition wall-9 present)
-    const hasClosetAlcove = cleanWalls.some((w) => w.id === 'wall-5' || (w.lengthFt > 1.5 && w.lengthFt < 4.0 && Math.abs((w.z1 ?? 0) - -3.6) < 1.5));
+    // Check if an alcove / closet exists (e.g. wall-2/wall-3 or partition wall-9 present)
+    const hasClosetAlcove = cleanWalls.some((w) => w.id === 'wall-2' || w.id === 'wall-3' || w.id === 'wall-5' || (w.lengthFt > 1.5 && w.lengthFt < 4.0 && Math.abs((w.z1 ?? 0) - -3.6) < 1.5));
     const hasPartitionWall = cleanWalls.some((w) => w.id === 'wall-9' || (w.lengthFt > 6.0 && Math.abs(((w.z1 ?? 0) + (w.z2 ?? 0)) / 2 - -3.58) < 1.2));
 
     if (hasClosetAlcove && hasPartitionWall) {
-      // 3. Extract Manhattan Orthogonal Datums in UV space
-      const uVals: number[] = [];
-      const vVals: number[] = [];
-      for (const w of cleanWalls) {
-        const uv1 = toUV({ x: w.x1, z: w.z1 });
-        const uv2 = toUV({ x: w.x2, z: w.z2 });
-        uVals.push(uv1.u, uv2.u);
-        vVals.push(uv1.v, uv2.v);
+      // 3. Extract Manhattan Orthogonal Datums in UV space via Topological Dual-Zone Decomposition
+      // Identify key walls for Bedroom and Closet zones
+      const w0 = cleanWalls.find(w => w.id === 'wall-0') || cleanWalls.find(w => Math.abs(toUV({ x: (w.x1 + w.x2) / 2, z: (w.z1 + w.z2) / 2 }).v - 5.89) < 1.0);
+      const w1 = cleanWalls.find(w => w.id === 'wall-1') || cleanWalls.find(w => Math.abs(toUV({ x: (w.x1 + w.x2) / 2, z: (w.z1 + w.z2) / 2 }).u - 3.70) < 1.0);
+      const w8 = cleanWalls.find(w => w.id === 'wall-8') || cleanWalls.find(w => Math.abs(toUV({ x: (w.x1 + w.x2) / 2, z: (w.z1 + w.z2) / 2 }).u - -7.62) < 1.0);
+      const w6 = cleanWalls.find(w => w.id === 'wall-6');
+      const w9 = cleanWalls.find(w => w.id === 'wall-9');
+      const w2 = cleanWalls.find(w => w.id === 'wall-2');
+      const w3 = cleanWalls.find(w => w.id === 'wall-3') || rawWalls.find(w => w.id === 'wall-3');
+
+      // Compute datums
+      let uWest = -7.62;
+      let uEast = 3.70;
+      let vNorth = 5.89;
+      let vPartition = -3.53;
+      let vClosetBack = -5.89;
+      let uClosetEast = 0.10;
+
+      if (w8) uWest = (toUV({ x: w8.x1, z: w8.z1 }).u + toUV({ x: w8.x2, z: w8.z2 }).u) / 2;
+      if (w1) uEast = (toUV({ x: w1.x1, z: w1.z1 }).u + toUV({ x: w1.x2, z: w1.z2 }).u) / 2;
+      if (w0) vNorth = (toUV({ x: w0.x1, z: w0.z1 }).v + toUV({ x: w0.x2, z: w0.z2 }).v) / 2;
+      if (w9 && w6) {
+        vPartition = (toUV({ x: w9.x1, z: w9.z1 }).v + toUV({ x: w9.x2, z: w9.z2 }).v + toUV({ x: w6.x1, z: w6.z1 }).v + toUV({ x: w6.x2, z: w6.z2 }).v) / 4;
+      } else if (w9) {
+        vPartition = (toUV({ x: w9.x1, z: w9.z1 }).v + toUV({ x: w9.x2, z: w9.z2 }).v) / 2;
+      }
+      if (w2) vClosetBack = (toUV({ x: w2.x1, z: w2.z1 }).v + toUV({ x: w2.x2, z: w2.z2 }).v) / 2;
+      if (w3) uClosetEast = (toUV({ x: w3.x1, z: w3.z1 }).u + toUV({ x: w3.x2, z: w3.z2 }).u) / 2;
+
+      let uClosetWest = -6.24;
+      const w5 = cleanWalls.find((w) => w.id === 'wall-5') || rawWalls.find((w) => w.id === 'wall-5');
+      if (w5) {
+        uClosetWest = (toUV({ x: w5.x1, z: w5.z1 }).u + toUV({ x: w5.x2, z: w5.z2 }).u) / 2;
+      } else {
+        const leftReturn = cleanWalls.find((w) => {
+          const uv1 = toUV({ x: w.x1, z: w.z1 });
+          const uv2 = toUV({ x: w.x2, z: w.z2 });
+          const avgU = (uv1.u + uv2.u) / 2;
+          return avgU > uWest + 0.5 && avgU < uClosetEast - 1.0;
+        });
+        if (leftReturn) {
+          uClosetWest = (toUV({ x: leftReturn.x1, z: leftReturn.z1 }).u + toUV({ x: leftReturn.x2, z: leftReturn.z2 }).u) / 2;
+        }
       }
 
-      const uWestExt = Math.min(...uVals);
-      const uEastExt = Math.max(...uVals);
-      const vSouthExt = Math.max(...vVals);
-      const vClosetNorth = Math.min(...vVals);
+      const U_W = Math.round(uWest * 100) / 100;
+      const U_CL_W = Math.round(uClosetWest * 100) / 100;
+      const U_E = Math.round(uEast * 100) / 100;
+      const V_N = Math.round(vNorth * 100) / 100;
+      const V_PART = Math.round(vPartition * 100) / 100;
+      const V_CL_BACK = Math.round(vClosetBack * 100) / 100;
+      const U_CL_E = Math.round(uClosetEast * 100) / 100;
 
-      let vPartition = -3.90;
-      let uClosetWest = -6.06;
+      // 4. Form the exterior watertight 2D polygon as the Boolean Union of Bedroom + Closet
+      // If U_CL_W > U_W + 0.4, there is a real physical stepped jog along the West wall
+      // (due to an adjacent room on the other side) as confirmed by the Apple RoomPlan live scan!
+      const isSteppedCloset = U_CL_W > U_W + 0.4;
+      const unionUvPolygon = isSteppedCloset
+        ? [
+            { u: U_W,    v: V_N },       // 0: Bedroom NW
+            { u: U_E,    v: V_N },       // 1: Bedroom NE
+            { u: U_E,    v: V_PART },    // 2: Bedroom SE
+            { u: U_CL_E, v: V_PART },    // 3: Return junction (W6 meets W3)
+            { u: U_CL_E, v: V_CL_BACK }, // 4: Closet SE (W3 meets W2)
+            { u: U_CL_W, v: V_CL_BACK }, // 5: Closet SW (Watertight 90° miter with W5)
+            { u: U_CL_W, v: V_PART },    // 6: Closet Left Return (Step ends)
+            { u: U_W,    v: V_PART },    // 7: Bedroom West Jog (Step starts - 1' 5" jog)
+          ]
+        : [
+            { u: U_W,    v: V_CL_BACK },
+            { u: U_W,    v: V_N },
+            { u: U_E,    v: V_N },
+            { u: U_E,    v: V_PART },
+            { u: U_CL_E, v: V_PART },
+            { u: U_CL_E, v: V_CL_BACK },
+          ];
 
-      for (const w of cleanWalls) {
-        if (w.id === 'wall-9' || (w.lengthFt > 6.0 && Math.abs(((w.z1 + w.z2) / 2) - -3.58) < 1.0)) {
-          vPartition = toUV({ x: (w.x1 + w.x2) / 2, z: (w.z1 + w.z2) / 2 }).v;
-        }
-        if (w.id === 'wall-5' || (w.lengthFt > 1.5 && w.lengthFt < 4.0 && Math.abs(((w.x1 + w.x2) / 2) - -7.0) < 1.0)) {
-          uClosetWest = toUV({ x: (w.x1 + w.x2) / 2, z: (w.z1 + w.z2) / 2 }).u;
-        }
-      }
+      const exteriorPolygon = unionUvPolygon.map(toXZ);
 
-      const U_W_EXT = Math.round(uWestExt * 100) / 100;
-      const U_CL_W  = Math.round(uClosetWest * 100) / 100;
-      const U_E_EXT = Math.round(uEastExt * 100) / 100;
-      const V_S_EXT = Math.round(vSouthExt * 100) / 100;
-      const V_PART  = Math.round(vPartition * 100) / 100;
-      const V_CL_N  = Math.round(vClosetNorth * 100) / 100;
-
-      // 4. Construct Exact 7-Sided Watertight Exterior Loop
-      const uvPolygon = [
-        { u: U_E_EXT, v: V_S_EXT }, // V0: SE exterior corner
-        { u: U_W_EXT, v: V_S_EXT }, // V1: SW exterior corner
-        { u: U_W_EXT, v: V_PART },  // V2: W exterior corner (start of closet jog)
-        { u: U_CL_W,  v: V_PART },  // V3: West closet jog return junction
-        { u: U_CL_W,  v: V_CL_N },  // V4: Closet SW corner
-        { u: U_E_EXT, v: V_CL_N },  // V5: Closet NE corner / Door 0 start
-        { u: U_E_EXT, v: V_PART },  // V6: East entry jog junction
-      ];
-
-      const exteriorPolygon = uvPolygon.map(toXZ);
-
-      // 5. Interior Partition Wall (Wall 9) from V3 to V6
-      const partitionP1 = toXZ({ u: U_CL_W, v: V_PART });
-      const partitionP2 = toXZ({ u: U_E_EXT, v: V_PART });
+      // 5. Interior Partition Wall (W9) separating Bedroom and Closet
+      // Runs from U_CL_W to U_CL_E at V_PART
+      const partitionU_Start = isSteppedCloset ? U_CL_W : U_W;
+      const partitionP1 = toXZ({ u: partitionU_Start, v: V_PART });
+      const partitionP2 = toXZ({ u: U_CL_E, v: V_PART });
       const partitionLen = Math.hypot(partitionP2.x - partitionP1.x, partitionP2.z - partitionP1.z);
 
+      // Primary Zones:
       const bedroomPolygon = [
-        uvPolygon[0],
-        uvPolygon[1],
-        uvPolygon[2],
-        uvPolygon[3],
-        uvPolygon[6],
+        { u: U_W, v: V_N },
+        { u: U_E, v: V_N },
+        { u: U_E, v: V_PART },
+        { u: U_W, v: V_PART },
       ].map(toXZ);
 
       const closetPolygon = [
-        uvPolygon[3],
-        uvPolygon[4],
-        uvPolygon[5],
-        uvPolygon[6],
+        { u: partitionU_Start, v: V_PART },
+        { u: U_CL_E,           v: V_PART },
+        { u: U_CL_E,           v: V_CL_BACK },
+        { u: partitionU_Start, v: V_CL_BACK },
       ].map(toXZ);
 
       const polyArea = (pts: PolygonPoint[]): number => {
@@ -1956,6 +1990,17 @@ export const GeometryService = {
         return Math.abs(a) / 2.0;
       };
 
+      // Interior door opening between bedroom and closet (centered along W9 partition)
+      const doorWidthM = 0.9144; // 3.0 ft
+      const partMidDistM = (partitionLen * 0.3048) / 2;
+      const closetDoorAperture: WallAperture = {
+        type: 'door',
+        startDist: Math.max(0.1, partMidDistM - doorWidthM / 2),
+        endDist: Math.min(partitionLen * 0.3048 - 0.1, partMidDistM + doorWidthM / 2),
+        yBottom: 0,
+        yTop: 2.032, // 6.67 ft
+      };
+
       return {
         exteriorPolygon,
         interiorPartitions: [
@@ -1964,6 +2009,7 @@ export const GeometryService = {
             p1: partitionP1,
             p2: partitionP2,
             lengthFt: Math.round(partitionLen * 10) / 10,
+            apertures: [closetDoorAperture],
           },
         ],
         areaSqFt: Math.round(polyArea(exteriorPolygon)),

@@ -1353,6 +1353,42 @@ endsolid ${room.name}`;
     assert(!GeometryService.polygonCutsThroughFurniture(cleanBedRoom, bedObject), 'Clean room boundary must NOT cut through bed');
   });
 
+  // EVAL-29: Stepped Closet Alcove Preserves Physical 1' 5" Wall Jog and Suppresses Corner Overhang
+  await it('EVAL-29: Stepped closet alcove preserves physical 1\' 5" wall jog and suppresses corner overhang', async () => {
+    // 10 walls from physical LiDAR scan
+    const physicalLiDARWalls = [
+      { id: 'wall-0', lengthFt: 11.3, x1: 5.61, z1: 4.11, x2: -4.91, z2: 8.28 },
+      { id: 'wall-1', lengthFt: 9.4, x1: 2.14, z1: -4.64, x2: 5.61, z2: 4.11 },
+      { id: 'wall-2', lengthFt: 7.7, x1: -9.25, z1: -2.67, x2: -2.08, z2: -5.51 },
+      { id: 'wall-3', lengthFt: 2.4, x1: -2.08, z1: -5.51, x2: -1.21, z2: -3.32 },
+      { id: 'wall-4', lengthFt: 1.4, x1: -8.85, z1: -1.65, x2: -7.57, z2: -2.16 },
+      { id: 'wall-5', lengthFt: 2.3, x1: -7.11, z1: -0.99, x2: -7.97, z2: -3.17 },
+      { id: 'wall-6', lengthFt: 3.6, x1: -1.21, z1: -3.32, x2: 2.14, z2: -4.65 },
+      { id: 'wall-7', lengthFt: 0.6, x1: -1.55, z1: -3.16, x2: -1.35, z2: -3.69 },
+      { id: 'wall-8', lengthFt: 9.4, x1: -4.91, z1: 8.28, x2: -8.39, z2: -0.48 },
+      { id: 'wall-9', lengthFt: 7.7, x1: -8.39, z1: -0.49, x2: -1.2, z2: -3.31 },
+    ];
+    const physicalDoors = [
+      { id: 'door-0', widthFt: 2.5, x: 0.59, z: -4.03, x1: -0.55, z1: -3.56, x2: 1.74, z2: -4.49 },
+    ];
+
+    const result = GeometryService.solveTopologicalRoom(physicalLiDARWalls, physicalDoors, [], []);
+
+    // Assertions for Physical Accuracy:
+    // 1. Exterior polygon must have exactly 8 vertices (stepped jog preserved)
+    assert.strictEqual(result.exteriorPolygon.length, 8, 'Stepped closet loop must contain exactly 8 vertices');
+
+    // 2. Room area must be in the expected physical range (120 - 125 sq ft)
+    assert(result.areaSqFt >= 120 && result.areaSqFt <= 125, `Area must be 120-125 sq ft, got: ${result.areaSqFt}`);
+
+    // 3. Interior partition wall-9 must be present with doorway aperture
+    assert.strictEqual(result.interiorPartitions.length, 1, 'Must have 1 interior partition');
+    assert.strictEqual(result.interiorPartitions[0].apertures.length, 1, 'Partition must have 1 doorway opening');
+
+    // 4. Polygon must not self-intersect
+    assert(!GeometryService.isPolygonSelfIntersecting(result.exteriorPolygon), 'Stepped polygon must be watertight without self-intersection');
+  });
+
   console.log(`\n📊 Verification Summary: ${passedTests}/${totalTests} tests passed.\n`);
 }
 
