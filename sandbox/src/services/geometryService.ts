@@ -1874,78 +1874,91 @@ export const GeometryService = {
       return true;
     });
 
-    // Check if an alcove / closet exists (e.g. wall-2/wall-3 or partition wall-9 present)
-    const hasClosetAlcove = cleanWalls.some((w) => w.id === 'wall-2' || w.id === 'wall-3' || w.id === 'wall-5' || (w.lengthFt > 1.5 && w.lengthFt < 4.0 && Math.abs((w.z1 ?? 0) - -3.6) < 1.5));
-    const hasPartitionWall = cleanWalls.some((w) => w.id === 'wall-9' || (w.lengthFt > 6.0 && Math.abs(((w.z1 ?? 0) + (w.z2 ?? 0)) / 2 - -3.58) < 1.2));
+    // 2. Project all clean walls to UV space for universal datum clustering
+    const uvWalls = cleanWalls.map((w) => {
+      const p1 = toUV({ x: w.x1 ?? (w.x - 2), z: w.z1 ?? (w.z - 2) });
+      const p2 = toUV({ x: w.x2 ?? (w.x + 2), z: w.z2 ?? (w.z + 2) });
+      const isH = Math.abs(p2.v - p1.v) < Math.abs(p2.u - p1.u);
+      return {
+        id: w.id,
+        len: w.lengthFt || Math.hypot(p2.u - p1.u, p2.v - p1.v) || 1,
+        isH,
+        uMin: Math.min(p1.u, p2.u),
+        uMax: Math.max(p1.u, p2.u),
+        vMin: Math.min(p1.v, p2.v),
+        vMax: Math.max(p1.v, p2.v),
+        avgU: (p1.u + p2.u) / 2,
+        avgV: (p1.v + p2.v) / 2,
+      };
+    });
 
-    if (hasClosetAlcove && hasPartitionWall) {
-      // 3. Extract Manhattan Orthogonal Datums in UV space via Topological Dual-Zone Decomposition
-      // Identify key walls for Bedroom and Closet zones
-      const w0 = cleanWalls.find(w => w.id === 'wall-0') || cleanWalls.find(w => Math.abs(toUV({ x: (w.x1 + w.x2) / 2, z: (w.z1 + w.z2) / 2 }).v - 5.89) < 1.0);
-      const w1 = cleanWalls.find(w => w.id === 'wall-1') || cleanWalls.find(w => Math.abs(toUV({ x: (w.x1 + w.x2) / 2, z: (w.z1 + w.z2) / 2 }).u - 3.70) < 1.0);
-      const w8 = cleanWalls.find(w => w.id === 'wall-8') || cleanWalls.find(w => Math.abs(toUV({ x: (w.x1 + w.x2) / 2, z: (w.z1 + w.z2) / 2 }).u - -7.62) < 1.0);
-      const w6 = cleanWalls.find(w => w.id === 'wall-6');
-      const w9 = cleanWalls.find(w => w.id === 'wall-9');
-      const w2 = cleanWalls.find(w => w.id === 'wall-2');
-      const w3 = cleanWalls.find(w => w.id === 'wall-3') || rawWalls.find(w => w.id === 'wall-3');
+    const hWalls = uvWalls.filter((w) => w.isH && w.len >= 1.0);
+    const vWalls = uvWalls.filter((w) => !w.isH && w.len >= 1.0);
 
-      // Compute datums
-      let uWest = -7.62;
-      let uEast = 3.70;
-      let vNorth = 5.89;
-      let vPartition = -3.53;
-      let vClosetBack = -5.89;
-      let uClosetEast = 0.10;
+    // Detect if this room has an alcove / stepped closet:
+    // Occurs when there are multiple distinct horizontal wall levels (delta V > 1.8 ft)
+    const hasMultipleVLevels = hWalls.some((w1) => hWalls.some((w2) => Math.abs(w1.avgV - w2.avgV) > 1.8));
 
-      if (w8) uWest = (toUV({ x: w8.x1, z: w8.z1 }).u + toUV({ x: w8.x2, z: w8.z2 }).u) / 2;
-      if (w1) uEast = (toUV({ x: w1.x1, z: w1.z1 }).u + toUV({ x: w1.x2, z: w1.z2 }).u) / 2;
-      if (w0) vNorth = (toUV({ x: w0.x1, z: w0.z1 }).v + toUV({ x: w0.x2, z: w0.z2 }).v) / 2;
-      if (w9 && w6) {
-        vPartition = (toUV({ x: w9.x1, z: w9.z1 }).v + toUV({ x: w9.x2, z: w9.z2 }).v + toUV({ x: w6.x1, z: w6.z1 }).v + toUV({ x: w6.x2, z: w6.z2 }).v) / 4;
-      } else if (w9) {
-        vPartition = (toUV({ x: w9.x1, z: w9.z1 }).v + toUV({ x: w9.x2, z: w9.z2 }).v) / 2;
-      }
-      if (w2) vClosetBack = (toUV({ x: w2.x1, z: w2.z1 }).v + toUV({ x: w2.x2, z: w2.z2 }).v) / 2;
-      if (w3) uClosetEast = (toUV({ x: w3.x1, z: w3.z1 }).u + toUV({ x: w3.x2, z: w3.z2 }).u) / 2;
+    if (hasMultipleVLevels && hWalls.length >= 2 && vWalls.length >= 2) {
+      // 3. Extract Universal Manhattan Datums
+      // North Wall is highest V
+      const V_N = Math.max(...hWalls.map((w) => w.avgV));
 
-      let uClosetWest = -6.24;
-      const w5 = cleanWalls.find((w) => w.id === 'wall-5') || rawWalls.find((w) => w.id === 'wall-5');
-      if (w5) {
-        uClosetWest = (toUV({ x: w5.x1, z: w5.z1 }).u + toUV({ x: w5.x2, z: w5.z2 }).u) / 2;
+      // Closet Back Wall is lowest V (below V_N - 5.0)
+      const lowHWalls = hWalls.filter((w) => w.avgV < V_N - 5.0);
+      const V_CL_BACK = lowHWalls.length > 0 ? Math.min(...lowHWalls.map((w) => w.avgV)) : V_N - 11.7;
+
+      // Partition / Entrance line is between V_CL_BACK + 1.0 and V_N - 3.0
+      const partCands = hWalls.filter((w) => w.avgV > V_CL_BACK + 1.0 && w.avgV < V_N - 3.0);
+      const V_PART = partCands.length > 0
+        ? partCands.reduce((sum, w) => sum + w.avgV * w.len, 0) / partCands.reduce((sum, w) => sum + w.len, 0)
+        : (V_N + V_CL_BACK) / 2;
+
+      // East Wall is highest U
+      const U_E = Math.max(...vWalls.map((w) => w.avgU));
+
+      // West Wall is lowest U
+      const U_W = Math.min(...vWalls.map((w) => w.avgU));
+
+      // Closet Right Return (vertical wall between U_W + 3.0 and U_E - 0.8)
+      const clECands = vWalls.filter((w) => w.avgU > U_W + 3.0 && w.avgU < U_E - 0.8);
+      const U_CL_E = clECands.length > 0
+        ? clECands.reduce((sum, w) => sum + w.avgU * w.len, 0) / clECands.reduce((sum, w) => sum + w.len, 0)
+        : (U_W + U_E) / 2;
+
+      // Stepped Jog:
+      // Look for vertical wall between U_W + 0.4 and U_CL_E - 1.5 (Closet Left Return)
+      const clWCands = vWalls.filter((w) => w.avgU > U_W + 0.4 && w.avgU < U_CL_E - 1.5);
+      let U_CL_W = U_W;
+      let V_JOG = V_PART;
+
+      if (clWCands.length > 0) {
+        U_CL_W = clWCands.reduce((sum, w) => sum + w.avgU * w.len, 0) / clWCands.reduce((sum, w) => sum + w.len, 0);
       } else {
-        const leftReturn = cleanWalls.find((w) => {
-          const uv1 = toUV({ x: w.x1, z: w.z1 });
-          const uv2 = toUV({ x: w.x2, z: w.z2 });
-          const avgU = (uv1.u + uv2.u) / 2;
-          return avgU > uWest + 0.5 && avgU < uClosetEast - 1.0;
-        });
-        if (leftReturn) {
-          uClosetWest = (toUV({ x: leftReturn.x1, z: leftReturn.z1 }).u + toUV({ x: leftReturn.x2, z: leftReturn.z2 }).u) / 2;
+        // Look for horizontal step jog wall
+        const jogH = hWalls.filter((w) => w.uMin > U_W - 0.5 && w.uMin < U_W + 1.5 && w.uMax < U_CL_E);
+        if (jogH.length > 0) {
+          U_CL_W = Math.max(...jogH.map((w) => w.uMax));
         }
       }
 
-      const U_W = Math.round(uWest * 100) / 100;
-      const U_CL_W = Math.round(uClosetWest * 100) / 100;
-      const U_E = Math.round(uEast * 100) / 100;
-      const V_N = Math.round(vNorth * 100) / 100;
-      const V_PART = Math.round(vPartition * 100) / 100;
-      const V_CL_BACK = Math.round(vClosetBack * 100) / 100;
-      const U_CL_E = Math.round(uClosetEast * 100) / 100;
+      // Check if there is a horizontal jog segment at a distinct V height
+      const jogVCands = hWalls.filter((w) => w.uMin < U_CL_W && w.uMax > U_W && w.avgV < V_PART + 0.5 && w.avgV > V_CL_BACK + 0.5);
+      if (jogVCands.length > 0) {
+        V_JOG = jogVCands[0].avgV;
+      }
 
-      // 4. Form the exterior watertight 2D polygon as the Boolean Union of Bedroom + Closet
-      // If U_CL_W > U_W + 0.4, there is a real physical stepped jog along the West wall
-      // (due to an adjacent room on the other side) as confirmed by the Apple RoomPlan live scan!
       const isSteppedCloset = U_CL_W > U_W + 0.4;
       const unionUvPolygon = isSteppedCloset
         ? [
-            { u: U_W,    v: V_N },       // 0: Bedroom NW
-            { u: U_E,    v: V_N },       // 1: Bedroom NE
-            { u: U_E,    v: V_PART },    // 2: Bedroom SE
-            { u: U_CL_E, v: V_PART },    // 3: Return junction (W6 meets W3)
-            { u: U_CL_E, v: V_CL_BACK }, // 4: Closet SE (W3 meets W2)
-            { u: U_CL_W, v: V_CL_BACK }, // 5: Closet SW (Watertight 90° miter with W5)
-            { u: U_CL_W, v: V_PART },    // 6: Closet Left Return (Step ends)
-            { u: U_W,    v: V_PART },    // 7: Bedroom West Jog (Step starts - 1' 5" jog)
+            { u: U_E,        v: V_N },         // 0: Bedroom NE
+            { u: U_W,        v: V_N },         // 1: Bedroom NW
+            { u: U_W,        v: V_JOG },       // 2: Bedroom West Wall Jog Start
+            { u: U_CL_W,     v: V_JOG },       // 3: Closet Left Jog End (1' 5" step inward!)
+            { u: U_CL_W,     v: V_CL_BACK },   // 4: Closet SW Corner (watertight 90° miter)
+            { u: U_CL_E,     v: V_CL_BACK },   // 5: Closet SE Corner (watertight 90° miter)
+            { u: U_CL_E,     v: V_PART },      // 6: Closet Right Return Junction
+            { u: U_E,        v: V_PART },      // 7: Bedroom SE (Main Entrance Wall)
           ]
         : [
             { u: U_W,    v: V_CL_BACK },

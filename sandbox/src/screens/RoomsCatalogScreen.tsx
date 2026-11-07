@@ -38,9 +38,12 @@ const RoomBlueprintThumbnail: React.FC<{ room: Room; width?: number; height?: nu
     !GeometryService.polygonCutsThroughFurniture(parsedMesh.polygon, realObjects) &&
     !GeometryService.hasInteriorChords(parsedMesh.polygon);
 
-  const poly: PolygonPoint[] = hasValidPrecomputedPolygon
-    ? parsedMesh.polygon
-    : GeometryService.buildRoomPolygon(realWalls, room.width_ft || 14, room.length_ft || 16, realObjects);
+  const topoRes = GeometryService.solveTopologicalRoom(realWalls, realDoors, realWindows, realObjects);
+  const poly: PolygonPoint[] = (topoRes.exteriorPolygon && topoRes.exteriorPolygon.length >= 3)
+    ? topoRes.exteriorPolygon
+    : (hasValidPrecomputedPolygon
+        ? parsedMesh.polygon
+        : GeometryService.buildRoomPolygon(realWalls, room.width_ft || 14, room.length_ft || 16, realObjects));
 
   let minX = Infinity;
   let maxX = -Infinity;

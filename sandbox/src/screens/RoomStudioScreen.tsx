@@ -229,11 +229,17 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
     return GeometryService.solveTopologicalRoom(realWalls, realDoors, realWindows, realObjects);
   }, [realWalls, realDoors, realWindows, realObjects]);
 
+  const hasValidTopological = Boolean(
+    topologicalResult.exteriorPolygon &&
+    topologicalResult.exteriorPolygon.length >= 3 &&
+    !activePolygon
+  );
+
   const polygon: PolygonPoint[] = activePolygon || (
-    hasValidPrecomputedPolygon
-      ? parsedMesh.polygon
-      : (topologicalResult.exteriorPolygon && topologicalResult.exteriorPolygon.length >= 3
-          ? topologicalResult.exteriorPolygon
+    hasValidTopological
+      ? topologicalResult.exteriorPolygon
+      : (hasValidPrecomputedPolygon
+          ? parsedMesh.polygon
           : GeometryService.buildRoomPolygon(
               realWalls,
               room.width_ft || 14,
@@ -243,12 +249,6 @@ export const RoomStudioScreen: React.FC<Props> = ({ room: initialRoom, onBack })
             ))
   );
   const N = polygon.length;
-
-  const hasValidTopological = Boolean(
-    topologicalResult.exteriorPolygon &&
-    topologicalResult.exteriorPolygon.length >= 3 &&
-    !activePolygon
-  );
 
   const pointsForBounds: PolygonPoint[] = hasValidTopological
     ? topologicalResult.exteriorPolygon
