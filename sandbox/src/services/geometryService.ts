@@ -1019,63 +1019,9 @@ export const GeometryService = {
     return apertureMap;
   },
 
-  // Sample architectural templates
+  // Sample architectural templates (App Store Production: zero fake or mock rooms)
   getSampleRooms(): Room[] {
-    return [
-      {
-        id: 'sample-001',
-        name: 'Living Room (Sample)',
-        length_ft: 18.2,
-        width_ft: 14.5,
-        height_ft: 9.0,
-        area_sqft: 263.9,
-        mesh_json: JSON.stringify({
-          widthFt: 14.5,
-          lengthFt: 18.2,
-          heightFt: 9.0,
-          walls: [
-            { id: 'w0', x1: -7.25, z1: -9.1, x2: 7.25, z2: -9.1, lengthFt: 14.5, heightFt: 9.0, thicknessFt: 0.5 },
-            { id: 'w1', x1: 7.25, z1: -9.1, x2: 7.25, z2: 9.1, lengthFt: 18.2, heightFt: 9.0, thicknessFt: 0.5 },
-            { id: 'w2', x1: 7.25, z1: 9.1, x2: -7.25, z2: 9.1, lengthFt: 14.5, heightFt: 9.0, thicknessFt: 0.5 },
-            { id: 'w3', x1: -7.25, z1: 9.1, x2: -7.25, z2: -9.1, lengthFt: 18.2, heightFt: 9.0, thicknessFt: 0.5 },
-          ],
-          doors: [{ x1: 0, z1: 9.1, x2: 3.0, z2: 9.1, widthFt: 3.0 }],
-          windows: [{ x1: -3.0, z1: -9.1, x2: 3.0, z2: -9.1, widthFt: 6.0 }],
-          objects: [
-            { id: 'sample-obj-1', category: 'Sofa', x: 0, y: 0, z: -6.5, widthFt: 7.0, heightFt: 2.8, lengthFt: 3.2, yawDeg: 0, dirXx: 1, dirXz: 0, dirZx: 0, dirZz: 1 },
-            { id: 'sample-obj-2', category: 'Coffee Table', x: 0, y: 0, z: -2.0, widthFt: 4.2, heightFt: 1.5, lengthFt: 2.2, yawDeg: 0, dirXx: 1, dirXz: 0, dirZx: 0, dirZz: 1 },
-            { id: 'sample-obj-3', category: 'Storage / TV Console', x: 0, y: 0, z: 7.2, widthFt: 6.5, heightFt: 2.2, lengthFt: 1.8, yawDeg: 180, dirXx: -1, dirXz: 0, dirZx: 0, dirZz: -1 },
-          ],
-        }),
-        is_sample: true,
-        created_at: new Date(Date.now() - 86400000).toISOString(),
-        updated_at: new Date(Date.now() - 86400000).toISOString(),
-      },
-      {
-        id: 'sample-002',
-        name: 'Dining & Kitchen (Sample)',
-        length_ft: 15.0,
-        width_ft: 12.0,
-        height_ft: 9.0,
-        area_sqft: 180.0,
-        mesh_json: JSON.stringify({
-          widthFt: 12.0,
-          lengthFt: 15.0,
-          heightFt: 9.0,
-          walls: [
-            { id: 'w0', x1: -6.0, z1: -7.5, x2: 6.0, z2: -7.5, lengthFt: 12.0, heightFt: 9.0, thicknessFt: 0.5 },
-            { id: 'w1', x1: 6.0, z1: -7.5, x2: 6.0, z2: 7.5, lengthFt: 15.0, heightFt: 9.0, thicknessFt: 0.5 },
-            { id: 'w2', x1: 6.0, z1: 7.5, x2: -6.0, z2: 7.5, lengthFt: 12.0, heightFt: 9.0, thicknessFt: 0.5 },
-            { id: 'w3', x1: -6.0, z1: 7.5, x2: -6.0, z2: -7.5, lengthFt: 15.0, heightFt: 9.0, thicknessFt: 0.5 },
-          ],
-          doors: [{ x1: -6.0, z1: 0, x2: -6.0, z2: 3.0, widthFt: 3.0 }],
-          windows: [{ x1: -2.5, z1: -7.5, x2: 2.5, z2: -7.5, widthFt: 5.0 }],
-        }),
-        is_sample: true,
-        created_at: new Date(Date.now() - 172800000).toISOString(),
-        updated_at: new Date(Date.now() - 172800000).toISOString(),
-      },
-    ];
+    return [];
   },
 
   // Perpendicular distance from a point to a line segment

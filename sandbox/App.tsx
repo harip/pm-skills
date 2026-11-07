@@ -59,7 +59,7 @@ export default function App() {
       if (myRooms.length > 0) {
         setSelectedRoom(myRooms[0]);
       } else {
-        setSelectedRoom(GeometryService.getSampleRooms()[0]);
+        setSelectedRoom(null);
       }
     })();
   }, []);
@@ -74,7 +74,15 @@ export default function App() {
     setActiveTab('studio');
   };
 
-  const handleBackToCatalog = () => {
+  const handleBackToCatalog = async () => {
+    const myRooms = await Database.getRooms();
+    if (myRooms.length > 0) {
+      if (!selectedRoom || !myRooms.some((r) => r.id === selectedRoom.id)) {
+        setSelectedRoom(myRooms[0]);
+      }
+    } else {
+      setSelectedRoom(null);
+    }
     setCatalogRefreshKey((k) => k + 1);
     setActiveTab('catalog');
   };
@@ -97,11 +105,32 @@ export default function App() {
             onScanFinished={handleScanFinished}
           />
         )}
-        {activeTab === 'studio' && selectedRoom && (
-          <RoomStudioScreen
-            room={selectedRoom}
-            onBack={handleBackToCatalog}
-          />
+        {activeTab === 'studio' && (
+          selectedRoom ? (
+            <RoomStudioScreen
+              room={selectedRoom}
+              onBack={handleBackToCatalog}
+            />
+          ) : (
+            <SafeAreaView style={styles.emptyScreenContainer}>
+              <View style={styles.emptyStateContainer}>
+                <View style={styles.emptyIconCircle}>
+                  <Text style={styles.emptyIconText}>🧊</Text>
+                </View>
+                <Text style={styles.emptyTitle}>No Rooms Scanned Yet</Text>
+                <Text style={styles.emptyDescription}>
+                  Capture your room with the LiDAR Scanner to view, edit, and inspect 3D models and blueprints in Studio.
+                </Text>
+                <TouchableOpacity
+                  style={styles.emptyCtaBtn}
+                  onPress={() => setActiveTab('scanner')}
+                  activeOpacity={0.82}
+                >
+                  <Text style={styles.emptyCtaText}>Start Your First Scan</Text>
+                </TouchableOpacity>
+              </View>
+            </SafeAreaView>
+          )
         )}
         {activeTab === 'assembly' && (
           <HouseAssemblyScreen
@@ -112,6 +141,7 @@ export default function App() {
           <SettingsScreen
             onBack={handleBackToCatalog}
             onPurgeComplete={() => {
+              setSelectedRoom(null);
               setCatalogRefreshKey((k) => k + 1);
               setActiveTab('catalog');
             }}
@@ -145,8 +175,12 @@ export default function App() {
           style={styles.tabItem}
           onPress={async () => {
             const myRooms = await Database.getRooms();
-            if (myRooms.length > 0 && (!selectedRoom || !myRooms.some((r) => r.id === selectedRoom.id))) {
-              setSelectedRoom(myRooms[0]);
+            if (myRooms.length > 0) {
+              if (!selectedRoom || !myRooms.some((r) => r.id === selectedRoom.id)) {
+                setSelectedRoom(myRooms[0]);
+              }
+            } else {
+              setSelectedRoom(null);
             }
             setActiveTab('studio');
           }}
@@ -219,5 +253,61 @@ const styles = StyleSheet.create({
   },
   tabLabelActive: {
     color: '#007aff',
+  },
+  emptyScreenContainer: {
+    flex: 1,
+    backgroundColor: '#f5f5f7',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emptyStateContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 36,
+  },
+  emptyIconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+  },
+  emptyIconText: {
+    fontSize: 36,
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1c1c1e',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  emptyDescription: {
+    fontSize: 14,
+    color: '#8e8e93',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 28,
+  },
+  emptyCtaBtn: {
+    backgroundColor: '#007aff',
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderRadius: 22,
+    shadowColor: '#007aff',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+  },
+  emptyCtaText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

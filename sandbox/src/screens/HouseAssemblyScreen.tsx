@@ -307,12 +307,10 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
   useEffect(() => {
     (async () => {
       const userRooms = await Database.getRooms();
-      const samples = GeometryService.getSampleRooms();
-      const available = userRooms.length > 0 ? userRooms : samples;
-      setAllRooms(available);
+      setAllRooms(userRooms);
       await loadBuilds();
 
-      if (initialSelectedRoom) {
+      if (initialSelectedRoom && userRooms.some((r) => r.id === initialSelectedRoom.id)) {
         const rw = initialSelectedRoom.width_ft || 16;
         const rl = initialSelectedRoom.length_ft || 14;
         const rh = initialSelectedRoom.height_ft || 9;
@@ -2594,7 +2592,17 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
               </View>
 
               <ScrollView style={styles.roomPickerScroll} showsVerticalScrollIndicator={false}>
-                {allRooms.map((r, idx) => {
+                {allRooms.length === 0 ? (
+                  <View style={{ padding: 28, alignItems: 'center' }}>
+                    <Text style={{ fontSize: 16, fontWeight: '700', color: '#1c1c1e', marginBottom: 6 }}>
+                      No Scanned Rooms
+                    </Text>
+                    <Text style={{ fontSize: 13, color: '#8e8e93', textAlign: 'center', lineHeight: 18 }}>
+                      Scan rooms in the Scan tab first before placing them in a Whole House assembly.
+                    </Text>
+                  </View>
+                ) : (
+                  allRooms.map((r, idx) => {
                   const isPlaced = placedRoomNodes.some((n) => n.room.id === r.id);
                   const isSelected = selectedRoomId === r.id;
                   const rw = Math.round(r.width_ft || 16);
@@ -2642,7 +2650,7 @@ export const HouseAssemblyScreen: React.FC<Props> = ({ initialSelectedRoom, onBa
                       )}
                     </View>
                   );
-                })}
+                }))}
               </ScrollView>
 
               <TouchableOpacity
