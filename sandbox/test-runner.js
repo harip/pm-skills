@@ -991,8 +991,18 @@ endsolid ${room.name}`;
   // EVAL-24: OM-TLC Solver eliminates obtuse bent kinks and fuses collinear wall fragments
   await it('EVAL-24: OM-TLC Solver fuses broken collinear walls & eliminates obtuse bent kinks', async () => {
     // Exact wall scan from user device (Room 3 Living Room with top wall bent kink)
-    const bundledRooms = require('./data/device_dump/bundled_rooms.json');
-    const room3Walls = bundledRooms[3].walls;
+    const room3Walls = [
+      { id: "wall-0", x1: 0.38, z1: -8.94, x2: 1.58, z2: 2.27, lengthFt: 11.3, yawDeg: 84 },
+      { id: "wall-1", x1: -8.88, z1: -7.95, x2: 0.38, z2: -8.94, lengthFt: 9.3, yawDeg: -6 },
+      { id: "wall-2", x1: -10.14, z1: 2.19, x2: -10.81, z2: -4.10, lengthFt: 6.3, yawDeg: -96 },
+      { id: "wall-3", x1: -8.89, z1: 3.39, x2: -9.03, z2: 2.07, lengthFt: 1.3, yawDeg: -96 },
+      { id: "wall-4", x1: -9.03, z1: 2.07, x2: -10.14, z2: 2.19, lengthFt: 1.1, yawDeg: 174 },
+      { id: "wall-5", x1: 1.58, z1: 2.27, x2: -7.68, z2: 3.26, lengthFt: 9.3, yawDeg: 174 },
+      { id: "wall-6", x1: -7.68, z1: 3.26, x2: -8.89, z2: 3.39, lengthFt: 1.2, yawDeg: 174 },
+      { id: "wall-7", x1: -7.68, z1: 3.26, x2: -8.49, z2: -4.35, lengthFt: 7.7, yawDeg: -96 },
+      { id: "wall-8", x1: -10.81, z1: -4.10, x2: -8.49, z2: -4.35, lengthFt: 2.3, yawDeg: -6 },
+      { id: "wall-9", x1: -8.49, z1: -4.35, x2: -8.88, z2: -7.95, lengthFt: 3.6, yawDeg: -96 }
+    ];
     assert.strictEqual(room3Walls.length, 10, 'Raw LiDAR scan must contain 10 fragmented wall segments');
 
     // OM-TLC implementation (matching GeometryService.buildRoomPolygon)
